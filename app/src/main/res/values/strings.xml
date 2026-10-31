@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">JARVIS</string>
+    <string name="accessibility_description">JARVIS ke haath: sirf aapke voice command pe screen padhna, tap/type/scroll karna, screenshot, lock aur home/back. Screen band hone par bhi apps, calls aur alarms khol paata hai. Background mein kuch nahi padhta; password fields kabhi nahi padhta; payment / OTP screens pe ruk jaata hai.</string>
 </resources>

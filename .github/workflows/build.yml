@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # needed to publish the APK as a release asset
     steps:
       - uses: actions/checkout@v4
 
@@ -36,6 +36,21 @@ jobs:
         with:
           name: JARVIS-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+
+      # Direct phone download, no login / zip:
+      # https://github.com/<owner>/<repo>/releases/download/jarvis-latest/JARVIS.apk
+      - name: Publish APK to the "jarvis-latest" release
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk JARVIS.apk
+          gh release delete jarvis-latest --yes --cleanup-tag || true
+          gh release create jarvis-latest JARVIS.apk \
+            --title "JARVIS (latest build)" \
+            --notes "Auto-built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}. Install JARVIS.apk on the phone." \
+            --prerelease \
+            --target "$GITHUB_SHA"
 
       - uses: actions/upload-artifact@v4
         if: failure()

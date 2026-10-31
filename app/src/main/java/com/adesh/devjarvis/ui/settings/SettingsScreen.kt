@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -35,6 +36,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -51,11 +54,17 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adesh.devjarvis.core.JarvisConfig
+import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.ui.theme.Hud
 import com.adesh.devjarvis.voice.VoiceInfo
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onOpenSetup: () -> Unit,
+    onOpenMemory: () -> Unit,
+) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     var showVoices by remember { mutableStateOf(false) }
@@ -89,33 +98,45 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             )
             LinkText("Free key yahan se lo: aistudio.google.com/apikey", JarvisConfig.GEMINI_KEY_URL)
             SecretField(
-                label = "Groq API key (optional — Phase 4 fallback)",
+                label = "Groq API key (backup brain + Whisper)",
                 value = draft.groqApiKey,
                 onChange = { v -> viewModel.edit { it.copy(groqApiKey = v) } },
             )
             LinkText("Free key: console.groq.com/keys", JarvisConfig.GROQ_KEY_URL)
 
+            Section("VOICE ENGINE")
+            ChoiceRow(
+                options = listOf(JarvisSettings.VOICE_LIVE to "LIVE", JarvisSettings.VOICE_CLASSIC to "CLASSIC"),
+                selected = draft.voiceEngine,
+            ) { v -> viewModel.edit { it.copy(voiceEngine = v) } }
+            Hint(
+                "LIVE = Gemini Live: asli awaaz, sabse tez, beech mein bol ke tok sakte ho. Quota/error pe khud CLASSIC pe aa jaata hai. " +
+                    "CLASSIC = sunna -> text -> Android TTS (offline voice, kam data)."
+            )
+            HudField("Live model", draft.liveModel, { v -> viewModel.edit { it.copy(liveModel = v) } })
+            HudField("Live voice", draft.liveVoice, { v -> viewModel.edit { it.copy(liveVoice = v) } })
+            Hint("Voices: Charon (deep, calm — default), Orus (firm), Fenrir, Puck, Kore, Aoede.")
+            Text("Classic mode ears", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(
+                options = listOf(JarvisSettings.STT_ANDROID to "ANDROID", JarvisSettings.STT_GROQ to "GROQ WHISPER"),
+                selected = draft.sttEngine,
+            ) { v -> viewModel.edit { it.copy(sttEngine = v) } }
+            Hint("Groq Whisper Hinglish behtar samajhta hai (Groq key chahiye).")
+
             Section("BRAIN")
             HudField("Gemini model", draft.geminiModel, { v -> viewModel.edit { it.copy(geminiModel = v) } })
             Hint("Default: ${JarvisConfig.GEMINI_MODEL}. Naya model aaye to naam yahan badlo.")
             TextButton(onClick = viewModel::resetModel) { Text("Reset model", color = Hud.Cyan) }
+            HudField("Groq backup model", draft.groqModel, { v -> viewModel.edit { it.copy(groqModel = v) } })
+            Hint("Gemini ka free quota khatam (429) ho to JARVIS chupchaap Groq pe chala jaata hai. HUD pe MODE: FALLBACK dikhega.")
+
+            HudField("Home city (weather)", draft.homeCity, { v -> viewModel.edit { it.copy(homeCity = v) } })
+            Hint("Jaise: Mumbai. \"Mausam kaisa hai?\" bina city ke pucho to yahi use hoga.")
 
             Section("VOICE")
             Text("Speech language (sunne ki bhasha)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                JarvisConfig.STT_LANGUAGES.forEach { lang ->
-                    val selected = draft.sttLanguage == lang
-                    Text(
-                        lang,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) Hud.Background else Hud.Cyan,
-                        modifier = Modifier
-                            .border(1.dp, Hud.Cyan, RoundedCornerShape(4.dp))
-                            .background(if (selected) Hud.Cyan else Hud.Background, RoundedCornerShape(4.dp))
-                            .clickable { viewModel.edit { it.copy(sttLanguage = lang) } }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
+            ChoiceRow(JarvisConfig.STT_LANGUAGES.map { it to it }, draft.sttLanguage) { lang ->
+                viewModel.edit { it.copy(sttLanguage = lang) }
             }
             Hint("Hinglish ke liye en-IN best hai. Zyada Hindi bolte ho to hi-IN try karo.")
 
@@ -131,6 +152,64 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             }
             LabeledSlider("Pitch", draft.ttsPitch, 0.5f..1.5f) { v -> viewModel.edit { it.copy(ttsPitch = v) } }
             LabeledSlider("Speed", draft.ttsRate, 0.6f..1.5f) { v -> viewModel.edit { it.copy(ttsRate = v) } }
+
+            Section("WAKE WORD & CONVERSATION")
+            Hint("Wake phrases: \"Hello Dev\", \"Jarvis\". Always-on switch HUD pe hai.")
+            LabeledSlider("Sensitivity", draft.wakeSensitivity, 0f..1f) { v -> viewModel.edit { it.copy(wakeSensitivity = v) } }
+            Hint("Kam = sirf saaf bola hua wake word. Zyada = jaldi jaagta hai, par galti se bhi jaag sakta hai. 0.8+ pe sabse tez.")
+            ToggleRow(
+                "Continuous conversation",
+                "Jawab ke baad ~8 sec bina wake word ke follow-up sunta hai.",
+                draft.continuousConversation,
+            ) { v -> viewModel.edit { it.copy(continuousConversation = v) } }
+            ToggleRow(
+                "Voice barge-in",
+                "JARVIS bolte waqt \"Jarvis\" / \"stop\" / \"ruko\" bolke rok do (always-on ke saath).",
+                draft.voiceBargeIn,
+            ) { v -> viewModel.edit { it.copy(voiceBargeIn = v) } }
+            OutlinedButton(onClick = onOpenSetup) { Text("Setup & permissions checklist", color = Hud.Cyan) }
+
+            Section("PROACTIVE JARVIS")
+            ToggleRow("Morning briefing", "Weather, aaj ke events/reminders, battery + ek witty line.", draft.briefingEnabled) { v ->
+                viewModel.edit { it.copy(briefingEnabled = v) }
+            }
+            TimeField("Briefing time", draft.briefingMinute) { m -> viewModel.edit { it.copy(briefingMinute = m) } }
+            OutlinedButton(onClick = viewModel::playBriefingNow) { Text("Play briefing now", color = Hud.Cyan) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { TimeField("Quiet from", draft.quietStartMinute) { m -> viewModel.edit { it.copy(quietStartMinute = m) } } }
+                Box(Modifier.weight(1f)) { TimeField("Quiet until", draft.quietEndMinute) { m -> viewModel.edit { it.copy(quietEndMinute = m) } } }
+            }
+            Hint("Quiet hours, DND, silent mode (bina headphones) ya call ke dauraan JARVIS khud se nahi bolta — sirf notification. Aapke apne reminders raat mein bhi bolte hain.")
+            ToggleRow("Important notifications bolna", "Chune hue apps/logon ke message ka chhota summary. OTP/bank kabhi nahi.", draft.notificationAlerts) { v ->
+                viewModel.edit { it.copy(notificationAlerts = v) }
+            }
+            HudField("Important apps (comma)", draft.importantApps, { v -> viewModel.edit { it.copy(importantApps = v) } })
+            HudField("Important people (comma)", draft.importantContacts, { v -> viewModel.edit { it.copy(importantContacts = v) } })
+            Hint("Jaise: Mummy, Papa, Boss. In logon ka message kisi bhi app se aaye to JARVIS batayega.")
+            ToggleRow("Low battery warning", "20% se neeche (charging nahi) — aur 10% pe dobara.", draft.lowBatteryAlert) { v ->
+                viewModel.edit { it.copy(lowBatteryAlert = v) }
+            }
+
+            Section("MEMORY")
+            Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
+            OutlinedButton(onClick = onOpenMemory) { Text("Open memory", color = Hud.Cyan) }
+
+            Section("EXTRAS")
+            ToggleRow("Floating mini-reactor", "Doosre apps ke upar chhota reactor jab JARVIS sun/bol raha ho (\"Display over other apps\" chahiye). Tap = kholo, long-press = rok do.", draft.bubbleEnabled) { v ->
+                viewModel.edit { it.copy(bubbleEnabled = v) }
+            }
+            ToggleRow("Sound effects", "Chime, success blip, error tone. (Haptic tick hamesha.)", draft.soundEffects) { v ->
+                viewModel.edit { it.copy(soundEffects = v) }
+            }
+            ToggleRow("Battery saver", "15% se neeche (charging nahi) wake word pause. Tap/home long-press chalte rahenge.", draft.pauseWakeOnLowBattery) { v ->
+                viewModel.edit { it.copy(pauseWakeOnLowBattery = v) }
+            }
+            ToggleRow("Boot animation", "App kholte hi \"JARVIS ONLINE\" system check.", draft.bootAnimation) { v ->
+                viewModel.edit { it.copy(bootAnimation = v) }
+            }
+
+            Section("DIAGNOSTICS")
+            DiagnosticsBlock(viewModel)
 
             Section("PERSONALITY")
             OutlinedTextField(
@@ -283,6 +362,87 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun DiagnosticsBlock(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    var log by remember { mutableStateOf(viewModel.diagnostics()) }
+    if (log == null) {
+        Hint("Koi crash nahi. Sab systems nominal, Sir.")
+        return
+    }
+    Text(
+        log!!.take(1500),
+        style = MaterialTheme.typography.bodySmall,
+        color = Hud.Dim,
+        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())
+            .border(1.dp, Hud.Faint, RoundedCornerShape(4.dp)).padding(8.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, log)
+            runCatching { context.startActivity(Intent.createChooser(send, "Share JARVIS log")) }
+        }) { Text("Share log", color = Hud.Cyan) }
+        TextButton(onClick = { viewModel.clearDiagnostics(); log = null }) { Text("Clear", color = Hud.Dim) }
+    }
+    Hint("Log mein sirf error ka stack trace + phone/app version hota hai — API keys ya baat-cheet nahi.")
+}
+
+/** "07:30" style field; invalid text is ignored until it parses. */
+@Composable
+private fun TimeField(label: String, minute: Int, onChange: (Int) -> Unit) {
+    var text by remember(minute) { mutableStateOf("%02d:%02d".format(minute / 60, minute % 60)) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { v ->
+            text = v
+            Regex("""^(\d{1,2}):(\d{2})$""").find(v.trim())?.let { m ->
+                val h = m.groupValues[1].toInt()
+                val mm = m.groupValues[2].toInt()
+                if (h in 0..23 && mm in 0..59) onChange(h * 60 + mm)
+            }
+        },
+        label = { Text(label) },
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
+        colors = hudFieldColors(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+@Composable
+private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { (value, label) ->
+            val on = selected == value
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (on) Hud.Background else Hud.Cyan,
+                modifier = Modifier
+                    .border(1.dp, Hud.Cyan, RoundedCornerShape(4.dp))
+                    .background(if (on) Hud.Cyan else Hud.Background, RoundedCornerShape(4.dp))
+                    .clickable { onPick(value) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Hud.Dim)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = Hud.Background, checkedTrackColor = Hud.Cyan),
+        )
+    }
 }
 
 @Composable

@@ -24,6 +24,7 @@ object Hud {
     val Faint = Color(0xFF1B3346)
     val Amber = Color(0xFFFFB300)
     val Red = Color(0xFFFF5252)
+    val Green = Color(0xFF00E676)
     val White = Color(0xFFEFFBFF)
 }
 
