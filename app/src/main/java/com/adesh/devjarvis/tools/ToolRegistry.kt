@@ -1,5 +1,6 @@
 package com.adesh.devjarvis.tools
 
+import com.adesh.devjarvis.brain.GroqMessages
 import com.adesh.devjarvis.tools.impl.CommunicationTools
 import com.adesh.devjarvis.tools.impl.InfoTools
 import com.adesh.devjarvis.tools.impl.PhoneTools
@@ -22,10 +23,15 @@ class ToolRegistry @Inject constructor(
     val tools: List<JarvisTool> = communication.tools + phone.tools + info.tools
     private val byName = tools.associateBy { it.name }
 
+    val declarations: List<JsonObject> = tools.map { it.declaration() }
+
     /** Gemini `tools` array: one entry with all function declarations. */
     val geminiTools: JsonArray = buildJsonArray {
-        add(buildJsonObject { put("functionDeclarations", JsonArray(tools.map { it.declaration() })) })
+        add(buildJsonObject { put("functionDeclarations", JsonArray(declarations)) })
     }
+
+    /** Same tools in OpenAI format for Groq. */
+    val groqTools: JsonArray = GroqMessages.toolsFromGemini(declarations)
 
     suspend fun execute(name: String, args: JsonObject, ctx: ToolContext): ToolResult {
         val tool = byName[name] ?: return ToolResult.fail("unknown tool $name")

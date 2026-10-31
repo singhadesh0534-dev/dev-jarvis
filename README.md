@@ -3,9 +3,30 @@
 Tony Stark ke JARVIS jaisa personal voice assistant, native Android (Kotlin + Jetpack Compose).
 Bilkul free: Gemini ki free API key, open-source libraries, koi paid cheez nahi.
 
-> **Abhi kya bana hai: Phase 1–3 — voice loop, always-on, phone control.**
-> "Hello Dev" bolo → "Mummy ko call karo, phir subah 6 ka alarm laga do" → JARVIS confirm karke dono kaam karta hai.
-> Memory, proactive briefing, camera/screen waghera agle phases mein (neeche roadmap).
+> **Abhi kya bana hai: Phase 1–4 — voice loop, always-on, phone control, Gemini Live + fallback.**
+> "Hello Dev" bolo → JARVIS Gemini Live ki asli awaaz mein turant jawab deta hai, aap beech mein bol ke tok sakte ho
+> → "Mummy ko call karo, phir subah 6 ka alarm" → confirm karke dono kaam. Quota khatam? Chupchaap backup pe.
+>
+> **Direct APK:** https://github.com/singhadesh0534-dev/dev-jarvis/releases/download/jarvis-latest/JARVIS.apk
+
+## Phase 4 mein naya — Live mode & fallback
+
+| | Kya | Kab |
+|---|---|---|
+| **LIVE** (default) | Gemini Live API: aapki awaaz seedha model tak (WebSocket, 16 kHz), model ki native awaaz wapas (24 kHz). Beech mein bolo → turant chup (native interruption). Hindi ka asli uchcharan. Tools + confirmation yahan bhi. | Settings → Voice engine: LIVE |
+| **CLASSIC** | Sunna (Android ya **Groq Whisper**) → Gemini text streaming → Android TTS | Live fail / quota khatam / Settings mein CLASSIC |
+| **FALLBACK** | Gemini text ka 429 (free quota) → chupchaap **Groq** (`openai/gpt-oss-120b`, tool calling ke saath) | Groq key daali ho |
+
+- **Auto-switch:** Live session shuru hi na ho paaye (quota, model, key, network) → usi baat-cheet mein CLASSIC
+  pe chala jaata hai — wake word dobara nahi bolna padta. Quota wala Live aaj ke liye band, baaki errors pe 10 min baad dobara try.
+- **HUD MODE chip:** `LIVE` / `STREAM` (classic Gemini) / `FALLBACK` (Groq). **FUEL** usi engine ka aaj ka bacha hua
+  andaaza (Gemini requests / Live minutes / Groq requests) — 429 aate hi 0%.
+- **Echo:** Live mode phone ko "communication mode" mein daalta hai (jaise WhatsApp call) taaki Android ka echo
+  canceller JARVIS ki apni awaaz hata sake. Headset/Bluetooth laga ho to wahi use hota hai, warna loudspeaker.
+- **Live mein tap = conversation band.** Rokne ke liye bas bol do — Live khud ruk jaata hai.
+- **Groq Whisper** (Settings → Classic mode ears): Hinglish Google recognizer se behtar samajhta hai.
+
+---
 
 ## Phase 3 mein naya — phone control
 
@@ -95,6 +116,8 @@ app/src/main/java/com/adesh/devjarvis/
 ├── accessibility/            ← global actions (lock, screenshot) + background launch
 ├── reminders/                ← AlarmManager reminders
 ├── ui/setup/                 ← setup wizard (permissions + Infinix steps)
+├── live/                     ← Gemini Live: WebSocket, messages, echo-cancelled audio
+├── brain/GroqClient.kt       ← Groq backup brain + Whisper STT
 ├── brain/SystemPrompt.kt     ← JARVIS ki personality
 ├── brain/JarvisBrain.kt      ← prompt + context + history jod ke Gemini ko bhejta hai
 ├── brain/GeminiClient.kt     ← streaming HTTP (SSE) client
@@ -195,7 +218,16 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 6. HUD pe switch ke neeche `heard: ...` dikhata hai ki wake engine ne kya suna — sensitivity tune karne mein kaam aata hai
    (Settings → Wake word → Sensitivity).
 
-### 5.2 Phase 3 test (phone control)
+### 5.2 Phase 4 test (Live + fallback)
+1. Settings → Voice engine **LIVE** (default), Gemini + Groq dono keys daalo → SAVE. HUD pe MODE: **LIVE**.
+2. "Hello Dev" → "Ek lambi kahani sunao" → beech mein bolo "ruko, bas" → turant chup ho jaana chahiye.
+3. "Torch on karo" (Live mein bhi tools chalte hain). "Mummy ko call karo" → confirm (haan/nahi) → call.
+4. Fallback test: Settings → Live model mein galat naam (jaise `abc`) → SAVE → "Hello Dev" → transcript mein
+   "Live mode unavailable … classic mode" aur JARVIS normal (classic) mein jawab de. Test ke baad Reset kar dena
+   (default `gemini-3.8-live`).
+5. Groq-only test: Gemini key hata ke sirf Groq key → MODE: FALLBACK, sawaal ka jawab Groq se aaye.
+
+### 5.3 Phase 3 test (phone control)
 1. "Jarvis, torch on karo" → torch jalegi, HUD pe `✓ toggle_flashlight` line.
 2. "Mummy ko call karo" → "Sir, Mummy ko call karun?" → "haan" → call lagegi.
 3. Chain: "10 minute ka timer lagao aur volume 50 kar do" → dono ho jayenge.
@@ -203,7 +235,7 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 5. Screen lock karke: "Hello Dev, YouTube kholo" → (Accessibility ON ho to) YouTube khul jayega, unlock karte hi dikhega.
 6. 📋 icon → Activity log mein sab entries.
 
-### 5.3 Phase 1 test (tap-to-talk)
+### 5.4 Phase 1 test (tap-to-talk)
 1. JARVIS app kholo → upar right ⚙️ **Settings**.
 2. **Gemini API key** paste karo → neeche **SAVE**.
 3. *VOICE* section mein **Test voice** dabao. Awaaz pasand nahi aayi to **Choose voice** se koi aur chuno (`en-gb-x-rjs`, `en-gb-x-gbd`, `en-in-x-ene` deep male voices hain). *Offline* wali voice tez hoti hai.
@@ -241,6 +273,11 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 | Alarm/timer nahi lagta | Phone mein default Clock app hona chahiye (Infinix Clock theek hai). |
 | Brightness nahi badalti | Setup → Modify system settings ON karo. |
 | Gemini error "function call ... thought signature" / 400 | Model naam check karo (Settings → Gemini model). Purane models pe Settings mein `gemini-3.8-flash` daalo. |
+| Live mein JARVIS khud ko hi interrupt karta hai (apni awaaz sun ke ruk jaata hai) | Volume thoda kam karo ya headset lagao. Phir bhi ho to Settings → Voice engine CLASSIC. |
+| Live mein awaaz earpiece (kaan wale speaker) se aati hai | Kuch phones communication mode mein speaker nahi dete — CLASSIC use karo, ya mujhe batao (device-specific fix). |
+| Hamesha "Live mode unavailable" | Live model naam check karo (Settings → Live model, default `gemini-3.8-live`); AI Studio mein Live API free tier available hai ya nahi dekho. |
+| MODE: FALLBACK aur jawab Groq se | Gemini ka free quota (429) khatam — normal hai; agle din ya ek minute baad Gemini wapas. |
+| Groq error 404 / model not found | Settings → Groq backup model mein current model naam daalo (console.groq.com/docs/models). |
 | Wake model download fail | Internet check karo, Setup → Wake word model → dobara Download. |
 
 ---
@@ -249,8 +286,8 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 
 1. **Phase 1 — Core voice loop** ✅
 2. **Phase 2 — Always-on** ✅: foreground service, "Hello Dev"/"Jarvis" wake word (offline), continuous conversation, voice barge-in, setup wizard, Infinix XOS survival
-3. **Phase 3 — Phone control** ✅ *(ye version)*: call, SMS, WhatsApp, apps, alarm, timer, reminder, calendar, flashlight, volume, brightness, settings panels, screenshot/lock, media, device status, weather, calculator — confirmation + activity log
-4. Phase 4 — Gemini Live API (native audio) + Groq fallback + real fuel tracking
+3. **Phase 3 — Phone control** ✅: call, SMS, WhatsApp, apps, alarm, timer, reminder, calendar, flashlight, volume, brightness, settings panels, screenshot/lock, media, device status, weather, calculator — confirmation + activity log
+4. **Phase 4 — Live & fallback** ✅ *(ye version)*: Gemini Live API (native audio, interruption, tools), auto-switch to classic, Groq backup brain + Whisper, per-provider fuel
 5. Phase 5 — Memory DB + morning briefing + proactive alerts
 6. Phase 6 — Camera vision, screen reading, accessibility screen agent
 7. Phase 7 — Floating bubble, boot animation, sounds, battery tuning
@@ -263,9 +300,9 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 - **Reboot ke baad ek tap:** Android 15+ boot ke waqt kisi bhi app ko background se mic service start nahi karne deta.
   Isliye restart ke baad "tap karke online kijiye" notification aata hai — ek tap aur JARVIS wapas. (Ye Android ka
   security rule hai, koi app isse bypass nahi kar sakta.)
-- **Voice barge-in sirf keywords pe:** loudspeaker pe JARVIS ki apni awaaz mic mein aati hai, isliye "koi bhi awaaz pe
-  ruk jao" reliable nahi hota. Isliye "Jarvis" / "stop" / "ruko" — ya reactor pe tap. Phase 4 (Gemini Live) mein
-  native interruption aayega.
+- **Voice barge-in:** LIVE mode mein kuch bhi bolo, JARVIS ruk jaata hai (native). CLASSIC mode mein sirf
+  "Jarvis" / "stop" / "ruko" — kyunki wahan JARVIS ki apni awaaz mic mein aati hai.
+- **Live free tier:** Live API ki free limits Google badalta rehta hai; fuel gauge sirf andaaza hai.
 - **Wake word accuracy:** Vosk grammar-based spotting hai, Alexa jaisa trained detector nahi. Shor-sharabe mein
   kabhi miss/false alarm hoga — sensitivity slider se tune karo.
 - **Battery:** always-on wake word lagataar mic + thoda CPU use karta hai. Andaazan kuch % per din extra; raat ko

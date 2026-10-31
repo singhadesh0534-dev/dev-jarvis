@@ -120,7 +120,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
         }
 
     private fun mapHttpError(code: Int, message: String): BrainError = when {
-        code == 429 -> BrainError.RateLimited()
+        code == 429 -> BrainError.RateLimited(message)
         code == 401 || code == 403 -> BrainError.InvalidKey()
         code == 400 && message.contains("API key", ignoreCase = true) -> BrainError.InvalidKey()
         else -> BrainError.Server(code, message)

@@ -53,6 +53,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adesh.devjarvis.core.JarvisConfig
+import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.ui.theme.Hud
 import com.adesh.devjarvis.voice.VoiceInfo
 
@@ -91,36 +92,45 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSetup
             )
             LinkText("Free key yahan se lo: aistudio.google.com/apikey", JarvisConfig.GEMINI_KEY_URL)
             SecretField(
-                label = "Groq API key (optional — Phase 4 fallback)",
+                label = "Groq API key (backup brain + Whisper)",
                 value = draft.groqApiKey,
                 onChange = { v -> viewModel.edit { it.copy(groqApiKey = v) } },
             )
             LinkText("Free key: console.groq.com/keys", JarvisConfig.GROQ_KEY_URL)
 
+            Section("VOICE ENGINE")
+            ChoiceRow(
+                options = listOf(JarvisSettings.VOICE_LIVE to "LIVE", JarvisSettings.VOICE_CLASSIC to "CLASSIC"),
+                selected = draft.voiceEngine,
+            ) { v -> viewModel.edit { it.copy(voiceEngine = v) } }
+            Hint(
+                "LIVE = Gemini Live: asli awaaz, sabse tez, beech mein bol ke tok sakte ho. Quota/error pe khud CLASSIC pe aa jaata hai. " +
+                    "CLASSIC = sunna -> text -> Android TTS (offline voice, kam data)."
+            )
+            HudField("Live model", draft.liveModel, { v -> viewModel.edit { it.copy(liveModel = v) } })
+            HudField("Live voice", draft.liveVoice, { v -> viewModel.edit { it.copy(liveVoice = v) } })
+            Hint("Voices: Charon (deep, calm — default), Orus (firm), Fenrir, Puck, Kore, Aoede.")
+            Text("Classic mode ears", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(
+                options = listOf(JarvisSettings.STT_ANDROID to "ANDROID", JarvisSettings.STT_GROQ to "GROQ WHISPER"),
+                selected = draft.sttEngine,
+            ) { v -> viewModel.edit { it.copy(sttEngine = v) } }
+            Hint("Groq Whisper Hinglish behtar samajhta hai (Groq key chahiye).")
+
             Section("BRAIN")
             HudField("Gemini model", draft.geminiModel, { v -> viewModel.edit { it.copy(geminiModel = v) } })
             Hint("Default: ${JarvisConfig.GEMINI_MODEL}. Naya model aaye to naam yahan badlo.")
             TextButton(onClick = viewModel::resetModel) { Text("Reset model", color = Hud.Cyan) }
+            HudField("Groq backup model", draft.groqModel, { v -> viewModel.edit { it.copy(groqModel = v) } })
+            Hint("Gemini ka free quota khatam (429) ho to JARVIS chupchaap Groq pe chala jaata hai. HUD pe MODE: FALLBACK dikhega.")
 
             HudField("Home city (weather)", draft.homeCity, { v -> viewModel.edit { it.copy(homeCity = v) } })
             Hint("Jaise: Mumbai. \"Mausam kaisa hai?\" bina city ke pucho to yahi use hoga.")
 
             Section("VOICE")
             Text("Speech language (sunne ki bhasha)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                JarvisConfig.STT_LANGUAGES.forEach { lang ->
-                    val selected = draft.sttLanguage == lang
-                    Text(
-                        lang,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) Hud.Background else Hud.Cyan,
-                        modifier = Modifier
-                            .border(1.dp, Hud.Cyan, RoundedCornerShape(4.dp))
-                            .background(if (selected) Hud.Cyan else Hud.Background, RoundedCornerShape(4.dp))
-                            .clickable { viewModel.edit { it.copy(sttLanguage = lang) } }
-                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                    )
-                }
+            ChoiceRow(JarvisConfig.STT_LANGUAGES.map { it to it }, draft.sttLanguage) { lang ->
+                viewModel.edit { it.copy(sttLanguage = lang) }
             }
             Hint("Hinglish ke liye en-IN best hai. Zyada Hindi bolte ho to hi-IN try karo.")
 
@@ -304,6 +314,25 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.forEach { (value, label) ->
+            val on = selected == value
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium,
+                color = if (on) Hud.Background else Hud.Cyan,
+                modifier = Modifier
+                    .border(1.dp, Hud.Cyan, RoundedCornerShape(4.dp))
+                    .background(if (on) Hud.Cyan else Hud.Background, RoundedCornerShape(4.dp))
+                    .clickable { onPick(value) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp),
+            )
+        }
+    }
 }
 
 @Composable

@@ -34,7 +34,23 @@ data class JarvisSettings(
     val setupDone: Boolean = false,
     /** Weather / briefing default city. */
     val homeCity: String = "",
+    /** "live" = Gemini Live (falls back to classic automatically), "classic" = STT -> text -> TTS. */
+    val voiceEngine: String = VOICE_LIVE,
+    val liveModel: String = JarvisConfig.GEMINI_LIVE_MODEL,
+    val liveVoice: String = JarvisConfig.GEMINI_LIVE_VOICE,
+    val groqModel: String = JarvisConfig.GROQ_CHAT_MODEL,
+    /** Classic-mode ears: "android" (Google speech) or "groq" (Whisper, better Hinglish; needs Groq key). */
+    val sttEngine: String = STT_ANDROID,
 ) {
+    val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
+
+    companion object {
+        const val VOICE_LIVE = "live"
+        const val VOICE_CLASSIC = "classic"
+        const val STT_ANDROID = "android"
+        const val STT_GROQ = "groq"
+    }
+
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
 }
 
@@ -77,6 +93,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_BARGE_IN, cleaned.voiceBargeIn)
             .putBoolean(K_SETUP_DONE, cleaned.setupDone)
             .putString(K_HOME_CITY, cleaned.homeCity.trim())
+            .putString(K_VOICE_ENGINE, cleaned.voiceEngine)
+            .putString(K_LIVE_MODEL, cleaned.liveModel.trim().ifBlank { JarvisConfig.GEMINI_LIVE_MODEL })
+            .putString(K_LIVE_VOICE, cleaned.liveVoice.trim().ifBlank { JarvisConfig.GEMINI_LIVE_VOICE })
+            .putString(K_GROQ_MODEL, cleaned.groqModel.trim().ifBlank { JarvisConfig.GROQ_CHAT_MODEL })
+            .putString(K_STT_ENGINE, cleaned.sttEngine)
             .apply()
         _settings.value = cleaned
     }
@@ -98,6 +119,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             voiceBargeIn = prefs.getBoolean(K_BARGE_IN, d.voiceBargeIn),
             setupDone = prefs.getBoolean(K_SETUP_DONE, d.setupDone),
             homeCity = prefs.getString(K_HOME_CITY, d.homeCity).orEmpty(),
+            voiceEngine = prefs.getString(K_VOICE_ENGINE, d.voiceEngine).orEmpty().ifBlank { d.voiceEngine },
+            liveModel = prefs.getString(K_LIVE_MODEL, d.liveModel).orEmpty().ifBlank { d.liveModel },
+            liveVoice = prefs.getString(K_LIVE_VOICE, d.liveVoice).orEmpty().ifBlank { d.liveVoice },
+            groqModel = prefs.getString(K_GROQ_MODEL, d.groqModel).orEmpty().ifBlank { d.groqModel },
+            sttEngine = prefs.getString(K_STT_ENGINE, d.sttEngine).orEmpty().ifBlank { d.sttEngine },
         )
     }
 
@@ -138,5 +164,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_BARGE_IN = "voice_barge_in"
         const val K_SETUP_DONE = "setup_done"
         const val K_HOME_CITY = "home_city"
+        const val K_VOICE_ENGINE = "voice_engine"
+        const val K_LIVE_MODEL = "live_model"
+        const val K_LIVE_VOICE = "live_voice"
+        const val K_GROQ_MODEL = "groq_model"
+        const val K_STT_ENGINE = "stt_engine"
     }
 }

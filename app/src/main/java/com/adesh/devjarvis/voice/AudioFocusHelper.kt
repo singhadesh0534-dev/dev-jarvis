@@ -36,8 +36,11 @@ class AudioFocusHelper @Inject constructor(@ApplicationContext context: Context)
         held = false
     }
 
+    /** Set while JARVIS's own Live session has the phone in communication mode. */
+    @Volatile var ownCommunicationMode = false
+
     /** True if the user is in a call or the phone is ringing — JARVIS should stay quiet. */
     fun inCall(): Boolean = audio?.mode == AudioManager.MODE_IN_CALL ||
-        audio?.mode == AudioManager.MODE_IN_COMMUNICATION ||
+        (audio?.mode == AudioManager.MODE_IN_COMMUNICATION && !ownCommunicationMode) ||
         audio?.mode == AudioManager.MODE_RINGTONE
 }

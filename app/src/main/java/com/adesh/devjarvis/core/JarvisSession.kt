@@ -1,10 +1,16 @@
 package com.adesh.devjarvis.core
 
+import android.content.Context
+import android.media.AudioManager
 import com.adesh.devjarvis.brain.BrainError
 import com.adesh.devjarvis.brain.BrainEvent
 import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SentenceChunker
 import com.adesh.devjarvis.brain.SpeechSanitizer
+import com.adesh.devjarvis.live.LiveAudio
+import com.adesh.devjarvis.live.LiveConnection
+import com.adesh.devjarvis.live.LiveMessages
+import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.ConfirmationParser
 import com.adesh.devjarvis.tools.ToolContext
@@ -12,11 +18,15 @@ import com.adesh.devjarvis.tools.ToolRegistry
 import com.adesh.devjarvis.tools.ToolResult
 import com.adesh.devjarvis.voice.AudioFocusHelper
 import com.adesh.devjarvis.voice.Earcons
+import com.adesh.devjarvis.voice.GroqWhisperInput
 import com.adesh.devjarvis.voice.SpeechInput
 import com.adesh.devjarvis.voice.SpeechOutput
 import com.adesh.devjarvis.wakeword.VoskModelManager
 import com.adesh.devjarvis.wakeword.WakePhraseMatcher
 import com.adesh.devjarvis.wakeword.WakeWordEngine
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -27,16 +37,18 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
-import javax.inject.Inject
-import javax.inject.Singleton
+import okhttp3.OkHttpClient
 
 enum class JarvisState(val label: String) {
     IDLE("STANDBY"), LISTENING("LISTENING"), THINKING("PROCESSING"), SPEAKING("SPEAKING")
@@ -95,13 +107,20 @@ class JarvisSession @Inject constructor(
     private val focus: AudioFocusHelper,
     private val registry: ToolRegistry,
     private val activityLog: ActivityLog,
+    private val groqWhisper: GroqWhisperInput,
+    private val http: OkHttpClient,
+    @ApplicationContext context: Context,
 ) {
+    private val audioManager = context.getSystemService(AudioManager::class.java)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _ui = MutableStateFlow(HudUiState())
     val ui: StateFlow<HudUiState> = _ui.asStateFlow()
 
-    val speechLevel: StateFlow<Float> = speechOut.level
+    private val liveOutLevel = MutableStateFlow(0f)
+    /** Speech amplitude for the reactor: Android TTS (classic) or Live audio output. */
+    val speechLevel: StateFlow<Float> = combine(speechOut.level, liveOutLevel) { a, b -> maxOf(a, b) }
+        .stateIn(scope, SharingStarted.Eagerly, 0f)
 
     private val _signals = MutableSharedFlow<SessionSignal>(extraBufferCapacity = 4)
     val signals: SharedFlow<SessionSignal> = _signals.asSharedFlow()
@@ -116,6 +135,15 @@ class JarvisSession @Inject constructor(
     private var endAfterReply = false
     private var confirmAnswer: CompletableDeferred<Boolean>? = null
 
+    // Live mode
+    private var liveJob: Job? = null
+    private var liveConn: LiveConnection? = null
+    private var liveAudio: LiveAudio? = null
+    private var liveClosingByUs = false
+    /** Don't retry Live before this time (after a non-quota failure). */
+    private var liveRetryAt = 0L
+    private val liveActive: Boolean get() = liveJob?.isActive == true
+
     private val toolContext = object : ToolContext {
         override suspend fun confirm(question: String): Boolean = confirmByVoice(question)
     }
@@ -124,11 +152,13 @@ class JarvisSession @Inject constructor(
         scope.launch {
             settings.settings.collect { s ->
                 wake.sensitivity = s.wakeSensitivity
-                _ui.update { it.copy(hasKey = s.hasGeminiKey) }
+                _ui.update { it.copy(hasKey = s.hasGeminiKey || s.hasGroqKey) }
                 syncMic()
+                updateMode()
             }
         }
-        scope.launch { usage.fuelPercent.collect { f -> _ui.update { it.copy(fuelPercent = f) } } }
+        scope.launch { usage.fuel.collect { updateMode() } }
+        scope.launch { brain.active.collect { updateMode() } }
         scope.launch { wake.lastHeard.collect { h -> _ui.update { it.copy(wakeHeard = h) } } }
         scope.launch { wake.detections.collect(::onDetection) }
         scope.launch { wake.problem.collect(::onWakeProblem) }
@@ -165,6 +195,11 @@ class JarvisSession @Inject constructor(
 
     /** Reactor tap: idle -> listen, listening -> stop, thinking/speaking -> interrupt and listen. */
     fun onReactorTap() {
+        if (liveActive) {
+            // Live mode: interrupting is done by voice; a tap ends the Live conversation.
+            closeLive(chime = false)
+            return
+        }
         when (_ui.value.state) {
             JarvisState.LISTENING -> {
                 listenJob?.cancel()
@@ -213,6 +248,7 @@ class JarvisSession @Inject constructor(
     }
 
     fun stopEverything() {
+        closeLive(chime = false)
         listenJob?.cancel()
         interrupt()
         endConversation(chime = false)
@@ -274,6 +310,10 @@ class JarvisSession @Inject constructor(
 
     /** Decides who owns the mic for the current state. */
     private fun syncMic() {
+        if (liveActive) {
+            wake.stop() // Live owns the mic.
+            return
+        }
         if (!serviceActive || !models.isInstalled() || focus.inCall()) {
             wake.stop()
             return
@@ -291,7 +331,7 @@ class JarvisSession @Inject constructor(
     private fun startConversation() {
         focus.acquire()
         _ui.update { it.copy(inConversation = true) }
-        startListening(followUp = false)
+        if (shouldUseLive(settings.current)) startLive() else startListening(followUp = false)
     }
 
     private fun endConversation(chime: Boolean) {
@@ -318,7 +358,7 @@ class JarvisSession @Inject constructor(
                 var outcome = ListenOutcome.NOTHING
                 var heardText = ""
                 var failure: SpeechInput.Reason? = null
-                speechIn.listen(settings.current.sttLanguage).collect { ev ->
+                classicListener().collect { ev ->
                     when (ev) {
                         SpeechInput.Event.Ready -> Unit
                         is SpeechInput.Event.Level -> _ui.update { it.copy(micLevel = ev.value) }
@@ -458,6 +498,17 @@ class JarvisSession @Inject constructor(
     /** Ask out loud, then wait for "haan / nahi" by voice or a YES / NO tap. No answer = no. */
     private suspend fun confirmByVoice(question: String): Boolean {
         speechOut.awaitIdle()
+        while (liveAudio?.isPlaying() == true) delay(100)
+        val live = liveAudio
+        live?.pauseMic()
+        try {
+            return confirmByVoiceInner(question)
+        } finally {
+            live?.resumeMic()
+        }
+    }
+
+    private suspend fun confirmByVoiceInner(question: String): Boolean {
         addLine(fromUser = false, text = question)
         speakingText = question
         speechOut.speak(question)
@@ -501,7 +552,7 @@ class JarvisSession @Inject constructor(
     /** One recognizer pass; returns the text or null if nothing usable was heard. */
     private suspend fun listenOnce(): String? {
         var text: String? = null
-        speechIn.listen(settings.current.sttLanguage).collect { ev ->
+        classicListener().collect { ev ->
             when (ev) {
                 is SpeechInput.Event.Level -> _ui.update { it.copy(micLevel = ev.value) }
                 is SpeechInput.Event.Partial -> _ui.update { it.copy(partial = ev.text) }
@@ -511,6 +562,208 @@ class JarvisSession @Inject constructor(
         }
         _ui.update { it.copy(partial = "", micLevel = 0f) }
         return text
+    }
+
+    // ---------------------------------------------------------------- engines & mode
+
+    /** Classic-mode ears: Groq Whisper if chosen and possible, else Android's recognizer. */
+    private fun classicListener() = settings.current.let { s ->
+        if (s.sttEngine == JarvisSettings.STT_GROQ && s.hasGroqKey && device.isOnline() && !usage.isExhausted(Provider.GROQ)) {
+            groqWhisper.listen(s.sttLanguage)
+        } else {
+            speechIn.listen(s.sttLanguage)
+        }
+    }
+
+    private fun shouldUseLive(s: JarvisSettings): Boolean =
+        s.voiceEngine == JarvisSettings.VOICE_LIVE && s.hasGeminiKey && device.isOnline() &&
+            !usage.isExhausted(Provider.LIVE) && System.currentTimeMillis() >= liveRetryAt
+
+    /** HUD chip + fuel gauge follow whichever engine is (or would be) doing the work. */
+    private fun updateMode() {
+        val s = settings.current
+        val provider = when {
+            liveActive || (shouldUseLive(s) && s.voiceEngine == JarvisSettings.VOICE_LIVE) -> Provider.LIVE
+            brain.active.value == Provider.GROQ || (!s.hasGeminiKey && s.hasGroqKey) || usage.isExhausted(Provider.GEMINI) -> Provider.GROQ
+            else -> Provider.GEMINI
+        }
+        val label = when (provider) {
+            Provider.LIVE -> "LIVE"
+            Provider.GROQ -> "FALLBACK"
+            Provider.GEMINI -> "STREAM"
+        }
+        _ui.update { it.copy(mode = label, fuelPercent = usage.fuel.value[provider] ?: 100) }
+    }
+
+    // ---------------------------------------------------------------- Live mode
+
+    /**
+     * Gemini Live: our mic -> WebSocket -> native audio back. Interruption is native (just speak).
+     * Fails before the first reply (quota, model, key, network)? Fall back to classic for this conversation.
+     */
+    private fun startLive() {
+        listenJob?.cancel()
+        liveClosingByUs = false
+        val s = settings.current
+        _ui.update { it.copy(partial = "", micLevel = 0f) }
+        liveJob = scope.launch {
+            setState(JarvisState.LISTENING) // syncMic(): Live owns the mic now
+            wake.stop()
+            wake.awaitStopped()
+            focus.ownCommunicationMode = true
+            updateMode()
+
+            val conn = LiveConnection(http, s.geminiApiKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations))
+            val audio = LiveAudio(audioManager) { bytes, n -> conn.sendAudio(bytes, n) }
+            liveConn = conn
+            liveAudio = audio
+            val startedAt = System.currentTimeMillis()
+            var anyReply = false
+            var closeKind: LiveMessages.CloseKind? = null
+            var closeDetail = ""
+            val userSaid = StringBuilder()
+            val jarvisSaid = StringBuilder()
+            var userLine = -1L
+            var jarvisLine = -1L
+            var endAfterTurn = false
+            var followUp: Job? = null
+
+            fun commitTurn() {
+                val u = userSaid.toString().trim()
+                val j = jarvisSaid.toString().trim()
+                if (u.isNotEmpty() || j.isNotEmpty()) brain.remember(u.ifEmpty { "…" }, j.ifEmpty { "…" })
+                if (u.isNotEmpty() && ConversationRules.isEnder(u)) endAfterTurn = true
+                userSaid.clear(); jarvisSaid.clear()
+                userLine = -1; jarvisLine = -1
+                speakingText = ""
+            }
+
+            /** After JARVIS finishes speaking, keep listening ~8 s; silence -> close. */
+            fun armFollowUp() {
+                followUp?.cancel()
+                followUp = launch {
+                    while (audio.isPlaying()) delay(100)
+                    if (endAfterTurn || endAfterReply) {
+                        closeLive(chime = false)
+                        return@launch
+                    }
+                    setState(JarvisState.LISTENING)
+                    delay(JarvisConfig.FOLLOW_UP_WINDOW_MS)
+                    closeLive(chime = true)
+                }
+            }
+
+            val meters = launch {
+                while (isActive) {
+                    _ui.update { it.copy(micLevel = audio.micLevel) }
+                    liveOutLevel.value = audio.outLevel
+                    delay(50)
+                }
+            }
+            try {
+                conn.connect()
+                audio.start()
+                armFollowUp()
+                for (ev in conn.events) {
+                    if (ev is LiveConnection.Event.Closed) {
+                        closeKind = ev.kind
+                        closeDetail = ev.detail
+                        break
+                    }
+                    when (val e = (ev as LiveConnection.Event.Server).event) {
+                        is LiveMessages.ServerEvent.InputText -> {
+                            followUp?.cancel()
+                            userSaid.append(e.text)
+                            if (userLine < 0) userLine = nextId++
+                            upsertLine(userLine, userSaid.toString().trim(), fromUser = true)
+                            if (_ui.value.state != JarvisState.SPEAKING) setState(JarvisState.LISTENING)
+                        }
+                        is LiveMessages.ServerEvent.Audio -> {
+                            anyReply = true
+                            followUp?.cancel()
+                            audio.enqueue(e.pcm)
+                            setState(JarvisState.SPEAKING)
+                        }
+                        is LiveMessages.ServerEvent.OutputText -> {
+                            anyReply = true
+                            jarvisSaid.append(e.text)
+                            speakingText = jarvisSaid.toString()
+                            if (jarvisLine < 0) jarvisLine = nextId++
+                            upsertLine(jarvisLine, jarvisSaid.toString().trim())
+                        }
+                        LiveMessages.ServerEvent.Interrupted -> {
+                            // Sir spoke over JARVIS: stop the speaker right now.
+                            audio.flushPlayback()
+                            commitTurn()
+                            setState(JarvisState.LISTENING)
+                        }
+                        LiveMessages.ServerEvent.TurnComplete -> {
+                            commitTurn()
+                            armFollowUp()
+                        }
+                        is LiveMessages.ServerEvent.ToolCalls -> {
+                            anyReply = true
+                            followUp?.cancel()
+                            val results = e.calls.map { c -> c to runTool(c.name, c.args) }
+                            conn.sendToolResponse(LiveMessages.toolResponse(results))
+                            setState(JarvisState.LISTENING)
+                        }
+                        is LiveMessages.ServerEvent.GoAway -> Unit // server ends the session soon; we close on Closed
+                        is LiveMessages.ServerEvent.ToolCancelled, LiveMessages.ServerEvent.SetupComplete -> Unit
+                    }
+                }
+            } finally {
+                followUp?.cancel()
+                meters.cancel()
+                commitTurn()
+                audio.stop()
+                conn.close()
+                liveConn = null
+                liveAudio = null
+                liveOutLevel.value = 0f
+                focus.ownCommunicationMode = false
+                usage.recordLiveSeconds(((System.currentTimeMillis() - startedAt) / 1000).toInt())
+            }
+            onLiveEnded(closeKind, closeDetail, anyReply)
+        }
+    }
+
+    private fun onLiveEnded(kind: LiveMessages.CloseKind?, detail: String, anyReply: Boolean) {
+        liveJob = null
+        updateMode()
+        if (liveClosingByUs) return // closeLive() already handled the ending
+        when (kind) {
+            LiveMessages.CloseKind.QUOTA -> usage.markExhausted(Provider.LIVE)
+            LiveMessages.CloseKind.AUTH, LiveMessages.CloseKind.MODEL, LiveMessages.CloseKind.OTHER ->
+                if (!anyReply) liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
+            else -> Unit
+        }
+        updateMode()
+        if (!anyReply && _ui.value.inConversation && kind != LiveMessages.CloseKind.NETWORK) {
+            // Auto-switch A -> B: Live couldn't start, carry on in classic mode without making Sir repeat the wake word.
+            addLine(fromUser = false, text = "Live mode unavailable ($detail) — classic mode.", system = true)
+            startListening(followUp = false)
+            return
+        }
+        if (kind == LiveMessages.CloseKind.NETWORK && !anyReply) {
+            say("Sir, network gayab hai, abhi offline hoon.")
+            return
+        }
+        endConversation(chime = false)
+    }
+
+    /** End the Live conversation from our side (follow-up timeout, ender phrase, tap). */
+    private fun closeLive(chime: Boolean) {
+        val job = liveJob ?: return
+        if (liveClosingByUs) return
+        liveClosingByUs = true
+        liveConn?.close()
+        scope.launch {
+            job.join()
+            liveJob = null
+            updateMode()
+            endConversation(chime = chime)
+        }
     }
 
     private fun errorLine(e: BrainError): String = when (e) {
@@ -559,13 +812,13 @@ class JarvisSession @Inject constructor(
         _ui.update { it.copy(transcript = (it.transcript + line).takeLast(MAX_LINES)) }
     }
 
-    private fun upsertLine(id: Long, text: String, system: Boolean = false) {
+    private fun upsertLine(id: Long, text: String, system: Boolean = false, fromUser: Boolean = false) {
         _ui.update { st ->
             val existing = st.transcript.indexOfFirst { it.id == id }
             val list = if (existing >= 0) {
                 st.transcript.toMutableList().also { it[existing] = it[existing].copy(text = text) }
             } else {
-                (st.transcript + TranscriptLine(id, fromUser = false, text = text, isSystem = system)).takeLast(MAX_LINES)
+                (st.transcript + TranscriptLine(id, fromUser = fromUser, text = text, isSystem = system)).takeLast(MAX_LINES)
             }
             st.copy(transcript = list)
         }

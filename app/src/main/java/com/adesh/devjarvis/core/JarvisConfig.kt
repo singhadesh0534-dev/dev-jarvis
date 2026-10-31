@@ -28,11 +28,26 @@ object JarvisConfig {
      */
     const val GEMINI_DAILY_REQUEST_BUDGET = 1000
 
-    // ---- Phase 4 (abhi use nahi ho rahe, bas yahan ready hain) ----
+    // ---- Live mode: Gemini Live API (native audio in/out, real interruption) ----
+    const val GEMINI_LIVE_URL =
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+    /** Settings > Live model se badal sakte ho. */
     const val GEMINI_LIVE_MODEL = "gemini-3.8-live"
+    /** Prebuilt Live voices: Charon (deep, calm), Orus (firm), Fenrir, Puck, Kore, Aoede… */
+    const val GEMINI_LIVE_VOICE = "Charon"
+    const val LIVE_INPUT_RATE = 16_000
+    const val LIVE_OUTPUT_RATE = 24_000
+    /** Approx free daily Live minutes for the fuel gauge — check your AI Studio rate-limit page. */
+    const val LIVE_DAILY_MINUTES_BUDGET = 60
+    /** After a non-quota Live failure, use Classic mode for this long before trying Live again. */
+    const val LIVE_RETRY_AFTER_MS = 10 * 60_000L
+
+    // ---- Backup brain + better Hinglish ears: Groq (free tier) ----
     const val GROQ_BASE_URL = "https://api.groq.com/openai/v1"
-    const val GROQ_CHAT_MODEL = "llama-3.3-70b-versatile"
+    /** Fast free model with tool calling. Settings > Groq model se badlo (list: GET /openai/v1/models). */
+    const val GROQ_CHAT_MODEL = "openai/gpt-oss-120b"
     const val GROQ_STT_MODEL = "whisper-large-v3-turbo"
+    const val GROQ_DAILY_REQUEST_BUDGET = 1000
 
     // ---- Conversation ----
     /** Kitne pichhle turns (user + jarvis = 2 messages) brain ko bheje jaate hain. */
