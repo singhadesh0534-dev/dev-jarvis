@@ -387,7 +387,7 @@ private fun UpdatesBlock(updater: AppUpdater) {
         is AppUpdater.State.Downloading -> "Downloading… ${st.percent}%"
         is AppUpdater.State.Installing ->
             if (st.needsPermission) "Ek baar: JARVIS ke liye \"Allow from this source\" ON karo, phir wapas aao."
-            else "Android installer khula hai — Update / Install dabao."
+            else "Download / installer khula hai — file pe tap karke Update / Install dabao."
         is AppUpdater.State.Failed -> "Update fail: ${st.message}"
     }
     Hint(status)

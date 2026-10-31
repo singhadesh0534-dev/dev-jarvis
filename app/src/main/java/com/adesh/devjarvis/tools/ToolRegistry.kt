@@ -1,5 +1,6 @@
 package com.adesh.devjarvis.tools
 
+import android.content.Context
 import com.adesh.devjarvis.brain.GroqMessages
 import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.memory.MemoryTools
@@ -8,18 +9,20 @@ import com.adesh.devjarvis.screen.ScreenTools
 import com.adesh.devjarvis.tools.impl.CommunicationTools
 import com.adesh.devjarvis.tools.impl.InfoTools
 import com.adesh.devjarvis.tools.impl.PhoneTools
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import javax.inject.Inject
-import javax.inject.Singleton
 
 /** Saare tools ki list + Gemini ko bhejne wala `tools` JSON. */
 @Singleton
 class ToolRegistry @Inject constructor(
+    @ApplicationContext context: Context,
     communication: CommunicationTools,
     phone: PhoneTools,
     info: InfoTools,
@@ -29,6 +32,7 @@ class ToolRegistry @Inject constructor(
 ) {
     val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools)
         .filter { Edition.isFull || it.name !in Edition.FULL_ONLY_TOOLS }
+        .filter { t -> Edition.TOOL_NEEDS_PERMISSION[t.name]?.let { Edition.declares(context, it) } ?: true }
     private val byName = tools.associateBy { it.name }
 
     val declarations: List<JsonObject> = tools.map { it.declaration() }

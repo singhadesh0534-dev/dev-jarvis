@@ -30,9 +30,12 @@ Isliye do editions hain (same package, same data):
 | Camera vision ("ye kya hai?") | ✅ | ✅ |
 | Screen padhna / screenshot / tap / screen agent / lock screen | — | ✅ |
 | Notifications padhna, reply, important-message alerts | — | ✅ |
-| Lock screen / doosre app ke upar se apps kholna (bina tap) | notification tap chahiye* | ✅ |
+| Lock screen / doosre app ke upar se apps kholna (bina tap) | notification tap chahiye | ✅ |
+| Contacts se naam (Mummy, Bhai), seedha call, seedha SMS | — (dialer / SMS app khulta hai, number bolo) | ✅ |
+| Calendar, brightness, floating reactor, boot pe auto-start, exact reminders | — | ✅ |
 
-\* Lite mein "Display over other apps" ON karo — floating reactor dikhte hue apps khulna aasaan hota hai.
+Lite mein sirf internet, mic (wake word service), camera, notifications aur vibration permissions hain — taaki
+normal install ho. Full update (same package) baaki sab wapas laata hai; data bana rehta hai.
 
 **Lite → Full (data same rehta hai):** app → Settings → **Updates** → *Download Full edition*. Us ek install ke liye
 Play Protect ko rasta dena hoga — do seedhe tareeke:

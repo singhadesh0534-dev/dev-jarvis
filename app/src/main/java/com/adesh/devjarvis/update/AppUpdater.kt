@@ -83,6 +83,17 @@ class AppUpdater @Inject constructor(
      */
     fun downloadAndInstall(full: Boolean = Edition.isFull) {
         if (job?.isActive == true) return
+        if (!Edition.declares(context, android.Manifest.permission.REQUEST_INSTALL_PACKAGES)) {
+            // Lite has no install permission: let the browser download it; Sir taps the file to install.
+            val name = if (full) "JARVIS.apk" else "JARVIS-lite.apk"
+            val url = latest?.assets?.get(name)?.url
+                ?: "https://github.com/${BuildConfig.UPDATE_REPO}/releases/download/$RELEASE_TAG/$name"
+            runCatching {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            _state.value = State.Installing(needsPermission = false)
+            return
+        }
         job = scope.launch {
             try {
                 val info = latest ?: fetchInfo()

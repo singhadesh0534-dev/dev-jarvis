@@ -29,11 +29,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +42,7 @@ import androidx.core.app.ActivityCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.ui.theme.Hud
 import com.adesh.devjarvis.wakeword.VoskModelManager
 
@@ -79,7 +80,12 @@ fun SetupScreen(viewModel: SetupViewModel, onDone: () -> Unit) {
             StepAction.DOWNLOAD -> viewModel.downloadModel()
             StepAction.OPEN_SETTINGS, StepAction.MANUAL_CONFIRM -> {
                 val intents = when (step.id) {
-                    StepId.BATTERY -> listOf(SetupIntents.ignoreBatteryOptimization(context), SetupIntents.appDetails(context))
+                    StepId.BATTERY ->
+                        if (Edition.declares(context, android.Manifest.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)) {
+                            listOf(SetupIntents.ignoreBatteryOptimization(context), SetupIntents.appDetails(context))
+                        } else {
+                            listOf(SetupIntents.batteryOptimizationList(), SetupIntents.appDetails(context))
+                        }
                     StepId.XOS_AUTOSTART -> SetupIntents.xosAutoStart(context)
                     StepId.OVERLAY -> listOf(SetupIntents.overlay(context))
                     StepId.ACCESSIBILITY -> listOf(SetupIntents.accessibility())

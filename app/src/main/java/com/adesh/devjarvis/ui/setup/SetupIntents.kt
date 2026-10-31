@@ -16,6 +16,9 @@ object SetupIntents {
     fun ignoreBatteryOptimization(context: Context) =
         Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
 
+    /** All-apps battery list (no special permission needed) — Sir picks JARVIS > Don't optimize. */
+    fun batteryOptimizationList() = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+
     fun overlay(context: Context) =
         Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
 

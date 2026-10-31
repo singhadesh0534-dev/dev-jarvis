@@ -82,8 +82,14 @@ class SetupViewModel @Inject constructor(
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
     /** Lite has no Accessibility / Notification-listener service, so those steps can't be done there. */
-    private fun buildSteps(): List<SetupStep> = allSteps().filter {
-        Edition.isFull || (it.id != StepId.ACCESSIBILITY && it.id != StepId.NOTIFICATION_ACCESS)
+    private fun buildSteps(): List<SetupStep> = allSteps().filter { step ->
+        val needs = when (step.id) {
+            StepId.ACCESSIBILITY, StepId.NOTIFICATION_ACCESS -> if (Edition.isFull) null else "full-only"
+            StepId.OVERLAY -> Manifest.permission.SYSTEM_ALERT_WINDOW
+            StepId.WRITE_SETTINGS -> Manifest.permission.WRITE_SETTINGS
+            else -> step.permission
+        }
+        needs == null || (needs != "full-only" && Edition.declares(context, needs))
     }
 
     private fun allSteps(): List<SetupStep> = buildList {

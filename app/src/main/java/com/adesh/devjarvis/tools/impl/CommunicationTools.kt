@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.telephony.SmsManager
 import androidx.core.content.ContextCompat
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.tools.ActivityLauncher
 import com.adesh.devjarvis.tools.AppRepository
 import com.adesh.devjarvis.tools.ContactRepository
@@ -41,7 +42,10 @@ class CommunicationTools @Inject constructor(
 
     private suspend fun lookupFailure(who: String): ToolResult = when (val l = contacts.resolve(who)) {
         is Lookup.Ambiguous -> ToolResult.fail("ambiguous: ${l.options.joinToString { it.name }}. Ask Sir which one.")
-        Lookup.NoPermission -> ToolResult.fail("contacts permission missing — Sir can allow it in JARVIS Setup, or say the number")
+        Lookup.NoPermission -> ToolResult.fail(
+            if (Edition.declares(context, Manifest.permission.READ_CONTACTS)) "contacts permission missing — Sir can allow it in JARVIS Setup, or say the number"
+            else "this Lite edition can't read contacts — ask Sir for the number (the Full update adds contacts)"
+        )
         Lookup.NotFound -> ToolResult.fail("no contact matching '$who'")
         is Lookup.Found -> ToolResult.fail("unexpected")
     }
