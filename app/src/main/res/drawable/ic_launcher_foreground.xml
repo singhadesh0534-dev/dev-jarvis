@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mini arc reactor: outer ring, 10 coils, glowing core. 108dp canvas, safe zone 66dp. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF00E5FF"
+        android:strokeWidth="2.5"
+        android:pathData="M54,25 A29,29 0 1,1 53.99,25 Z" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#FF00E5FF"
+        android:strokeAlpha="0.75"
+        android:strokeWidth="7"
+        android:pathData="M74.95,55.46 A21,21 0 0,1 71.81,65.13 M70.09,67.50 A21,21 0 0,1 61.87,73.47 M59.08,74.38 A21,21 0 0,1 48.92,74.38 M46.13,73.47 A21,21 0 0,1 37.91,67.50 M36.19,65.13 A21,21 0 0,1 33.05,55.46 M33.05,52.54 A21,21 0 0,1 36.19,42.87 M37.91,40.50 A21,21 0 0,1 46.13,34.53 M48.92,33.62 A21,21 0 0,1 59.08,33.62 M61.87,34.53 A21,21 0 0,1 70.09,40.50 M71.81,42.87 A21,21 0 0,1 74.95,52.54" />
+    <path
+        android:fillColor="#FF9BEFFF"
+        android:pathData="M54,42 A12,12 0 1,1 53.99,42 Z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M54,48 A6,6 0 1,1 53.99,48 Z" />
+</vector>
