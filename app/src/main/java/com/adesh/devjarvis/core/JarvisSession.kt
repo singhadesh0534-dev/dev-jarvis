@@ -189,6 +189,8 @@ class JarvisSession @Inject constructor(
         scope.launch { wake.detections.collect(::onDetection) }
         scope.launch { screenTools.progress.collect { line -> addLine(fromUser = false, text = line, system = true) } }
         scope.launch { wake.problem.collect(::onWakeProblem) }
+        // Call shuru/khatam hone par turant react: beech mein JARVIS turant chup aur mic chhod de.
+        focus.watchCallState { scope.launch { onCallStateChanged() } }
         scope.launch {
             models.state.collect { st ->
                 if (st is VoskModelManager.State.Ready) syncMic()
@@ -294,6 +296,14 @@ class JarvisSession @Inject constructor(
         listenJob?.cancel()
         interrupt()
         endConversation(chime = false)
+    }
+
+    /** A phone call started or ended. During a call JARVIS goes fully silent and gives up the mic. */
+    private fun onCallStateChanged() {
+        if (focus.inCall()) {
+            if (_ui.value.state != JarvisState.IDLE || _ui.value.inConversation || liveActive) stopEverything()
+        }
+        syncMic() // call started -> wake stops; call ended -> wake restarts
     }
 
     // ---------------------------------------------------------------- wake word

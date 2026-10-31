@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.os.Build
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -12,6 +13,17 @@ import javax.inject.Singleton
 @Singleton
 class AudioFocusHelper @Inject constructor(@ApplicationContext context: Context) {
     private val audio = context.getSystemService(AudioManager::class.java)
+
+    /**
+     * Call (ya koi aur app ke communication mode) shuru/khatam hone par turant pata chale, taaki JARVIS
+     * call ke beech mic na pakde aur na bole. [onCallStateChanged] har mode badlav pe chalega.
+     */
+    fun watchCallState(onCallStateChanged: () -> Unit) {
+        val am = audio ?: return
+        if (Build.VERSION.SDK_INT >= 31) {
+            runCatching { am.addOnModeChangedListener({ it.run() }, { onCallStateChanged() }) }
+        }
+    }
     private val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
         .setAudioAttributes(
             AudioAttributes.Builder()
