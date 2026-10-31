@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -58,7 +59,12 @@ import com.adesh.devjarvis.ui.theme.Hud
 import com.adesh.devjarvis.voice.VoiceInfo
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSetup: () -> Unit) {
+fun SettingsScreen(
+    viewModel: SettingsViewModel,
+    onBack: () -> Unit,
+    onOpenSetup: () -> Unit,
+    onOpenMemory: () -> Unit,
+) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     var showVoices by remember { mutableStateOf(false) }
@@ -162,6 +168,31 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSetup
                 draft.voiceBargeIn,
             ) { v -> viewModel.edit { it.copy(voiceBargeIn = v) } }
             OutlinedButton(onClick = onOpenSetup) { Text("Setup & permissions checklist", color = Hud.Cyan) }
+
+            Section("PROACTIVE JARVIS")
+            ToggleRow("Morning briefing", "Weather, aaj ke events/reminders, battery + ek witty line.", draft.briefingEnabled) { v ->
+                viewModel.edit { it.copy(briefingEnabled = v) }
+            }
+            TimeField("Briefing time", draft.briefingMinute) { m -> viewModel.edit { it.copy(briefingMinute = m) } }
+            OutlinedButton(onClick = viewModel::playBriefingNow) { Text("Play briefing now", color = Hud.Cyan) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) { TimeField("Quiet from", draft.quietStartMinute) { m -> viewModel.edit { it.copy(quietStartMinute = m) } } }
+                Box(Modifier.weight(1f)) { TimeField("Quiet until", draft.quietEndMinute) { m -> viewModel.edit { it.copy(quietEndMinute = m) } } }
+            }
+            Hint("Quiet hours, DND, silent mode (bina headphones) ya call ke dauraan JARVIS khud se nahi bolta — sirf notification. Aapke apne reminders raat mein bhi bolte hain.")
+            ToggleRow("Important notifications bolna", "Chune hue apps/logon ke message ka chhota summary. OTP/bank kabhi nahi.", draft.notificationAlerts) { v ->
+                viewModel.edit { it.copy(notificationAlerts = v) }
+            }
+            HudField("Important apps (comma)", draft.importantApps, { v -> viewModel.edit { it.copy(importantApps = v) } })
+            HudField("Important people (comma)", draft.importantContacts, { v -> viewModel.edit { it.copy(importantContacts = v) } })
+            Hint("Jaise: Mummy, Papa, Boss. In logon ka message kisi bhi app se aaye to JARVIS batayega.")
+            ToggleRow("Low battery warning", "20% se neeche (charging nahi) — aur 10% pe dobara.", draft.lowBatteryAlert) { v ->
+                viewModel.edit { it.copy(lowBatteryAlert = v) }
+            }
+
+            Section("MEMORY")
+            Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
+            OutlinedButton(onClick = onOpenMemory) { Text("Open memory", color = Hud.Cyan) }
 
             Section("PERSONALITY")
             OutlinedTextField(
@@ -311,6 +342,28 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
                 Text(if (visible) "HIDE" else "SHOW", style = MaterialTheme.typography.labelSmall, color = Hud.Cyan)
             }
         },
+        colors = hudFieldColors(),
+        modifier = Modifier.fillMaxWidth(),
+    )
+}
+
+/** "07:30" style field; invalid text is ignored until it parses. */
+@Composable
+private fun TimeField(label: String, minute: Int, onChange: (Int) -> Unit) {
+    var text by remember(minute) { mutableStateOf("%02d:%02d".format(minute / 60, minute % 60)) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { v ->
+            text = v
+            Regex("""^(\d{1,2}):(\d{2})$""").find(v.trim())?.let { m ->
+                val h = m.groupValues[1].toInt()
+                val mm = m.groupValues[2].toInt()
+                if (h in 0..23 && mm in 0..59) onChange(h * 60 + mm)
+            }
+        },
+        label = { Text(label) },
+        singleLine = true,
+        textStyle = MaterialTheme.typography.bodyMedium,
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )

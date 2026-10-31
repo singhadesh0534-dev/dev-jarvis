@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -23,7 +24,7 @@ import javax.inject.Inject
 
 enum class StepId {
     MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK,
-    CALL_PHONE, CONTACTS, SMS, ACCESSIBILITY, WRITE_SETTINGS, OVERLAY, ASSISTANT,
+    CALL_PHONE, CONTACTS, SMS, ACCESSIBILITY, NOTIFICATION_ACCESS, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
 }
 
 /** How the step's main button works. */
@@ -192,6 +193,26 @@ class SetupViewModel @Inject constructor(
                 ),
                 StepAction.OPEN_SETTINGS, "Open setting",
                 granted = accessibilityEnabled(), optional = false,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.NOTIFICATION_ACCESS, "Notification access",
+                "\"Kiska message aaya?\", reply karna, aur important messages ka spoken alert. OTP / bank / payment " +
+                    "notifications JARVIS kabhi nahi padhta, bolta ya kahin bhejta.",
+                listOf("Open setting dabao → JARVIS → Allow.", "\"Restricted setting\" aaye to Accessibility wala same tareeka: App info > ⋮ > Allow restricted settings."),
+                StepAction.OPEN_SETTINGS, "Open setting",
+                granted = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName), optional = false,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.CALENDAR, "Calendar (optional)",
+                "Morning briefing aur \"aaj kya schedule hai?\" ke liye events padhna. Sirf padhna, kuch badalta nahi.",
+                listOf("Allow dabao."),
+                StepAction.RUNTIME_PERMISSION, "Allow calendar",
+                granted = has(Manifest.permission.READ_CALENDAR), optional = true,
+                permission = Manifest.permission.READ_CALENDAR,
             )
         )
         add(

@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -71,6 +72,7 @@ fun HudScreen(
     viewModel: HudViewModel,
     onOpenSettings: () -> Unit,
     onOpenActivity: () -> Unit,
+    onOpenMemory: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
@@ -108,7 +110,7 @@ fun HudScreen(
             .imePadding()
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            TopBar(onOpenSettings, onOpenActivity)
+            TopBar(onOpenSettings, onOpenActivity, onOpenMemory)
             StatusRow(ui)
             AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
@@ -143,7 +145,7 @@ fun HudScreen(
 }
 
 @Composable
-private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit) {
+private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpenMemory: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -151,6 +153,9 @@ private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text("J.A.R.V.I.S.", style = MaterialTheme.typography.headlineSmall, color = Hud.Cyan)
             Text("JUST A RATHER VERY INTELLIGENT SYSTEM", style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
+        }
+        IconButton(onClick = onOpenMemory) {
+            Icon(Icons.Filled.Person, contentDescription = "Memory", tint = Hud.Cyan)
         }
         IconButton(onClick = onOpenActivity) {
             Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Activity log", tint = Hud.Cyan)

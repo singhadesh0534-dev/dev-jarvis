@@ -21,6 +21,8 @@ object SetupIntents {
 
     fun accessibility() = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
 
+    fun notificationAccess() = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+
     fun writeSettings(context: Context) =
         Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
 

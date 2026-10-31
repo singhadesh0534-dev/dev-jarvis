@@ -83,6 +83,7 @@ fun SetupScreen(viewModel: SetupViewModel, onDone: () -> Unit) {
                     StepId.XOS_AUTOSTART -> SetupIntents.xosAutoStart(context)
                     StepId.OVERLAY -> listOf(SetupIntents.overlay(context))
                     StepId.ACCESSIBILITY -> listOf(SetupIntents.accessibility())
+                    StepId.NOTIFICATION_ACCESS -> listOf(SetupIntents.notificationAccess())
                     StepId.WRITE_SETTINGS -> listOf(SetupIntents.writeSettings(context))
                     StepId.ASSISTANT -> SetupIntents.defaultAssistant()
                     else -> listOf(SetupIntents.appDetails(context))

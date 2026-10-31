@@ -20,6 +20,8 @@ object ContextBlock {
     fun build(
         device: DeviceSnapshot,
         homeCity: String = "",
+        memories: List<String> = emptyList(),
+        notifications: List<String> = emptyList(),
         now: ZonedDateTime = ZonedDateTime.now(),
     ): String = buildString {
         appendLine("[Live context — use only if relevant, never read it out as a list]")
@@ -32,6 +34,14 @@ object ContextBlock {
         device.nextAlarmMillis?.let {
             val alarm = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
             appendLine("Next alarm: ${alarm.format(alarmFormat)}")
+        }
+        if (notifications.isNotEmpty()) {
+            appendLine("Unread notifications (filtered, newest first):")
+            notifications.forEach { appendLine("- $it") }
+        }
+        if (memories.isNotEmpty()) {
+            appendLine("What you remember about Sir (use naturally, never announce it):")
+            memories.forEach { appendLine("- $it") }
         }
     }.trimEnd()
 }

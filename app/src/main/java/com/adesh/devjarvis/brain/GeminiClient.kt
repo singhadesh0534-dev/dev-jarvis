@@ -55,6 +55,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
         systemInstruction: String,
         contents: JsonArray,
         tools: JsonArray?,
+        jsonMode: Boolean = false,
     ): Flow<GeminiStreamParser.Chunk> = channelFlow {
         if (apiKey.isBlank()) throw BrainError.MissingKey()
 
@@ -66,7 +67,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
                     .url("${JarvisConfig.GEMINI_BASE_URL}/models/$model:streamGenerateContent?alt=sse")
                     // Key header mein — URL mein nahi, taaki kisi log mein na dikhe.
                     .header("x-goog-api-key", apiKey)
-                    .post(buildBody(systemInstruction, contents, tools, useThinking).toString().toRequestBody(JSON))
+                    .post(buildBody(systemInstruction, contents, tools, useThinking, jsonMode).toString().toRequestBody(JSON))
                     .build()
                 val current = http.newCall(request).also { call.set(it) }
                 val response = try {
@@ -103,7 +104,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
         awaitClose { call.get()?.cancel(); reader.cancel() }
     }
 
-    private fun buildBody(systemInstruction: String, contents: JsonArray, tools: JsonArray?, thinking: Boolean): JsonObject =
+    private fun buildBody(systemInstruction: String, contents: JsonArray, tools: JsonArray?, thinking: Boolean, jsonMode: Boolean): JsonObject =
         buildJsonObject {
             putJsonObject("system_instruction") {
                 putJsonArray("parts") { addJsonObject { put("text", systemInstruction) } }
@@ -113,6 +114,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
             putJsonObject("generationConfig") {
                 put("temperature", JarvisConfig.GEMINI_TEMPERATURE)
                 put("maxOutputTokens", JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS)
+                if (jsonMode) put("responseMimeType", "application/json")
                 if (thinking) {
                     putJsonObject("thinkingConfig") { put("thinkingLevel", JarvisConfig.GEMINI_THINKING_LEVEL) }
                 }

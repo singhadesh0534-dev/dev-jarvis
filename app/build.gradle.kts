@@ -14,8 +14,8 @@ android {
         applicationId = "com.adesh.devjarvis"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0-phase2"
+        versionCode = 5
+        versionName = "0.5.0-phase5"
     }
 
     buildTypes {
@@ -63,6 +63,9 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.vosk.android)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    ksp(libs.androidx.room.compiler)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

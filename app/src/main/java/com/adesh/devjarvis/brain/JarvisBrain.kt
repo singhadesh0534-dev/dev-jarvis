@@ -4,6 +4,8 @@ import com.adesh.devjarvis.core.DeviceStatus
 import com.adesh.devjarvis.core.JarvisConfig
 import com.adesh.devjarvis.core.Provider
 import com.adesh.devjarvis.core.UsageTracker
+import com.adesh.devjarvis.memory.MemoryRepository
+import com.adesh.devjarvis.notifications.NotificationStore
 import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.ToolRegistry
@@ -39,8 +41,12 @@ class JarvisBrain @Inject constructor(
     private val device: DeviceStatus,
     private val usage: UsageTracker,
     private val registry: ToolRegistry,
+    private val memory: MemoryRepository,
+    private val notifications: NotificationStore,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
+    /** Exchanges not yet looked at by the memory extractor. */
+    private val pendingForMemory = mutableListOf<Pair<String, String>>()
 
     private val _active = MutableStateFlow(Provider.GEMINI)
     /** Which text brain answered last — the HUD shows STREAM / FALLBACK. */
@@ -59,7 +65,7 @@ class JarvisBrain @Inject constructor(
         val s = settings.current
         if (!s.hasGeminiKey && !s.hasGroqKey) throw BrainError.MissingKey()
         if (!device.isOnline()) throw BrainError.NoNetwork()
-        val system = systemPrompt(s, forLive = false)
+        val system = systemPrompt(s, forLive = false, query = userText)
 
         val useGemini = s.hasGeminiKey && !usage.isExhausted(Provider.GEMINI)
         if (useGemini) {
@@ -77,13 +83,23 @@ class JarvisBrain @Inject constructor(
         groqLoop(s, system, userText, runTool)
     }
 
-    /** Full system instruction: personality + format/tool rules + live context (+ recent chat for Live). */
-    fun systemPrompt(s: JarvisSettings = settings.current, forLive: Boolean): String = buildString {
+    /**
+     * Full system instruction: personality + format/tool rules + live context, relevant memories,
+     * top notifications (+ recent chat for Live).
+     */
+    suspend fun systemPrompt(s: JarvisSettings = settings.current, forLive: Boolean, query: String = ""): String = buildString {
         append(s.systemPrompt.trim())
         append("\n\n")
         append(if (forLive) SystemPrompt.LIVE_RULES else SystemPrompt.SPEECH_FORMAT_RULES)
         append("\n\n")
-        append(ContextBlock.build(device.snapshot(), s.homeCity))
+        append(
+            ContextBlock.build(
+                device.snapshot(),
+                s.homeCity,
+                memories = memory.relevant(query, limit = 5).map { it.text },
+                notifications = notifications.topForContext(3),
+            )
+        )
         if (forLive) {
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {
@@ -185,7 +201,47 @@ class JarvisBrain @Inject constructor(
 
     /** Call after a reply finished (or was interrupted) so the next turn has context. */
     fun remember(userText: String, jarvisText: String) {
-        if (userText.isNotBlank() && jarvisText.isNotBlank()) conversation.addExchange(userText, jarvisText)
+        if (userText.isNotBlank() && jarvisText.isNotBlank()) {
+            conversation.addExchange(userText, jarvisText)
+            synchronized(pendingForMemory) { pendingForMemory += userText to jarvisText }
+        }
+    }
+
+    /** Exchanges since the last memory extraction (and clears the list). */
+    fun takeForMemory(): List<Pair<String, String>> = synchronized(pendingForMemory) {
+        pendingForMemory.toList().also { pendingForMemory.clear() }
+    }
+
+    /**
+     * One-shot JSON / text completion for background jobs (memory extraction, briefing).
+     * Gemini first, Groq if Gemini is out of quota. Returns null if neither works.
+     */
+    suspend fun complete(system: String, user: String, json: Boolean): String? {
+        val s = settings.current
+        if (!device.isOnline()) return null
+        if (s.hasGeminiKey && !usage.isExhausted(Provider.GEMINI)) {
+            try {
+                usage.recordGeminiRequest()
+                val out = StringBuilder()
+                gemini.streamTurn(s.geminiApiKey, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json)
+                    .collect { out.append(it.text) }
+                return out.toString()
+            } catch (e: BrainError) {
+                if (e is BrainError.RateLimited) usage.markExhausted(Provider.GEMINI, cooldownFor(e))
+            }
+        }
+        if (s.hasGroqKey && !usage.isExhausted(Provider.GROQ)) {
+            try {
+                usage.recordGroqRequest()
+                val out = StringBuilder()
+                val msgs = JsonArray(listOf(GroqMessages.text("system", system), GroqMessages.text("user", user)))
+                groq.streamChat(s.groqApiKey, s.groqModel, msgs, null, jsonMode = json).collect { out.append(it.text) }
+                return out.toString()
+            } catch (e: BrainError) {
+                if (e is BrainError.RateLimited) usage.markExhausted(Provider.GROQ, cooldownFor(e))
+            }
+        }
+        return null
     }
 
     fun forgetConversation() = conversation.clear()

@@ -10,6 +10,7 @@ import com.adesh.devjarvis.brain.SpeechSanitizer
 import com.adesh.devjarvis.live.LiveAudio
 import com.adesh.devjarvis.live.LiveConnection
 import com.adesh.devjarvis.live.LiveMessages
+import com.adesh.devjarvis.memory.MemoryExtractor
 import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.ConfirmationParser
@@ -46,6 +47,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
@@ -109,6 +111,7 @@ class JarvisSession @Inject constructor(
     private val activityLog: ActivityLog,
     private val groqWhisper: GroqWhisperInput,
     private val http: OkHttpClient,
+    private val memoryExtractor: MemoryExtractor,
     @ApplicationContext context: Context,
 ) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
@@ -134,6 +137,9 @@ class JarvisSession @Inject constructor(
     /** Set by a tool like make_call: close the conversation after this reply instead of listening on. */
     private var endAfterReply = false
     private var confirmAnswer: CompletableDeferred<Boolean>? = null
+
+    private var conversationStartedAt = 0L
+    private var memoryJob: Job? = null
 
     // Live mode
     private var liveJob: Job? = null
@@ -228,6 +234,8 @@ class JarvisSession @Inject constructor(
 
     fun onTextSubmitted(text: String) {
         if (text.isBlank()) return
+        memoryJob?.cancel()
+        if (conversationStartedAt == 0L) conversationStartedAt = System.currentTimeMillis()
         listenJob?.cancel()
         // Typed chat: no follow-up listening afterwards (mic shouldn't open on its own).
         _ui.update { it.copy(inConversation = false) }
@@ -238,6 +246,9 @@ class JarvisSession @Inject constructor(
     fun answerConfirmation(yes: Boolean) {
         confirmAnswer?.complete(yes)
     }
+
+    /** Proactive line that should only be shown, not spoken (quiet hours, DND…). */
+    fun note(text: String) = addLine(fromUser = false, text = text, system = true)
 
     /** Proactive line (e.g. a reminder). Spoken only if JARVIS is idle and no call is going on. */
     fun announce(text: String) {
@@ -329,12 +340,15 @@ class JarvisSession @Inject constructor(
     // ---------------------------------------------------------------- conversation
 
     private fun startConversation() {
+        memoryJob?.cancel() // still talking — extract later, all at once
+        if (!_ui.value.inConversation) conversationStartedAt = System.currentTimeMillis()
         focus.acquire()
         _ui.update { it.copy(inConversation = true) }
         if (shouldUseLive(settings.current)) startLive() else startListening(followUp = false)
     }
 
     private fun endConversation(chime: Boolean) {
+        scheduleMemoryExtraction()
         val wasOpen = _ui.value.inConversation
         focus.release()
         _ui.update { it.copy(inConversation = false, partial = "", micLevel = 0f) }
@@ -562,6 +576,20 @@ class JarvisSession @Inject constructor(
         }
         _ui.update { it.copy(partial = "", micLevel = 0f) }
         return text
+    }
+
+    /**
+     * 15 s after a conversation ends, ask the LLM what's worth remembering. Debounced so a burst of
+     * typed messages costs one request, not ten.
+     */
+    private fun scheduleMemoryExtraction() {
+        memoryJob?.cancel()
+        val started = conversationStartedAt.takeIf { it > 0 } ?: System.currentTimeMillis()
+        memoryJob = scope.launch {
+            delay(15_000)
+            conversationStartedAt = 0L
+            withContext(Dispatchers.IO) { runCatching { memoryExtractor.run(started) } }
+        }
     }
 
     // ---------------------------------------------------------------- engines & mode

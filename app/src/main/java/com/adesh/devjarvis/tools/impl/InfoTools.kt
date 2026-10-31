@@ -9,6 +9,10 @@ import com.adesh.devjarvis.tools.ToolContext
 import com.adesh.devjarvis.tools.ToolResult
 import com.adesh.devjarvis.tools.WeatherClient
 import com.adesh.devjarvis.tools.params
+import com.adesh.devjarvis.reminders.ReminderScheduler
+import com.adesh.devjarvis.tools.CalendarReader
+import java.time.LocalDate
+import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -20,7 +24,30 @@ import javax.inject.Singleton
 class InfoTools @Inject constructor(
     private val weather: WeatherClient,
     private val settings: SettingsRepository,
+    private val calendar: CalendarReader,
+    private val reminders: ReminderScheduler,
 ) {
+    private val schedule = object : SimpleTool(
+        "get_schedule", "Sir's calendar events and JARVIS reminders for today or tomorrow.",
+        params { string("day", "today | tomorrow", enum = listOf("today", "tomorrow")) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val zone = ZoneId.systemDefault()
+            val date = LocalDate.now().plusDays(if (args.enum("day", listOf("today", "tomorrow")) == "tomorrow") 1 else 0)
+            val from = date.atStartOfDay(zone).toInstant().toEpochMilli()
+            val to = date.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+            val events = calendar.events(from, to)
+            val fmt = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+            val rem = reminders.between(from, to).map { java.time.Instant.ofEpochMilli(it.atMillis).atZone(zone).format(fmt) + " " + it.text }
+            val parts = buildList {
+                add(if (events.isEmpty()) "no calendar events" else "events: " + events.joinToString("; "))
+                add(if (rem.isEmpty()) "no reminders" else "reminders: " + rem.joinToString("; "))
+                if (!calendar.hasPermission()) add("(calendar permission is off — Sir can allow it in Setup)")
+            }
+            return ToolResult.ok(parts.joinToString(". "))
+        }
+    }
+
     private val weatherTool = object : SimpleTool(
         "weather", "Current weather and today's forecast. City defaults to Sir's home city from Settings.",
         params { string("city", "City name, e.g. Mumbai") },
@@ -48,5 +75,5 @@ class InfoTools @Inject constructor(
             ToolResult.ok(ZonedDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, h:mm a", Locale.ENGLISH)))
     }
 
-    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time)
+    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule)
 }

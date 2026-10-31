@@ -14,53 +14,64 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.adesh.devjarvis.R
-import com.adesh.devjarvis.core.JarvisSession
+import com.adesh.devjarvis.data.ReminderDao
+import com.adesh.devjarvis.data.ReminderEntity
+import com.adesh.devjarvis.proactive.ProactivePolicy
+import com.adesh.devjarvis.proactive.ProactiveSpeaker
 import dagger.hilt.android.AndroidEntryPoint
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.long
-import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
 data class Reminder(val id: Long, val text: String, val atMillis: Long)
 
-/**
- * JARVIS ke apne reminders: AlarmManager se time pe notification + (always-on ho to) bol ke yaad dilana.
- * Phase 5 mein ye Room DB mein shift honge.
- */
+/** JARVIS ke apne reminders: Room mein save, AlarmManager se time pe, phir bol ke / notification se yaad. */
 @Singleton
-class ReminderScheduler @Inject constructor(@ApplicationContext private val context: Context) {
-
-    private val prefs = context.getSharedPreferences("reminders", Context.MODE_PRIVATE)
+class ReminderScheduler @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val dao: ReminderDao,
+) {
     private val alarms = context.getSystemService(AlarmManager::class.java)
 
-    fun schedule(text: String, atMillis: Long): Reminder {
-        val r = Reminder(System.currentTimeMillis(), text, atMillis)
-        save(all() + r)
+    suspend fun schedule(text: String, atMillis: Long): Reminder {
+        val id = dao.insert(ReminderEntity(text = text, atMillis = atMillis))
+        val r = Reminder(id, text, atMillis)
         arm(r)
         return r
     }
 
-    fun all(): List<Reminder> = runCatching {
-        Json.parseToJsonElement(prefs.getString(KEY, "[]")!!).let { it as JsonArray }.map {
-            val o = it.jsonObject
-            Reminder(o["id"]!!.jsonPrimitive.long, o["text"]!!.jsonPrimitive.content, o["at"]!!.jsonPrimitive.long)
-        }
-    }.getOrDefault(emptyList())
+    suspend fun pending(): List<Reminder> = dao.pending().map { Reminder(it.id, it.text, it.atMillis) }
 
-    fun remove(id: Long) = save(all().filterNot { it.id == id })
+    suspend fun between(from: Long, to: Long): List<Reminder> = dao.between(from, to).map { Reminder(it.id, it.text, it.atMillis) }
 
-    /** After reboot alarms are gone — set them again (and drop old ones). */
-    fun rearmAll() {
+    suspend fun markDone(id: Long) = dao.markDone(id)
+
+    /** After reboot AlarmManager forgets everything — set future ones again. Also imports Phase-3 reminders. */
+    suspend fun rearmAll() {
+        importLegacy()
         val now = System.currentTimeMillis()
-        val future = all().filter { it.atMillis > now - 60_000 }
-        save(future)
-        future.forEach(::arm)
+        pending().forEach { r -> if (r.atMillis > now - 60_000) arm(r) else markDone(r.id) }
+    }
+
+    private suspend fun importLegacy() {
+        val prefs = context.getSharedPreferences("reminders", Context.MODE_PRIVATE)
+        val raw = prefs.getString("list", null) ?: return
+        runCatching {
+            (Json.parseToJsonElement(raw) as JsonArray).forEach {
+                val o = it.jsonObject
+                dao.insert(ReminderEntity(text = o["text"]!!.jsonPrimitive.content, atMillis = o["at"]!!.jsonPrimitive.long))
+            }
+        }
+        prefs.edit().remove("list").apply()
     }
 
     private fun arm(r: Reminder) {
@@ -77,46 +88,50 @@ class ReminderScheduler @Inject constructor(@ApplicationContext private val cont
         }
     }
 
-    private fun save(list: List<Reminder>) {
-        val arr = JsonArray(list.map { buildJsonObject { put("id", it.id); put("text", it.text); put("at", it.atMillis) } })
-        prefs.edit().putString(KEY, arr.toString()).apply()
-    }
-
     companion object {
         const val EXTRA_ID = "id"
         const val EXTRA_TEXT = "text"
         const val CHANNEL = "jarvis_reminders"
-        private const val KEY = "list"
+
+        fun notify(context: Context, id: Int, title: String, text: String) {
+            context.getSystemService(NotificationManager::class.java)?.createNotificationChannel(
+                NotificationChannel(CHANNEL, "Reminders & briefings", NotificationManager.IMPORTANCE_HIGH)
+            )
+            val n = NotificationCompat.Builder(context, CHANNEL)
+                .setSmallIcon(R.drawable.ic_stat_jarvis)
+                .setContentTitle(title)
+                .setContentText(text)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setAutoCancel(true)
+                .build()
+            if (Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            ) {
+                NotificationManagerCompat.from(context).notify(id, n)
+            }
+        }
     }
 }
 
 @AndroidEntryPoint
 class ReminderReceiver : BroadcastReceiver() {
     @Inject lateinit var scheduler: ReminderScheduler
-    @Inject lateinit var session: JarvisSession
+    @Inject lateinit var speaker: ProactiveSpeaker
 
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getLongExtra(ReminderScheduler.EXTRA_ID, 0)
         val text = intent.getStringExtra(ReminderScheduler.EXTRA_TEXT) ?: return
-        scheduler.remove(id)
-
-        val nm = context.getSystemService(NotificationManager::class.java)
-        nm?.createNotificationChannel(
-            NotificationChannel(ReminderScheduler.CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH)
-        )
-        val n = NotificationCompat.Builder(context, ReminderScheduler.CHANNEL)
-            .setSmallIcon(R.drawable.ic_stat_jarvis)
-            .setContentTitle("Reminder, Sir")
-            .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setAutoCancel(true)
-            .build()
-        if (Build.VERSION.SDK_INT < 33 ||
-            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        ) {
-            NotificationManagerCompat.from(context).notify(id.toInt(), n)
+        val pending = goAsync()
+        CoroutineScope(SupervisorJob() + Dispatchers.Main).launch {
+            try {
+                scheduler.markDone(id)
+                ReminderScheduler.notify(context, id.toInt(), "Reminder, Sir", text)
+                speaker.offer(ProactivePolicy.Kind.REMINDER, "Sir, reminder: $text")
+            } finally {
+                pending.finish()
+            }
         }
-        session.announce("Sir, reminder: $text")
     }
 }

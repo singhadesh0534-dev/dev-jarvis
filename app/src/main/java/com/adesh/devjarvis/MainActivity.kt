@@ -14,6 +14,7 @@ import com.adesh.devjarvis.service.ServiceController
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.ui.activity.ActivityLogScreen
 import com.adesh.devjarvis.ui.hud.HudScreen
+import com.adesh.devjarvis.ui.memory.MemoryScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
 import com.adesh.devjarvis.ui.setup.SetupScreen
 import com.adesh.devjarvis.ui.theme.JarvisTheme
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
                             viewModel = hiltViewModel(),
                             onOpenSettings = { nav.navigate(ROUTE_SETTINGS) },
                             onOpenActivity = { nav.navigate(ROUTE_ACTIVITY) },
+                            onOpenMemory = { nav.navigate(ROUTE_MEMORY) },
                         )
                     }
                     composable(ROUTE_ACTIVITY) {
@@ -49,7 +51,11 @@ class MainActivity : ComponentActivity() {
                             viewModel = hiltViewModel(),
                             onBack = { nav.popBackStack() },
                             onOpenSetup = { nav.navigate(ROUTE_SETUP) },
+                            onOpenMemory = { nav.navigate(ROUTE_MEMORY) },
                         )
+                    }
+                    composable(ROUTE_MEMORY) {
+                        MemoryScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() })
                     }
                     composable(ROUTE_SETUP_FIRST) {
                         SetupScreen(viewModel = hiltViewModel(), onDone = {
@@ -89,6 +95,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_HUD = "hud"
         const val ROUTE_SETTINGS = "settings"
         const val ROUTE_ACTIVITY = "activity"
+        const val ROUTE_MEMORY = "memory"
         const val ROUTE_SETUP_FIRST = "setup_first"
         const val ROUTE_SETUP = "setup"
     }

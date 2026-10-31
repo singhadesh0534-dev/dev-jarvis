@@ -1,9 +1,15 @@
 package com.adesh.devjarvis.core
 
-import kotlinx.coroutines.flow.MutableStateFlow
+import com.adesh.devjarvis.data.ActivityDao
+import com.adesh.devjarvis.data.ActivityEntity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -16,22 +22,23 @@ data class ActivityEntry(
     val result: String,
 )
 
-/** Har action ka record — "Activity log" screen pe dikhta hai. (Phase 5 mein DB mein jayega.) */
+/** Har action ka record (Room mein, aakhri 300) — "Activity log" screen pe dikhta hai. */
 @Singleton
-class ActivityLog @Inject constructor() {
-    private val _entries = MutableStateFlow<List<ActivityEntry>>(emptyList())
-    val entries: StateFlow<List<ActivityEntry>> = _entries.asStateFlow()
-    private var nextId = 0L
+class ActivityLog @Inject constructor(private val dao: ActivityDao) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    @Synchronized
+    val entries: StateFlow<List<ActivityEntry>> = dao.observeRecent()
+        .map { list -> list.map { ActivityEntry(it.id, it.timeMillis, it.tool, it.args, it.ok, it.result) } }
+        .stateIn(scope, SharingStarted.Eagerly, emptyList())
+
     fun add(tool: String, args: String, ok: Boolean, result: String) {
-        val e = ActivityEntry(nextId++, System.currentTimeMillis(), tool, args, ok, result)
-        _entries.update { (listOf(e) + it).take(MAX) }
+        scope.launch {
+            dao.insert(ActivityEntity(timeMillis = System.currentTimeMillis(), tool = tool, args = args, ok = ok, result = result))
+            dao.trim()
+        }
     }
 
-    fun clear() = _entries.update { emptyList() }
-
-    private companion object {
-        const val MAX = 300
+    fun clear() {
+        scope.launch { dao.deleteAll() }
     }
 }

@@ -3,11 +3,40 @@
 Tony Stark ke JARVIS jaisa personal voice assistant, native Android (Kotlin + Jetpack Compose).
 Bilkul free: Gemini ki free API key, open-source libraries, koi paid cheez nahi.
 
-> **Abhi kya bana hai: Phase 1–4 — voice loop, always-on, phone control, Gemini Live + fallback.**
+> **Abhi kya bana hai: Phase 1–5 — voice loop, always-on, phone control, Gemini Live + fallback, memory + proactive.**
 > "Hello Dev" bolo → JARVIS Gemini Live ki asli awaaz mein turant jawab deta hai, aap beech mein bol ke tok sakte ho
 > → "Mummy ko call karo, phir subah 6 ka alarm" → confirm karke dono kaam. Quota khatam? Chupchaap backup pe.
 >
 > **Direct APK:** https://github.com/singhadesh0534-dev/dev-jarvis/releases/download/jarvis-latest/JARVIS.apk
+
+## Phase 5 mein naya — memory & proactive JARVIS
+
+**Memory (sab sirf phone pe, Room database):**
+- Har baat-cheet ke ~15 sec baad JARVIS LLM se poochhta hai "kya yaad rakhne layak tha?" — log, rishte, pasand,
+  routine, projects. OTP / password / PIN / lambe numbers kabhi save nahi hote.
+- Har jawab se pehle sabse kaam ki 5 yaadein (keyword + rishton ke aliases + recency) brain ko di jaati hain — wo
+  unhe naturally use karta hai, announce nahi karta.
+- Bol ke: "yaad rakhna meri wife ka birthday 12 March hai" (`remember`), "Rahul kahan rehta hai?" (`recall`),
+  "wo gym wali baat bhool jao" (`forget`, pehle confirm).
+- 👤 icon (HUD) / Settings → **Memory**: dekho, edit karo, delete karo, ya sab WIPE. Conversation summaries bhi.
+
+**Proactive:**
+- **Morning briefing** (default 7:30): mausam (home city), aaj ke calendar events + reminders, battery, ek witty line.
+  Settings → *Play briefing now* se abhi test karo.
+- **Low battery:** 20% se neeche (charging nahi) bolta hai, 10% pe dobara.
+- **Important notifications:** chune hue apps (default WhatsApp, Messages, Phone) ke direct messages, ya chune hue
+  log (jaise "Mummy, Papa") — chhota spoken summary. Max ek alert / 30 sec.
+- **Reminders** time pe bolte hain (ab database mein; restart ke baad bhi).
+- **Chup kab rehta hai:** raat 11–7 (Settings mein badlo), DND, call, silent mode (headphones lage hon to bolta hai),
+  ya jab pehle se baat chal rahi ho — tab sirf notification. Aapke apne reminders raat mein bhi bolte hain.
+- Proactive *bolna* always-on service ON hone pe hi hota hai; warna notification.
+
+**Notifications:** `read_notifications` ("kiska message aaya?"), `reply_to_notification` ("Mummy ko reply karo
+aa raha hoon" → confirm → WhatsApp/Messages ke reply button se bhejta hai). OTP / bank / UPI / payment apps ke
+notifications JARVIS ko dikhte hi nahi — na bole jaate, na LLM ko jaate. Context mein top 3 (filtered) bhi jaate hain.
+
+Naye tools: `remember`, `recall`, `forget`, `read_notifications`, `reply_to_notification`, `get_schedule`.
+Setup mein naye steps: **Notification access**, **Calendar** (optional). Activity log ab save rehta hai.
 
 ## Phase 4 mein naya — Live mode & fallback
 
@@ -114,7 +143,11 @@ app/src/main/java/com/adesh/devjarvis/
 ├── tools/                    ← JarvisTool interface, ToolRegistry, contact/app fuzzy match, arg parsing
 ├── tools/impl/               ← Communication / Phone / Info tools
 ├── accessibility/            ← global actions (lock, screenshot) + background launch
-├── reminders/                ← AlarmManager reminders
+├── reminders/                ← AlarmManager reminders (Room)
+├── data/                     ← Room database (facts, conversations, reminders, activity)
+├── memory/                   ← ranking, extraction, memory tools
+├── notifications/            ← listener, OTP/bank filter, read/reply tools
+├── proactive/                ← policy, briefing, alerts
 ├── ui/setup/                 ← setup wizard (permissions + Infinix steps)
 ├── live/                     ← Gemini Live: WebSocket, messages, echo-cancelled audio
 ├── brain/GroqClient.kt       ← Groq backup brain + Whisper STT
@@ -218,7 +251,16 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 6. HUD pe switch ke neeche `heard: ...` dikhata hai ki wake engine ne kya suna — sensitivity tune karne mein kaam aata hai
    (Settings → Wake word → Sensitivity).
 
-### 5.2 Phase 4 test (Live + fallback)
+### 5.2 Phase 5 test (memory + proactive)
+1. Setup → Notification access ON, Calendar allow. Settings → Home city daalo, Important people mein "Mummy".
+2. "Jarvis, yaad rakhna mujhe chai pasand hai, coffee nahi." → 👤 Memory mein dikhna chahiye.
+3. Kuch baat karo (jaise "mera bhai Rahul Pune mein rehta hai"), 20 sec ruko → Memory mein naya fact.
+4. Naya din / baad mein: "main subah kya peeta hoon?" → JARVIS ko yaad hona chahiye.
+5. Settings → **Play briefing now** → briefing bolega (always-on ON ho to) ya notification aayega.
+6. Kisi se WhatsApp message bhijwao (Mummy ke naam se) → JARVIS bolega. "Reply karo aa raha hoon" → confirm → reply.
+7. Khud ko OTP wala SMS aaye → JARVIS chup rahe, "kiska message aaya" mein bhi na dikhe.
+
+### 5.3 Phase 4 test (Live + fallback)
 1. Settings → Voice engine **LIVE** (default), Gemini + Groq dono keys daalo → SAVE. HUD pe MODE: **LIVE**.
 2. "Hello Dev" → "Ek lambi kahani sunao" → beech mein bolo "ruko, bas" → turant chup ho jaana chahiye.
 3. "Torch on karo" (Live mein bhi tools chalte hain). "Mummy ko call karo" → confirm (haan/nahi) → call.
@@ -227,7 +269,7 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
    (default `gemini-3.8-live`).
 5. Groq-only test: Gemini key hata ke sirf Groq key → MODE: FALLBACK, sawaal ka jawab Groq se aaye.
 
-### 5.3 Phase 3 test (phone control)
+### 5.4 Phase 3 test (phone control)
 1. "Jarvis, torch on karo" → torch jalegi, HUD pe `✓ toggle_flashlight` line.
 2. "Mummy ko call karo" → "Sir, Mummy ko call karun?" → "haan" → call lagegi.
 3. Chain: "10 minute ka timer lagao aur volume 50 kar do" → dono ho jayenge.
@@ -235,7 +277,7 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 5. Screen lock karke: "Hello Dev, YouTube kholo" → (Accessibility ON ho to) YouTube khul jayega, unlock karte hi dikhega.
 6. 📋 icon → Activity log mein sab entries.
 
-### 5.4 Phase 1 test (tap-to-talk)
+### 5.5 Phase 1 test (tap-to-talk)
 1. JARVIS app kholo → upar right ⚙️ **Settings**.
 2. **Gemini API key** paste karo → neeche **SAVE**.
 3. *VOICE* section mein **Test voice** dabao. Awaaz pasand nahi aayi to **Choose voice** se koi aur chuno (`en-gb-x-rjs`, `en-gb-x-gbd`, `en-in-x-ene` deep male voices hain). *Offline* wali voice tez hoti hai.
@@ -278,6 +320,9 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 | Hamesha "Live mode unavailable" | Live model naam check karo (Settings → Live model, default `gemini-3.8-live`); AI Studio mein Live API free tier available hai ya nahi dekho. |
 | MODE: FALLBACK aur jawab Groq se | Gemini ka free quota (429) khatam — normal hai; agle din ya ek minute baad Gemini wapas. |
 | Groq error 404 / model not found | Settings → Groq backup model mein current model naam daalo (console.groq.com/docs/models). |
+| Briefing nahi bola | Always-on ON hai? Briefing time quiet hours ke andar to nahi? DND / silent mode? (Tab sirf notification aata hai.) |
+| Memory mein kuch nahi aata | Baat-cheet ke baad ~15 sec lagte hain, aur internet chahiye. Chhoti baatein ("timer lagao") yaad nahi rakhi jaati — ye design hai. |
+| Message alerts nahi bolta | Setup → Notification access ON? Settings → Important apps/people. Group messages tabhi jab sender "important people" mein ho. |
 | Wake model download fail | Internet check karo, Setup → Wake word model → dobara Download. |
 
 ---
@@ -287,8 +332,8 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 1. **Phase 1 — Core voice loop** ✅
 2. **Phase 2 — Always-on** ✅: foreground service, "Hello Dev"/"Jarvis" wake word (offline), continuous conversation, voice barge-in, setup wizard, Infinix XOS survival
 3. **Phase 3 — Phone control** ✅: call, SMS, WhatsApp, apps, alarm, timer, reminder, calendar, flashlight, volume, brightness, settings panels, screenshot/lock, media, device status, weather, calculator — confirmation + activity log
-4. **Phase 4 — Live & fallback** ✅ *(ye version)*: Gemini Live API (native audio, interruption, tools), auto-switch to classic, Groq backup brain + Whisper, per-provider fuel
-5. Phase 5 — Memory DB + morning briefing + proactive alerts
+4. **Phase 4 — Live & fallback** ✅: Gemini Live API (native audio, interruption, tools), auto-switch to classic, Groq backup brain + Whisper, per-provider fuel
+5. **Phase 5 — Memory & proactive** ✅ *(ye version)*: Room memory + auto-extraction + retrieval, memory screen, morning briefing, low battery, important notifications, quiet hours/DND/silent rules, notification read/reply
 6. Phase 6 — Camera vision, screen reading, accessibility screen agent
 7. Phase 7 — Floating bubble, boot animation, sounds, battery tuning
 
@@ -309,8 +354,9 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
   notification ka "Sleep" button dabao.
 - **WhatsApp auto-send nahi:** message bhar ke khulta hai, send aap dabate ho. Auto-send (Accessibility se) Phase 6 mein,
   sirf aapke explicit command pe.
-- **Reminders** abhi simple local storage mein hain (Phase 5 mein DB). Notification-reading / reply Phase 5 mein.
-- **Activity log** abhi app band hone pe saaf ho jaata hai (Phase 5 mein save hoga).
+- **Memory retrieval** keyword + recency based hai (embeddings nahi) — "mummy"/"mom"/"maa" jaise aliases samajhta
+  hai, lekin bilkul alag shabdon wala sawaal kabhi miss ho sakta hai.
+- **Reply** sirf un apps mein jo notification pe "Reply" button dete hain (WhatsApp, Messages, Telegram…).
 - Android normal apps ko Wi-Fi / mobile data / airplane mode seedha toggle nahi karne deta — Phase 3 mein JARVIS sahi settings panel kholega.
 
 ## License / credits

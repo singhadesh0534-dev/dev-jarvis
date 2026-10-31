@@ -36,7 +36,13 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
     private val json = Json { ignoreUnknownKeys = true }
 
     /** Streams one chat completion. [messages] / [tools] are OpenAI-format JSON. */
-    fun streamChat(apiKey: String, model: String, messages: JsonArray, tools: JsonArray?): Flow<GroqStreamParser.Delta> = channelFlow {
+    fun streamChat(
+        apiKey: String,
+        model: String,
+        messages: JsonArray,
+        tools: JsonArray?,
+        jsonMode: Boolean = false,
+    ): Flow<GroqStreamParser.Delta> = channelFlow {
         if (apiKey.isBlank()) throw BrainError.MissingKey()
         val body = buildJsonObject {
             put("model", model)
@@ -44,6 +50,7 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
             put("stream", true)
             put("temperature", JarvisConfig.GEMINI_TEMPERATURE)
             put("max_tokens", JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS)
+            if (jsonMode) put("response_format", buildJsonObject { put("type", "json_object") })
             if (tools != null && tools.isNotEmpty()) {
                 put("tools", tools)
                 put("tool_choice", "auto")

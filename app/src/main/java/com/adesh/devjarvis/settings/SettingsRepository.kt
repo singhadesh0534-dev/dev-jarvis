@@ -41,6 +41,19 @@ data class JarvisSettings(
     val groqModel: String = JarvisConfig.GROQ_CHAT_MODEL,
     /** Classic-mode ears: "android" (Google speech) or "groq" (Whisper, better Hinglish; needs Groq key). */
     val sttEngine: String = STT_ANDROID,
+    // ---- Proactive (Phase 5) ----
+    val briefingEnabled: Boolean = true,
+    /** Minutes after midnight. 7:30 AM default. */
+    val briefingMinute: Int = 7 * 60 + 30,
+    /** Quiet hours: no proactive speech (Sir's own reminders still speak). */
+    val quietStartMinute: Int = 23 * 60,
+    val quietEndMinute: Int = 7 * 60,
+    val notificationAlerts: Boolean = true,
+    /** Comma-separated app names whose notifications JARVIS speaks (filtered, never OTP/bank). */
+    val importantApps: String = "WhatsApp, Messages, Phone",
+    /** Comma-separated sender names that are always important (e.g. "Mummy, Papa"). */
+    val importantContacts: String = "",
+    val lowBatteryAlert: Boolean = true,
 ) {
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
 
@@ -98,6 +111,14 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_LIVE_VOICE, cleaned.liveVoice.trim().ifBlank { JarvisConfig.GEMINI_LIVE_VOICE })
             .putString(K_GROQ_MODEL, cleaned.groqModel.trim().ifBlank { JarvisConfig.GROQ_CHAT_MODEL })
             .putString(K_STT_ENGINE, cleaned.sttEngine)
+            .putBoolean(K_BRIEFING_ON, cleaned.briefingEnabled)
+            .putInt(K_BRIEFING_MIN, cleaned.briefingMinute.coerceIn(0, 1439))
+            .putInt(K_QUIET_START, cleaned.quietStartMinute.coerceIn(0, 1439))
+            .putInt(K_QUIET_END, cleaned.quietEndMinute.coerceIn(0, 1439))
+            .putBoolean(K_NOTIF_ALERTS, cleaned.notificationAlerts)
+            .putString(K_IMPORTANT_APPS, cleaned.importantApps)
+            .putString(K_IMPORTANT_CONTACTS, cleaned.importantContacts)
+            .putBoolean(K_LOW_BATTERY, cleaned.lowBatteryAlert)
             .apply()
         _settings.value = cleaned
     }
@@ -124,6 +145,14 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             liveVoice = prefs.getString(K_LIVE_VOICE, d.liveVoice).orEmpty().ifBlank { d.liveVoice },
             groqModel = prefs.getString(K_GROQ_MODEL, d.groqModel).orEmpty().ifBlank { d.groqModel },
             sttEngine = prefs.getString(K_STT_ENGINE, d.sttEngine).orEmpty().ifBlank { d.sttEngine },
+            briefingEnabled = prefs.getBoolean(K_BRIEFING_ON, d.briefingEnabled),
+            briefingMinute = prefs.getInt(K_BRIEFING_MIN, d.briefingMinute),
+            quietStartMinute = prefs.getInt(K_QUIET_START, d.quietStartMinute),
+            quietEndMinute = prefs.getInt(K_QUIET_END, d.quietEndMinute),
+            notificationAlerts = prefs.getBoolean(K_NOTIF_ALERTS, d.notificationAlerts),
+            importantApps = prefs.getString(K_IMPORTANT_APPS, d.importantApps).orEmpty(),
+            importantContacts = prefs.getString(K_IMPORTANT_CONTACTS, d.importantContacts).orEmpty(),
+            lowBatteryAlert = prefs.getBoolean(K_LOW_BATTERY, d.lowBatteryAlert),
         )
     }
 
@@ -169,5 +198,13 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_LIVE_VOICE = "live_voice"
         const val K_GROQ_MODEL = "groq_model"
         const val K_STT_ENGINE = "stt_engine"
+        const val K_BRIEFING_ON = "briefing_on"
+        const val K_BRIEFING_MIN = "briefing_minute"
+        const val K_QUIET_START = "quiet_start"
+        const val K_QUIET_END = "quiet_end"
+        const val K_NOTIF_ALERTS = "notification_alerts"
+        const val K_IMPORTANT_APPS = "important_apps"
+        const val K_IMPORTANT_CONTACTS = "important_contacts"
+        const val K_LOW_BATTERY = "low_battery_alert"
     }
 }
