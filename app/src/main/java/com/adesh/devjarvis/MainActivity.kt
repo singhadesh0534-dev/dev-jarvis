@@ -16,6 +16,7 @@ import com.adesh.devjarvis.ui.activity.ActivityLogScreen
 import com.adesh.devjarvis.ui.boot.BootScreen
 import com.adesh.devjarvis.ui.hud.HudScreen
 import com.adesh.devjarvis.ui.memory.MemoryScreen
+import com.adesh.devjarvis.ui.voicelock.VoiceLockScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
 import com.adesh.devjarvis.ui.setup.SetupScreen
 import com.adesh.devjarvis.ui.theme.JarvisTheme
@@ -63,10 +64,14 @@ class MainActivity : ComponentActivity() {
                             onBack = { nav.popBackStack() },
                             onOpenSetup = { nav.navigate(ROUTE_SETUP) },
                             onOpenMemory = { nav.navigate(ROUTE_MEMORY) },
+                            onOpenVoiceLock = { nav.navigate(ROUTE_VOICELOCK) },
                         )
                     }
                     composable(ROUTE_MEMORY) {
                         MemoryScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() })
+                    }
+                    composable(ROUTE_VOICELOCK) {
+                        VoiceLockScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() })
                     }
                     composable(ROUTE_SETUP_FIRST) {
                         SetupScreen(viewModel = hiltViewModel(), onDone = {
@@ -111,6 +116,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_SETTINGS = "settings"
         const val ROUTE_ACTIVITY = "activity"
         const val ROUTE_MEMORY = "memory"
+        const val ROUTE_VOICELOCK = "voicelock"
         const val ROUTE_SETUP_FIRST = "setup_first"
         const val ROUTE_SETUP = "setup"
     }

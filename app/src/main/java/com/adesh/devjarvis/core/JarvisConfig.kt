@@ -87,6 +87,13 @@ object JarvisConfig {
 
     const val WAKE_SENSITIVITY_DEFAULT = 0.6f
 
+    /**
+     * Speaker model (voiceprint) — "sirf meri awaaz" ke liye. ~13 MB, sirf tab download hota hai jab
+     * Sir speaker-lock ON karta hai. Best-effort: shor/bheed mein pakka nahi.
+     */
+    const val SPEAKER_MODEL_NAME = "vosk-model-spk-0.4"
+    const val SPEAKER_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-spk-0.4.zip"
+
     // ---- Conversation flow ----
     /** Jawab ke baad kitni der bina wake word ke follow-up sunta hai. */
     const val FOLLOW_UP_WINDOW_MS = 8_000L

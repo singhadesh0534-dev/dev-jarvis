@@ -62,7 +62,14 @@ data class JarvisSettings(
     /** Pause the wake word below 15% battery (not charging). */
     val pauseWakeOnLowBattery: Boolean = true,
     val bootAnimation: Boolean = true,
+    // ---- Speaker lock (best-effort "sirf meri awaaz") ----
+    val speakerLockEnabled: Boolean = false,
+    /** Enrolled voiceprint, comma-separated floats. Blank = not enrolled yet. */
+    val speakerProfile: String = "",
+    /** 0 (loose) .. 1 (strict). */
+    val speakerThreshold: Float = com.adesh.devjarvis.wakeword.SpeakerVerification.DEFAULT_THRESHOLD,
 ) {
+    val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
 
     companion object {
@@ -144,6 +151,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_SFX, cleaned.soundEffects)
             .putBoolean(K_LOW_POWER_PAUSE, cleaned.pauseWakeOnLowBattery)
             .putBoolean(K_BOOT_ANIM, cleaned.bootAnimation)
+            .putBoolean(K_SPK_LOCK, cleaned.speakerLockEnabled)
+            .putString(K_SPK_PROFILE, cleaned.speakerProfile)
+            .putFloat(K_SPK_THRESHOLD, cleaned.speakerThreshold)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -190,6 +200,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             soundEffects = prefs.getBoolean(K_SFX, d.soundEffects),
             pauseWakeOnLowBattery = prefs.getBoolean(K_LOW_POWER_PAUSE, d.pauseWakeOnLowBattery),
             bootAnimation = prefs.getBoolean(K_BOOT_ANIM, d.bootAnimation),
+            speakerLockEnabled = prefs.getBoolean(K_SPK_LOCK, d.speakerLockEnabled),
+            speakerProfile = prefs.getString(K_SPK_PROFILE, d.speakerProfile).orEmpty(),
+            speakerThreshold = prefs.getFloat(K_SPK_THRESHOLD, d.speakerThreshold),
         )
     }
 
@@ -230,6 +243,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     private companion object {
         const val FILE = "jarvis_secure_settings"
         const val PLAIN_FILE = "jarvis_settings_plain"
+        const val K_SPK_LOCK = "speaker_lock"
+        const val K_SPK_PROFILE = "speaker_profile"
+        const val K_SPK_THRESHOLD = "speaker_threshold"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

@@ -23,6 +23,7 @@ import com.adesh.devjarvis.voice.Earcons
 import com.adesh.devjarvis.voice.GroqWhisperInput
 import com.adesh.devjarvis.voice.SpeechInput
 import com.adesh.devjarvis.voice.SpeechOutput
+import com.adesh.devjarvis.wakeword.SpeakerVerification
 import com.adesh.devjarvis.wakeword.VoskModelManager
 import com.adesh.devjarvis.wakeword.WakePhraseMatcher
 import com.adesh.devjarvis.wakeword.WakeWordEngine
@@ -176,9 +177,17 @@ class JarvisSession @Inject constructor(
 
     init {
         scope.launch {
+            var prevSpeakerKey = ""
             settings.settings.collect { s ->
                 wake.sensitivity = s.wakeSensitivity
+                wake.speakerLock = s.speakerLockEnabled
+                wake.speakerProfile = SpeakerVerification.decode(s.speakerProfile)
+                wake.speakerThreshold = s.speakerThreshold
                 _ui.update { it.copy(hasKey = s.hasGeminiKey || s.hasGroqKey) }
+                // Speaker-lock changes need the wake engine rebuilt (it picks the recognizer type at start).
+                val speakerKey = "${s.speakerLockEnabled}|${s.speakerProfile.length}|${s.speakerThreshold}"
+                if (speakerKey != prevSpeakerKey && prevSpeakerKey.isNotEmpty()) wake.stop()
+                prevSpeakerKey = speakerKey
                 syncMic()
                 updateMode()
             }

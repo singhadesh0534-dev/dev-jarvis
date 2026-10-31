@@ -68,6 +68,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onOpenSetup: () -> Unit,
     onOpenMemory: () -> Unit,
+    onOpenVoiceLock: () -> Unit,
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
@@ -177,6 +178,8 @@ fun SettingsScreen(
                 draft.voiceBargeIn,
             ) { v -> viewModel.edit { it.copy(voiceBargeIn = v) } }
             OutlinedButton(onClick = onOpenSetup) { Text("Setup & permissions checklist", color = Hud.Cyan) }
+            OutlinedButton(onClick = onOpenVoiceLock) { Text("Sirf meri awaaz (speaker lock)", color = Hud.Cyan) }
+            Hint("Best-effort: JARVIS sirf aapki awaaz pe jaage, doosron ki ignore kare. Isme model download + ek baar enroll karna hota hai.")
 
             Section("PROACTIVE JARVIS")
             ToggleRow("Morning briefing", "Weather, aaj ke events/reminders, battery + ek witty line.", draft.briefingEnabled) { v ->

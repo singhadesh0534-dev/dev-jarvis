@@ -21,6 +21,7 @@ import org.vosk.LibVosk
 import org.vosk.LogLevel
 import org.vosk.Model
 import org.vosk.Recognizer
+import org.vosk.SpeakerModel
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,7 +39,10 @@ import javax.inject.Singleton
  * Ek hi background thread; mode badalne pe sirf grammar badalti hai, mic band nahi hota.
  */
 @Singleton
-class WakeWordEngine @Inject constructor(private val models: VoskModelManager) {
+class WakeWordEngine @Inject constructor(
+    private val models: VoskModelManager,
+    private val speakerModels: SpeakerModelManager,
+) {
 
     enum class Mode { WAKE, BARGE_IN }
 
@@ -61,10 +65,19 @@ class WakeWordEngine @Inject constructor(private val models: VoskModelManager) {
 
     @Volatile var sensitivity: Float = JarvisConfig.WAKE_SENSITIVITY_DEFAULT
 
+    // Speaker lock ("sirf meri awaaz") — set from settings. Only used for the WAKE phrase, never barge-in.
+    @Volatile var speakerLock: Boolean = false
+    @Volatile var speakerProfile: FloatArray? = null
+    @Volatile var speakerThreshold: Float = SpeakerVerification.DEFAULT_THRESHOLD
+    /** Last speaker-check result for the HUD: "you" / "not you" / "". */
+    private val _lastSpeaker = MutableStateFlow("")
+    val lastSpeaker: StateFlow<String> = _lastSpeaker.asStateFlow()
+
     @Volatile private var mode: Mode = Mode.WAKE
     @Volatile private var stopRequested = false
     private var thread: Thread? = null
     private var model: Model? = null
+    private var spkModel: SpeakerModel? = null
 
     /** Start listening (or just switch mode if already running). Safe to call repeatedly. */
     @Synchronized
@@ -115,9 +128,16 @@ class WakeWordEngine @Inject constructor(private val models: VoskModelManager) {
             effects += attachEffects(record.audioSessionId)
 
             var currentMode = mode
-            recognizer = Recognizer(m, SAMPLE_RATE.toFloat(), grammarFor(currentMode)).apply {
+            // Attach the speaker model only when the lock is on and Sir is enrolled — then results carry an "spk" vector.
+            val useSpeaker = speakerLock && speakerProfile != null && speakerModels.isInstalled()
+            val spk = if (useSpeaker) {
+                (spkModel ?: runCatching { SpeakerModel(speakerModels.modelDir.absolutePath) }.getOrNull()?.also { spkModel = it })
+            } else null
+            recognizer = (if (spk != null) Recognizer(m, SAMPLE_RATE.toFloat(), spk) else Recognizer(m, SAMPLE_RATE.toFloat(), grammarFor(currentMode))).apply {
                 setWords(true)
                 setEndpointerMode(Recognizer.EndpointerMode.SHORT)
+                // With a speaker model we can't also pass a grammar in the ctor, so set it after.
+                if (spk != null) setGrammar(grammarFor(currentMode))
             }
             val buffer = ShortArray(SAMPLE_RATE / 10) // 100 ms
             var silentChunks = 0
@@ -158,7 +178,21 @@ class WakeWordEngine @Inject constructor(private val models: VoskModelManager) {
 
                     val now = System.currentTimeMillis()
                     if (now < cooldownUntil) continue
-                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity) ?: continue
+                    // With speaker lock we need the "spk" vector, which only comes on a final result.
+                    val lockOnThisTurn = spk != null && currentMode == Mode.WAKE
+                    val heardForTrigger = if (lockOnThisTurn && !isFinal) continue else heard
+                    val phrase = WakePhraseMatcher.shouldTrigger(heardForTrigger, phrasesFor(currentMode), sensitivity) ?: continue
+
+                    if (lockOnThisTurn) {
+                        val profile = speakerProfile
+                        val candidate = SpeakerVerification.parseVector(raw)
+                        if (profile != null && candidate != null) {
+                            val ok = SpeakerVerification.matches(profile, candidate, speakerThreshold)
+                            _lastSpeaker.value = if (ok) "you ✓" else "not you"
+                            if (!ok) { recognizer.reset(); continue } // someone else — ignore the wake
+                        }
+                        // If we couldn't get a vector, fail open (wake anyway) so Sir is never locked out.
+                    }
                     recognizer.reset()
                     cooldownUntil = now + COOLDOWN_MS
                     _lastHeard.value = heard.text
