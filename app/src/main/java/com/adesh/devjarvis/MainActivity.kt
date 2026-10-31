@@ -13,6 +13,7 @@ import com.adesh.devjarvis.core.JarvisSession
 import com.adesh.devjarvis.service.ServiceController
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.ui.activity.ActivityLogScreen
+import com.adesh.devjarvis.ui.boot.BootScreen
 import com.adesh.devjarvis.ui.hud.HudScreen
 import com.adesh.devjarvis.ui.memory.MemoryScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
@@ -30,11 +31,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val start = if (settings.current.setupDone) ROUTE_HUD else ROUTE_SETUP_FIRST
+        val home = if (settings.current.setupDone) ROUTE_HUD else ROUTE_SETUP_FIRST
+        // Boot animation on a normal cold start only — not when launched by the assistant gesture.
+        val isAssist = intent?.action == Intent.ACTION_ASSIST || intent?.action == Intent.ACTION_VOICE_COMMAND
+        val start = if (savedInstanceState == null && !isAssist && settings.current.bootAnimation) ROUTE_BOOT else home
         setContent {
             JarvisTheme {
                 val nav = rememberNavController()
                 NavHost(navController = nav, startDestination = start) {
+                    composable(ROUTE_BOOT) {
+                        BootScreen(viewModel = hiltViewModel(), onDone = {
+                            nav.navigate(home) { popUpTo(ROUTE_BOOT) { inclusive = true } }
+                        })
+                    }
                     composable(ROUTE_HUD) {
                         HudScreen(
                             viewModel = hiltViewModel(),
@@ -92,6 +101,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        const val ROUTE_BOOT = "boot"
         const val ROUTE_HUD = "hud"
         const val ROUTE_SETTINGS = "settings"
         const val ROUTE_ACTIVITY = "activity"

@@ -54,6 +54,13 @@ data class JarvisSettings(
     /** Comma-separated sender names that are always important (e.g. "Mummy, Papa"). */
     val importantContacts: String = "",
     val lowBatteryAlert: Boolean = true,
+    // ---- Polish (Phase 7) ----
+    /** Floating mini-reactor over other apps while JARVIS listens/speaks (needs "Display over other apps"). */
+    val bubbleEnabled: Boolean = true,
+    val soundEffects: Boolean = true,
+    /** Pause the wake word below 15% battery (not charging). */
+    val pauseWakeOnLowBattery: Boolean = true,
+    val bootAnimation: Boolean = true,
 ) {
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
 
@@ -119,6 +126,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_IMPORTANT_APPS, cleaned.importantApps)
             .putString(K_IMPORTANT_CONTACTS, cleaned.importantContacts)
             .putBoolean(K_LOW_BATTERY, cleaned.lowBatteryAlert)
+            .putBoolean(K_BUBBLE, cleaned.bubbleEnabled)
+            .putBoolean(K_SFX, cleaned.soundEffects)
+            .putBoolean(K_LOW_POWER_PAUSE, cleaned.pauseWakeOnLowBattery)
+            .putBoolean(K_BOOT_ANIM, cleaned.bootAnimation)
             .apply()
         _settings.value = cleaned
     }
@@ -153,6 +164,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             importantApps = prefs.getString(K_IMPORTANT_APPS, d.importantApps).orEmpty(),
             importantContacts = prefs.getString(K_IMPORTANT_CONTACTS, d.importantContacts).orEmpty(),
             lowBatteryAlert = prefs.getBoolean(K_LOW_BATTERY, d.lowBatteryAlert),
+            bubbleEnabled = prefs.getBoolean(K_BUBBLE, d.bubbleEnabled),
+            soundEffects = prefs.getBoolean(K_SFX, d.soundEffects),
+            pauseWakeOnLowBattery = prefs.getBoolean(K_LOW_POWER_PAUSE, d.pauseWakeOnLowBattery),
+            bootAnimation = prefs.getBoolean(K_BOOT_ANIM, d.bootAnimation),
         )
     }
 
@@ -206,5 +221,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_IMPORTANT_APPS = "important_apps"
         const val K_IMPORTANT_CONTACTS = "important_contacts"
         const val K_LOW_BATTERY = "low_battery_alert"
+        const val K_BUBBLE = "bubble"
+        const val K_SFX = "sound_effects"
+        const val K_LOW_POWER_PAUSE = "low_power_pause"
+        const val K_BOOT_ANIM = "boot_animation"
     }
 }

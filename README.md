@@ -3,11 +3,32 @@
 Tony Stark ke JARVIS jaisa personal voice assistant, native Android (Kotlin + Jetpack Compose).
 Bilkul free: Gemini ki free API key, open-source libraries, koi paid cheez nahi.
 
-> **Abhi kya bana hai: Phase 1–6 — voice loop, always-on, phone control, Gemini Live + fallback, memory + proactive, eyes & hands.**
+> **Saare 7 phases bane hue hain:** voice loop, "Hello Dev" always-on, phone control, Gemini Live + fallback,
+> memory + proactive, eyes & hands, aur polish (floating bubble, boot animation, sounds, battery tuning, crash recovery).
+> ⚠️ Har phase GitHub pe compile + unit-tested hai, lekin **real phone pe abhi test nahi hua** — pehle test karke batayein.
 > "Hello Dev" bolo → JARVIS Gemini Live ki asli awaaz mein turant jawab deta hai, aap beech mein bol ke tok sakte ho
 > → "Mummy ko call karo, phir subah 6 ka alarm" → confirm karke dono kaam. Quota khatam? Chupchaap backup pe.
 >
 > **Direct APK:** https://github.com/singhadesh0534-dev/dev-jarvis/releases/download/jarvis-latest/JARVIS.apk
+
+## Phase 7 mein naya — polish
+
+- **Floating mini-reactor:** JARVIS sun/bol raha ho aur aap kisi doosre app mein ho → screen ke kinare chhota animated
+  reactor (awaaz ke saath pulse, sochte waqt tez ghoomta). **Tap** = JARVIS kholo, **long-press** = rok do,
+  **drag** = kahin bhi rakho (jagah yaad rehti hai). "Display over other apps" permission chahiye (Setup).
+  Bonus: dikhte overlay se Android 15 pe background se apps kholna aasaan hota hai.
+- **Boot animation:** app kholte hi "JARVIS ONLINE" + asli system check (Gemini/Groq key, mic, wake model,
+  accessibility, notifications, memory facts, pichhla session clean ya recovered). Tap = skip.
+- **Sounds:** wake chime, success blip (tool hua), error tone, follow-up khatam hone ki soft chime. Settings → Extras se OFF.
+- **Battery tuning:**
+  - Wake engine ab **energy gate** ke saath: chup kamre mein Vosk decoding band (CPU ka sabse bada kharcha), awaaz
+    aate hi pichhle 300 ms ke saath turant shuru — "Hello" ka shuruaati hissa nahi katta.
+  - 15% se neeche (charging nahi) wake word pause (Settings → Battery saver); tap / home long-press chalte rehte hain.
+  - Background refresh sirf jab HUD dikh raha ho.
+- **Crash handling:** crash ho to stack trace phone pe save; agli baar boot screen pe "LAST SESSION · RECOVERED",
+  Settings → **Diagnostics** mein dekho / share karo / clear. Baat-cheet ke andar koi bug ho to JARVIS crash nahi
+  hota — "glitch, maine khud ko reset kar liya" bol ke wake word pe wapas. Service START_STICKY + watchdog se wapas aati hai.
+  Log mein API keys ya baat-cheet nahi hoti.
 
 ## Phase 6 mein naya — eyes & hands
 
@@ -173,6 +194,8 @@ app/src/main/java/com/adesh/devjarvis/
 ├── notifications/            ← listener, OTP/bank filter, read/reply tools
 ├── proactive/                ← policy, briefing, alerts
 ├── screen/                   ← screen model, safety, agent protocol, eyes & hands tools
+├── overlay/                  ← floating mini-reactor bubble
+├── ui/boot/                  ← "JARVIS ONLINE" boot sequence
 ├── vision/                   ← camera capture screen, image utils
 ├── ui/setup/                 ← setup wizard (permissions + Infinix steps)
 ├── live/                     ← Gemini Live: WebSocket, messages, echo-cancelled audio
@@ -277,14 +300,21 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 6. HUD pe switch ke neeche `heard: ...` dikhata hai ki wake engine ne kya suna — sensitivity tune karne mein kaam aata hai
    (Settings → Wake word → Sensitivity).
 
-### 5.2 Phase 6 test (eyes & hands)
+### 5.2 Phase 7 test (polish)
+1. App kholo → boot animation + system checks (koi line amber ho to wo cheez Setup mein theek karo).
+2. Setup → Display over other apps ON. YouTube kholo, "Hello Dev, ek joke sunao" → kinare pe mini-reactor; drag karo,
+   long-press se roko, tap se JARVIS khulega.
+3. Torch on/off bolo → success blip. Settings → Extras → Sound effects OFF karke dobara.
+4. Settings → Diagnostics → "Koi crash nahi" (ya log share karo).
+
+### 5.3 Phase 6 test (eyes & hands)
 1. Setup → Camera allow. Accessibility ek baar OFF → ON (nayi permissions).
 2. Kisi cheez ki taraf phone karke: "Jarvis, ye kya hai?" → camera screen → jawab.
 3. Koi article kholo: "Hello Dev, screen pe kya likha hai, short mein batao."
 4. "WhatsApp pe Rahul ko 'test message' bhejo" (do_task_on_screen) → HUD pe steps → "Sir, 'Send' dabaun?" → "haan".
 5. Kisi shopping app ke checkout pe: "pay kar do" → JARVIS mana karega.
 
-### 5.3 Phase 5 test (memory + proactive)
+### 5.4 Phase 5 test (memory + proactive)
 1. Setup → Notification access ON, Calendar allow. Settings → Home city daalo, Important people mein "Mummy".
 2. "Jarvis, yaad rakhna mujhe chai pasand hai, coffee nahi." → 👤 Memory mein dikhna chahiye.
 3. Kuch baat karo (jaise "mera bhai Rahul Pune mein rehta hai"), 20 sec ruko → Memory mein naya fact.
@@ -293,7 +323,7 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 6. Kisi se WhatsApp message bhijwao (Mummy ke naam se) → JARVIS bolega. "Reply karo aa raha hoon" → confirm → reply.
 7. Khud ko OTP wala SMS aaye → JARVIS chup rahe, "kiska message aaya" mein bhi na dikhe.
 
-### 5.4 Phase 4 test (Live + fallback)
+### 5.5 Phase 4 test (Live + fallback)
 1. Settings → Voice engine **LIVE** (default), Gemini + Groq dono keys daalo → SAVE. HUD pe MODE: **LIVE**.
 2. "Hello Dev" → "Ek lambi kahani sunao" → beech mein bolo "ruko, bas" → turant chup ho jaana chahiye.
 3. "Torch on karo" (Live mein bhi tools chalte hain). "Mummy ko call karo" → confirm (haan/nahi) → call.
@@ -302,7 +332,7 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
    (default `gemini-3.8-live`).
 5. Groq-only test: Gemini key hata ke sirf Groq key → MODE: FALLBACK, sawaal ka jawab Groq se aaye.
 
-### 5.5 Phase 3 test (phone control)
+### 5.6 Phase 3 test (phone control)
 1. "Jarvis, torch on karo" → torch jalegi, HUD pe `✓ toggle_flashlight` line.
 2. "Mummy ko call karo" → "Sir, Mummy ko call karun?" → "haan" → call lagegi.
 3. Chain: "10 minute ka timer lagao aur volume 50 kar do" → dono ho jayenge.
@@ -310,7 +340,7 @@ Baad mein bhi: Settings → *Setup & permissions checklist*.
 5. Screen lock karke: "Hello Dev, YouTube kholo" → (Accessibility ON ho to) YouTube khul jayega, unlock karte hi dikhega.
 6. 📋 icon → Activity log mein sab entries.
 
-### 5.6 Phase 1 test (tap-to-talk)
+### 5.7 Phase 1 test (tap-to-talk)
 1. JARVIS app kholo → upar right ⚙️ **Settings**.
 2. **Gemini API key** paste karo → neeche **SAVE**.
 3. *VOICE* section mein **Test voice** dabao. Awaaz pasand nahi aayi to **Choose voice** se koi aur chuno (`en-gb-x-rjs`, `en-gb-x-gbd`, `en-in-x-ene` deep male voices hain). *Offline* wali voice tez hoti hai.
@@ -356,6 +386,9 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 | "ye kya hai" pe camera nahi khulta | Camera permission + Accessibility ON? Screen lock pe pehli baar "tap to continue" notification aa sakta hai. |
 | Screen agent galat jagah tap karta hai / atak jaata hai | Goal zyada saaf bolo ("WhatsApp kholo, Rahul ki chat, 'hi' bhejo"). Kuch apps (games, banking) accessibility se dikhte hi nahi. |
 | `look_at_screen` sirf text deta hai | Screenshot Android 11+ pe hi; Accessibility OFF→ON karo (canTakeScreenshot). |
+| Floating reactor nahi dikhta | Setup → Display over other apps ON; Settings → Extras → Floating mini-reactor ON; always-on service ON hona chahiye. |
+| Battery zyada ja rahi hai | Settings → Wake word sensitivity thodi kam karo (kam false wake-ups), Battery saver ON, raat ko notification se "Sleep". |
+| JARVIS ne "glitch… reset" bola | Settings → Diagnostics → Share log — mujhe bhej do, fix kar dunga. |
 | Briefing nahi bola | Always-on ON hai? Briefing time quiet hours ke andar to nahi? DND / silent mode? (Tab sirf notification aata hai.) |
 | Memory mein kuch nahi aata | Baat-cheet ke baad ~15 sec lagte hain, aur internet chahiye. Chhoti baatein ("timer lagao") yaad nahi rakhi jaati — ye design hai. |
 | Message alerts nahi bolta | Setup → Notification access ON? Settings → Important apps/people. Group messages tabhi jab sender "important people" mein ho. |
@@ -370,8 +403,10 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 3. **Phase 3 — Phone control** ✅: call, SMS, WhatsApp, apps, alarm, timer, reminder, calendar, flashlight, volume, brightness, settings panels, screenshot/lock, media, device status, weather, calculator — confirmation + activity log
 4. **Phase 4 — Live & fallback** ✅: Gemini Live API (native audio, interruption, tools), auto-switch to classic, Groq backup brain + Whisper, per-provider fuel
 5. **Phase 5 — Memory & proactive** ✅: Room memory + auto-extraction + retrieval, memory screen, morning briefing, low battery, important notifications, quiet hours/DND/silent rules, notification read/reply
-6. **Phase 6 — Eyes & hands** ✅ *(ye version)*: camera vision (`look`), screenshot vision, screen reading, tap/type/scroll, screen agent with safety stops + final-action confirmation
-7. Phase 7 — Floating bubble, boot animation, sounds, battery tuning
+6. **Phase 6 — Eyes & hands** ✅: camera vision (`look`), screenshot vision, screen reading, tap/type/scroll, screen agent with safety stops + final-action confirmation
+7. **Phase 7 — Polish** ✅ *(ye version)*: floating mini-reactor, boot animation with real system checks, sound effects, energy-gated wake word + low-battery pause, crash logging + in-session recovery + diagnostics
+
+Aage (ideas): embeddings se memory search, offline TTS upgrade (Piper), widget/quick-settings tile, Wear OS.
 
 ## 8. Honest limits
 

@@ -10,6 +10,7 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import com.adesh.devjarvis.settings.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -21,20 +22,33 @@ import kotlin.math.sin
  * Chhoti futuristic awaazein + haptic tick. Code se generate hoti hain (koi audio file nahi).
  */
 @Singleton
-class Earcons @Inject constructor(@ApplicationContext private val context: Context) {
+class Earcons @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val settings: SettingsRepository,
+) {
 
     private val main = Handler(Looper.getMainLooper())
     private val wakeTone: ShortArray by lazy { chime(listOf(1046.5, 1568.0), noteMs = 75) }
     private val sleepTone: ShortArray by lazy { chime(listOf(1318.5, 880.0), noteMs = 70, volume = 0.22) }
+    private val successTone: ShortArray by lazy { chime(listOf(1760.0), noteMs = 45, volume = 0.16) }
+    private val errorTone: ShortArray by lazy { chime(listOf(392.0, 330.0), noteMs = 80, volume = 0.22) }
+
+    private val enabled get() = settings.current.soundEffects
 
     /** Listening start: rising two-note chime + tick. */
     fun wake() {
         tick()
-        play(wakeTone)
+        if (enabled) play(wakeTone)
     }
 
     /** Conversation window closed: soft falling chime. */
-    fun sleep() = play(sleepTone)
+    fun sleep() { if (enabled) play(sleepTone) }
+
+    /** A tool did its job: tiny high blip. */
+    fun success() { if (enabled) play(successTone) }
+
+    /** Something failed: low two-note. */
+    fun error() { if (enabled) play(errorTone) }
 
     fun tick() {
         val vibrator = if (Build.VERSION.SDK_INT >= 31) {

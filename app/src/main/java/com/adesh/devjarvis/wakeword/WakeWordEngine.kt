@@ -122,6 +122,7 @@ class WakeWordEngine @Inject constructor(private val models: VoskModelManager) {
             val buffer = ShortArray(SAMPLE_RATE / 10) // 100 ms
             var silentChunks = 0
             var cooldownUntil = 0L
+            val gate = EnergyGate()
 
             while (!stopRequested) {
                 if (mode != currentMode) {
@@ -143,19 +144,27 @@ class WakeWordEngine @Inject constructor(private val models: VoskModelManager) {
                     break
                 }
 
-                val isFinal = recognizer.acceptWaveForm(buffer, n)
-                val raw = if (isFinal) recognizer.result else recognizer.partialResult
-                val heard = WakePhraseMatcher.parse(raw, isFinal) ?: continue
-                if (isFinal) _lastHeard.value = heard.text
+                // Battery: only decode when there's sound (with pre-roll so the first word isn't clipped).
+                val chunks = when (val g = gate.offer(buffer, n)) {
+                    is EnergyGate.Result.Feed -> g.chunks
+                    EnergyGate.Result.Closed -> { recognizer.reset(); continue }
+                    EnergyGate.Result.Skip -> continue
+                }
+                for (chunk in chunks) {
+                    val isFinal = recognizer.acceptWaveForm(chunk, chunk.size)
+                    val raw = if (isFinal) recognizer.result else recognizer.partialResult
+                    val heard = WakePhraseMatcher.parse(raw, isFinal) ?: continue
+                    if (isFinal) _lastHeard.value = heard.text
 
-                val now = System.currentTimeMillis()
-                if (now < cooldownUntil) continue
-                val phrases = phrasesFor(currentMode)
-                val phrase = WakePhraseMatcher.shouldTrigger(heard, phrases, sensitivity) ?: continue
-                recognizer.reset()
-                cooldownUntil = now + COOLDOWN_MS
-                _lastHeard.value = heard.text
-                _detections.tryEmit(Detection(currentMode, phrase))
+                    val now = System.currentTimeMillis()
+                    if (now < cooldownUntil) continue
+                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity) ?: continue
+                    recognizer.reset()
+                    cooldownUntil = now + COOLDOWN_MS
+                    _lastHeard.value = heard.text
+                    _detections.tryEmit(Detection(currentMode, phrase))
+                    break
+                }
             }
         } catch (e: SecurityException) {
             _problem.value = Problem.MIC_UNAVAILABLE

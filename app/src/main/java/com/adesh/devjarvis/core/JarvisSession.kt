@@ -31,6 +31,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -117,7 +118,22 @@ class JarvisSession @Inject constructor(
     @ApplicationContext context: Context,
 ) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val appContext = context.applicationContext
+
+    /** A bug inside a conversation must not kill always-on JARVIS: log it, reset, carry on. */
+    private val recover = CoroutineExceptionHandler { _, e ->
+        CrashReporter.record(appContext, "session", e)
+        runCatching {
+            liveConn?.close()
+            speechOut.stop()
+            focus.release()
+            _ui.update { it.copy(state = JarvisState.IDLE, inConversation = false, pendingConfirmation = null, partial = "", micLevel = 0f) }
+            addLine(fromUser = false, system = true, text = "Ek chhota glitch hua — maine khud ko reset kar liya, Sir. (${e.javaClass.simpleName})")
+            syncMic()
+        }
+    }
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate + recover)
 
     private val _ui = MutableStateFlow(HudUiState())
     val ui: StateFlow<HudUiState> = _ui.asStateFlow()
@@ -140,6 +156,8 @@ class JarvisSession @Inject constructor(
     private var endAfterReply = false
     private var confirmAnswer: CompletableDeferred<Boolean>? = null
 
+    /** Wake word paused to save a nearly empty battery (tap / home long-press still work). */
+    private var lowPowerPause = false
     private var conversationStartedAt = 0L
     private var memoryJob: Job? = null
 
@@ -179,7 +197,7 @@ class JarvisSession @Inject constructor(
         }
         scope.launch {
             while (isActive) {
-                refreshDevice()
+                if (AppVisibility.isForeground) refreshDevice() // HUD hidden? don't bother.
                 delay(30_000)
             }
         }
@@ -192,6 +210,16 @@ class JarvisSession @Inject constructor(
         val d = device.snapshot()
         usage.refresh()
         _ui.update { it.copy(batteryPercent = d.batteryPercent, charging = d.charging, network = d.network) }
+    }
+
+    fun setLowPowerPause(paused: Boolean) {
+        if (lowPowerPause == paused) return
+        lowPowerPause = paused
+        addLine(
+            fromUser = false, system = true,
+            text = if (paused) "Battery bachane ke liye wake word pause — tap karke baat kar sakte hain." else "Wake word wapas online.",
+        )
+        syncMic()
     }
 
     /** Called by JarvisService when it enters / leaves the foreground. */
@@ -328,7 +356,7 @@ class JarvisSession @Inject constructor(
             wake.stop() // Live owns the mic.
             return
         }
-        if (!serviceActive || !models.isInstalled() || focus.inCall()) {
+        if (!serviceActive || lowPowerPause || !models.isInstalled() || focus.inCall()) {
             wake.stop()
             return
         }
@@ -506,6 +534,7 @@ class JarvisSession @Inject constructor(
         val lineId = nextId++
         upsertLine(lineId, "⚙ $name($argText)", system = true)
         val result = registry.execute(name, args, toolContext)
+        if (result.ok) earcons.success() else earcons.error()
         if (result.endsConversation) endAfterReply = true
         upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: ${result.message}", system = true)
         activityLog.add(name, argText, result.ok, result.message)

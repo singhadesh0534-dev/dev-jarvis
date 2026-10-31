@@ -3,28 +3,33 @@ package com.adesh.devjarvis.service
 import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
-import android.content.IntentFilter
-import android.os.BatteryManager
-import androidx.core.content.ContextCompat
-import com.adesh.devjarvis.proactive.NotificationAlerts
-import com.adesh.devjarvis.proactive.ProactivePolicy
-import com.adesh.devjarvis.proactive.ProactiveSpeaker
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
+import androidx.core.content.ContextCompat
+import com.adesh.devjarvis.MainActivity
+import com.adesh.devjarvis.core.AppVisibility
 import com.adesh.devjarvis.core.JarvisSession
+import com.adesh.devjarvis.core.JarvisState
 import com.adesh.devjarvis.core.SessionSignal
+import com.adesh.devjarvis.overlay.BubbleOverlay
+import com.adesh.devjarvis.proactive.NotificationAlerts
+import com.adesh.devjarvis.proactive.ProactivePolicy
+import com.adesh.devjarvis.proactive.ProactiveSpeaker
 import com.adesh.devjarvis.settings.SettingsRepository
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Always-on JARVIS: foreground service (type microphone) jo "Hello Dev" sunta rehta hai,
@@ -47,6 +52,7 @@ class JarvisService : Service() {
             if (level < 0 || scale <= 0) return
             val pct = level * 100 / scale
             val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+            session.setLowPowerPause(!charging && pct < 15 && settings.current.pauseWakeOnLowBattery)
             if (charging) { batteryWarnedAt = 101; return }
             if (!settings.current.lowBatteryAlert) return
             val line = when {
@@ -60,6 +66,7 @@ class JarvisService : Service() {
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var bubble: BubbleOverlay? = null
     private var foreground = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -68,6 +75,7 @@ class JarvisService : Service() {
         super.onCreate()
         ServiceController.ensureChannels(this)
         alerts.start(scope)
+        startBubble()
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
         scope.launch {
             session.signals.collect { signal ->
@@ -124,7 +132,33 @@ class JarvisService : Service() {
         }
     }
 
+    /** Floating mini-reactor while JARVIS is busy and Sir is in another app. */
+    private fun startBubble() {
+        val b = BubbleOverlay(
+            this,
+            onTap = {
+                startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP))
+            },
+            onLongPress = { session.stopEverything() },
+        )
+        bubble = b
+        scope.launch {
+            combine(session.ui, session.speechLevel, AppVisibility.foreground) { ui, speech, fg -> Triple(ui, speech, fg) }
+                .collect { (ui, speech, fg) ->
+                    val busy = ui.state != JarvisState.IDLE || ui.inConversation
+                    val want = busy && !fg && settings.current.bubbleEnabled && b.canShow()
+                    if (want) {
+                        b.show()
+                        b.update(ui.state, if (ui.state == JarvisState.LISTENING) ui.micLevel else speech)
+                    } else {
+                        b.hide()
+                    }
+                }
+        }
+    }
+
     override fun onDestroy() {
+        bubble?.hide()
         runCatching { unregisterReceiver(batteryReceiver) }
         session.setServiceActive(false)
         session.stopEverything()

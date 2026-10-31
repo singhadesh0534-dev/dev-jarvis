@@ -194,6 +194,23 @@ fun SettingsScreen(
             Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
             OutlinedButton(onClick = onOpenMemory) { Text("Open memory", color = Hud.Cyan) }
 
+            Section("EXTRAS")
+            ToggleRow("Floating mini-reactor", "Doosre apps ke upar chhota reactor jab JARVIS sun/bol raha ho (\"Display over other apps\" chahiye). Tap = kholo, long-press = rok do.", draft.bubbleEnabled) { v ->
+                viewModel.edit { it.copy(bubbleEnabled = v) }
+            }
+            ToggleRow("Sound effects", "Chime, success blip, error tone. (Haptic tick hamesha.)", draft.soundEffects) { v ->
+                viewModel.edit { it.copy(soundEffects = v) }
+            }
+            ToggleRow("Battery saver", "15% se neeche (charging nahi) wake word pause. Tap/home long-press chalte rahenge.", draft.pauseWakeOnLowBattery) { v ->
+                viewModel.edit { it.copy(pauseWakeOnLowBattery = v) }
+            }
+            ToggleRow("Boot animation", "App kholte hi \"JARVIS ONLINE\" system check.", draft.bootAnimation) { v ->
+                viewModel.edit { it.copy(bootAnimation = v) }
+            }
+
+            Section("DIAGNOSTICS")
+            DiagnosticsBlock(viewModel)
+
             Section("PERSONALITY")
             OutlinedTextField(
                 value = draft.systemPrompt,
@@ -345,6 +362,31 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun DiagnosticsBlock(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    var log by remember { mutableStateOf(viewModel.diagnostics()) }
+    if (log == null) {
+        Hint("Koi crash nahi. Sab systems nominal, Sir.")
+        return
+    }
+    Text(
+        log!!.take(1500),
+        style = MaterialTheme.typography.bodySmall,
+        color = Hud.Dim,
+        modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())
+            .border(1.dp, Hud.Faint, RoundedCornerShape(4.dp)).padding(8.dp),
+    )
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, log)
+            runCatching { context.startActivity(Intent.createChooser(send, "Share JARVIS log")) }
+        }) { Text("Share log", color = Hud.Cyan) }
+        TextButton(onClick = { viewModel.clearDiagnostics(); log = null }) { Text("Clear", color = Hud.Dim) }
+    }
+    Hint("Log mein sirf error ka stack trace + phone/app version hota hai — API keys ya baat-cheet nahi.")
 }
 
 /** "07:30" style field; invalid text is ignored until it parses. */
