@@ -2,6 +2,7 @@ package com.adesh.devjarvis.voice
 
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -81,9 +82,13 @@ class SpeechInput @Inject constructor(@ApplicationContext private val context: C
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
         }
+        // Android recognizer har baar start/stop pe "beep" bajata hai — continuous conversation mein
+        // ye baar-baar sunai deta hai. Recognition ke dauraan system/notification beeps mute kar dete hain.
+        val muted = muteBeeps()
         recognizer.startListening(intent)
 
         awaitClose {
+            unmute(muted)
             recognizer.cancel()
             recognizer.destroy()
         }
@@ -96,5 +101,27 @@ class SpeechInput @Inject constructor(@ApplicationContext private val context: C
         SpeechRecognizer.ERROR_SERVER -> Reason.NETWORK
         SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> Reason.BUSY
         else -> Reason.OTHER
+    }
+
+    /** Streams jin par recognizer ki beep bajti hai. Ring/alarm ko haath nahi lagate. */
+    private val beepStreams = intArrayOf(AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_MUSIC)
+
+    private fun muteBeeps(): List<Int> {
+        val am = context.getSystemService(AudioManager::class.java) ?: return emptyList()
+        val muted = mutableListOf<Int>()
+        for (s in beepStreams) {
+            runCatching {
+                if (!am.isStreamMute(s)) {
+                    am.adjustStreamVolume(s, AudioManager.ADJUST_MUTE, 0)
+                    muted += s
+                }
+            }
+        }
+        return muted
+    }
+
+    private fun unmute(streams: List<Int>) {
+        val am = context.getSystemService(AudioManager::class.java) ?: return
+        streams.forEach { s -> runCatching { am.adjustStreamVolume(s, AudioManager.ADJUST_UNMUTE, 0) } }
     }
 }

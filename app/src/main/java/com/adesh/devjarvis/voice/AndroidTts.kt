@@ -104,9 +104,11 @@ class AndroidTts @Inject constructor(
             // Offline ("-local") version pehle: tez aur bina internet.
             (matches.firstOrNull { !it.isNetworkConnectionRequired } ?: matches.firstOrNull())?.let { return it }
         }
-        return voices.firstOrNull { it.locale.country == "IN" && !it.isNetworkConnectionRequired }
-            ?: voices.firstOrNull { it.locale.country == "GB" && !it.isNetworkConnectionRequired }
-            ?: voices.firstOrNull()
+        // No preferred male voice installed: pick a British accent first (closest to the JARVIS feel),
+        // then India, preferring higher-quality (often network) voices.
+        fun best(country: String) = voices.filter { it.locale.country == country }
+            .maxByOrNull { it.quality }
+        return best("GB") ?: best("IN") ?: voices.maxByOrNull { it.quality } ?: voices.firstOrNull()
     }
 
     override fun speak(text: String) {
