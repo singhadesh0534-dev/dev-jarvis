@@ -12,6 +12,7 @@ import com.adesh.devjarvis.live.LiveConnection
 import com.adesh.devjarvis.live.LiveMessages
 import com.adesh.devjarvis.memory.MemoryExtractor
 import com.adesh.devjarvis.settings.JarvisSettings
+import com.adesh.devjarvis.screen.ScreenTools
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.ConfirmationParser
 import com.adesh.devjarvis.tools.ToolContext
@@ -112,6 +113,7 @@ class JarvisSession @Inject constructor(
     private val groqWhisper: GroqWhisperInput,
     private val http: OkHttpClient,
     private val memoryExtractor: MemoryExtractor,
+    private val screenTools: ScreenTools,
     @ApplicationContext context: Context,
 ) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
@@ -167,6 +169,7 @@ class JarvisSession @Inject constructor(
         scope.launch { brain.active.collect { updateMode() } }
         scope.launch { wake.lastHeard.collect { h -> _ui.update { it.copy(wakeHeard = h) } } }
         scope.launch { wake.detections.collect(::onDetection) }
+        scope.launch { screenTools.progress.collect { line -> addLine(fromUser = false, text = line, system = true) } }
         scope.launch { wake.problem.collect(::onWakeProblem) }
         scope.launch {
             models.state.collect { st ->

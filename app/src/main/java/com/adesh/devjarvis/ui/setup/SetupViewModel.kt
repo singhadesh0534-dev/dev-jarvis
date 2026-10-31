@@ -24,7 +24,7 @@ import javax.inject.Inject
 
 enum class StepId {
     MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK,
-    CALL_PHONE, CONTACTS, SMS, ACCESSIBILITY, NOTIFICATION_ACCESS, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
+    CALL_PHONE, CONTACTS, SMS, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
 }
 
 /** How the step's main button works. */
@@ -189,7 +189,7 @@ class SetupViewModel @Inject constructor(
                 listOf(
                     "Open setting dabao → Installed apps / Downloaded apps → JARVIS → ON → Allow.",
                     "Agar \"Restricted setting\" likha aaye: phone Settings > Apps > JARVIS > upar ⋮ > \"Allow restricted settings\" — phir dobara try.",
-                    "JARVIS abhi sirf global actions use karta hai; screen padhna Phase 6 mein aayega.",
+                    "JARVIS screen sirf aapke command pe padhta hai (\"screen pe kya hai\", \"WhatsApp pe Rahul ko hi bhejo\"). Password fields kabhi nahi; payment/OTP screens pe ruk jaata hai.",
                 ),
                 StepAction.OPEN_SETTINGS, "Open setting",
                 granted = accessibilityEnabled(), optional = false,
@@ -203,6 +203,16 @@ class SetupViewModel @Inject constructor(
                 listOf("Open setting dabao → JARVIS → Allow.", "\"Restricted setting\" aaye to Accessibility wala same tareeka: App info > ⋮ > Allow restricted settings."),
                 StepAction.OPEN_SETTINGS, "Open setting",
                 granted = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName), optional = false,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.CAMERA, "Camera",
+                "\"Jarvis, ye kya hai?\" — sirf jab aap poochho tab ek photo, Gemini ko dikhane ke liye. Background mein camera kabhi nahi chalta.",
+                listOf("Allow dabao."),
+                StepAction.RUNTIME_PERMISSION, "Allow camera",
+                granted = has(Manifest.permission.CAMERA), optional = false,
+                permission = Manifest.permission.CAMERA,
             )
         )
         add(

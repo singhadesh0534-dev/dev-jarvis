@@ -3,6 +3,7 @@ package com.adesh.devjarvis.tools
 import com.adesh.devjarvis.brain.GroqMessages
 import com.adesh.devjarvis.memory.MemoryTools
 import com.adesh.devjarvis.notifications.NotificationTools
+import com.adesh.devjarvis.screen.ScreenTools
 import com.adesh.devjarvis.tools.impl.CommunicationTools
 import com.adesh.devjarvis.tools.impl.InfoTools
 import com.adesh.devjarvis.tools.impl.PhoneTools
@@ -23,8 +24,9 @@ class ToolRegistry @Inject constructor(
     info: InfoTools,
     memory: MemoryTools,
     notifications: NotificationTools,
+    screen: ScreenTools,
 ) {
-    val tools: List<JarvisTool> = communication.tools + phone.tools + info.tools + memory.tools + notifications.tools
+    val tools: List<JarvisTool> = communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools
     private val byName = tools.associateBy { it.name }
 
     val declarations: List<JsonObject> = tools.map { it.declaration() }

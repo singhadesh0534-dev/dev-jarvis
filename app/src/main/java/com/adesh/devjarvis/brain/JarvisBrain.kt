@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -210,6 +212,34 @@ class JarvisBrain @Inject constructor(
     /** Exchanges since the last memory extraction (and clears the list). */
     fun takeForMemory(): List<Pair<String, String>> = synchronized(pendingForMemory) {
         pendingForMemory.toList().also { pendingForMemory.clear() }
+    }
+
+    /** JARVIS ki aankhein: image + question -> short spoken answer (Gemini vision). Null if unavailable. */
+    suspend fun see(jpeg: ByteArray, question: String): String? {
+        val s = settings.current
+        if (!s.hasGeminiKey || !device.isOnline()) return null
+        val content = buildJsonObject {
+            put("role", "user")
+            put("parts", JsonArray(listOf(
+                buildJsonObject {
+                    put("inlineData", buildJsonObject {
+                        put("mimeType", "image/jpeg")
+                        put("data", java.util.Base64.getEncoder().encodeToString(jpeg))
+                    })
+                },
+                buildJsonObject { put("text", question.ifBlank { "Ye kya hai?" }) },
+            )))
+        }
+        return try {
+            usage.recordGeminiRequest()
+            val out = StringBuilder()
+            gemini.streamTurn(s.geminiApiKey, s.geminiModel, SystemPrompt.VISION, JsonArray(listOf(content)), null)
+                .collect { out.append(it.text) }
+            out.toString().trim().ifEmpty { null }
+        } catch (e: BrainError) {
+            if (e is BrainError.RateLimited) usage.markExhausted(Provider.GEMINI, cooldownFor(e))
+            null
+        }
     }
 
     /**
