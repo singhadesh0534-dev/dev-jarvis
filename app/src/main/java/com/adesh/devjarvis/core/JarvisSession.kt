@@ -174,7 +174,8 @@ class JarvisSession @Inject constructor(
     fun onTextSubmitted(text: String) {
         if (text.isBlank()) return
         listenJob?.cancel()
-        _ui.update { it.copy(inConversation = true) }
+        // Typed chat: no follow-up listening afterwards (mic shouldn't open on its own).
+        _ui.update { it.copy(inConversation = false) }
         ask(text.trim())
     }
 
