@@ -244,6 +244,25 @@ class JarvisBrain @Inject constructor(
         }
     }
 
+    /** Latest info from the web (Gemini grounded with Google Search). Null if unavailable. */
+    suspend fun webAnswer(query: String): String? {
+        val s = settings.current
+        if (!s.hasGeminiKey || !device.isOnline()) return null
+        val tools = JsonArray(listOf(buildJsonObject { put("google_search", buildJsonObject { }) }))
+        val content = GeminiContents.text(Role.USER, query)
+        val context = ContextBlock.build(device.snapshot(), s.homeCity)
+        return try {
+            usage.recordGeminiRequest()
+            val out = StringBuilder()
+            gemini.streamTurn(s.geminiApiKey, s.geminiModel, SystemPrompt.WEB + "\n\n" + context, JsonArray(listOf(content)), tools)
+                .collect { out.append(it.text) }
+            out.toString().trim().ifEmpty { null }
+        } catch (e: BrainError) {
+            if (e is BrainError.RateLimited) usage.markExhausted(Provider.GEMINI, cooldownFor(e))
+            null
+        }
+    }
+
     /**
      * One-shot JSON / text completion for background jobs (memory extraction, briefing).
      * Gemini first, Groq if Gemini is out of quota. Returns null if neither works.

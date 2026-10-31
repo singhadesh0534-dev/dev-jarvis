@@ -1,6 +1,7 @@
 package com.adesh.devjarvis.settings
 
 import android.content.Context
+import com.adesh.devjarvis.core.CrashReporter
 import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
@@ -91,13 +92,26 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
     @Synchronized
     fun update(change: (JarvisSettings) -> JarvisSettings) = save(change(current))
 
-    fun save(new: JarvisSettings) {
+    /** Returns true if it was written to disk. Never throws — a storage failure must not crash JARVIS. */
+    fun save(new: JarvisSettings): Boolean {
         val cleaned = new.copy(
             geminiApiKey = new.geminiApiKey.trim(),
             groqApiKey = new.groqApiKey.trim(),
             geminiModel = new.geminiModel.trim().ifBlank { JarvisConfig.GEMINI_MODEL },
             systemPrompt = new.systemPrompt.ifBlank { SystemPrompt.DEFAULT },
         )
+        // Update in-memory state first, so the UI reflects the change even if the disk write fails.
+        _settings.value = cleaned
+        return try {
+            writeToDisk(cleaned)
+            true
+        } catch (e: Exception) {
+            CrashReporter.record(context, "settings-save", e)
+            false
+        }
+    }
+
+    private fun writeToDisk(cleaned: JarvisSettings) {
         prefs.edit()
             .putString(K_GEMINI, cleaned.geminiApiKey)
             .putString(K_GROQ, cleaned.groqApiKey)
@@ -130,11 +144,19 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_SFX, cleaned.soundEffects)
             .putBoolean(K_LOW_POWER_PAUSE, cleaned.pauseWakeOnLowBattery)
             .putBoolean(K_BOOT_ANIM, cleaned.bootAnimation)
-            .apply()
-        _settings.value = cleaned
+            // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
+            // background thread — that's what made "save" silently do nothing on some devices.
+            .commit()
     }
 
-    private fun load(): JarvisSettings {
+    private fun load(): JarvisSettings = try {
+        loadFromPrefs()
+    } catch (e: Exception) {
+        CrashReporter.record(context, "settings-load", e)
+        JarvisSettings()
+    }
+
+    private fun loadFromPrefs(): JarvisSettings {
         val d = JarvisSettings()
         return JarvisSettings(
             geminiApiKey = prefs.getString(K_GEMINI, d.geminiApiKey).orEmpty(),
@@ -171,12 +193,25 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         )
     }
 
-    private fun openPrefs(): SharedPreferences = try {
-        create()
-    } catch (e: Exception) {
-        // Keystore kabhi-kabhi corrupt ho jata hai (restore/reinstall ke baad). Fresh start karo.
-        context.deleteSharedPreferences(FILE)
-        create()
+    /** True if we fell back to plain (unencrypted) storage because the Keystore wouldn't cooperate. */
+    @Volatile var usingPlainFallback = false
+        private set
+
+    private fun openPrefs(): SharedPreferences {
+        // Try encrypted. Keystore corrupts after restore/reinstall, or on some XOS/Infinix builds plain refuses
+        // to work at all — in that case fall back to normal prefs so JARVIS saves settings instead of crashing.
+        return try {
+            create()
+        } catch (e: Exception) {
+            runCatching { context.deleteSharedPreferences(FILE) }
+            try {
+                create()
+            } catch (e2: Exception) {
+                CrashReporter.record(context, "settings-encrypted", e2)
+                usingPlainFallback = true
+                context.getSharedPreferences(PLAIN_FILE, Context.MODE_PRIVATE)
+            }
+        }
     }
 
     private fun create(): SharedPreferences {
@@ -194,6 +229,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     private companion object {
         const val FILE = "jarvis_secure_settings"
+        const val PLAIN_FILE = "jarvis_settings_plain"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

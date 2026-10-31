@@ -1,5 +1,6 @@
 package com.adesh.devjarvis.tools.impl
 
+import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.Calculator
 import com.adesh.devjarvis.tools.JarvisTool
@@ -17,16 +18,29 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import javax.inject.Inject
+import javax.inject.Provider
 import javax.inject.Singleton
 
-/** Weather, calculator, time. */
+/** Weather, web answers, calculator, time. */
 @Singleton
 class InfoTools @Inject constructor(
     private val weather: WeatherClient,
     private val settings: SettingsRepository,
     private val calendar: CalendarReader,
     private val reminders: ReminderScheduler,
+    // Provider breaks the JarvisBrain -> ToolRegistry -> InfoTools -> JarvisBrain cycle.
+    private val brainProvider: Provider<JarvisBrain>,
 ) {
+    private val webAnswer = object : SimpleTool(
+        "web_answer", "Answer a question that needs current/live info from the web (news, scores, prices, 'aaj ka', latest anything).",
+        params { string("query", "What Sir wants to know", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val answer = brainProvider.get().webAnswer(args.requireString("query"))
+            return answer?.let { ToolResult.ok(it) } ?: ToolResult.fail("web par abhi pahunch nahi paaya — Gemini key aur internet check karo")
+        }
+    }
+
     private val schedule = object : SimpleTool(
         "get_schedule", "Sir's calendar events and JARVIS reminders for today or tomorrow.",
         params { string("day", "today | tomorrow", enum = listOf("today", "tomorrow")) },
@@ -75,5 +89,5 @@ class InfoTools @Inject constructor(
             ToolResult.ok(ZonedDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, h:mm a", Locale.ENGLISH)))
     }
 
-    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule)
+    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer)
 }

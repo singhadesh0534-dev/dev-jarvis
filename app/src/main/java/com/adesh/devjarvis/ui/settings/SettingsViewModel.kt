@@ -43,6 +43,9 @@ class SettingsViewModel @Inject constructor(
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
+    private val _saveFailed = MutableStateFlow(false)
+    val saveFailed: StateFlow<Boolean> = _saveFailed.asStateFlow()
+
     fun edit(change: (JarvisSettings) -> JarvisSettings) {
         _draft.update(change)
         _saved.value = false
@@ -56,11 +59,12 @@ class SettingsViewModel @Inject constructor(
 
     fun save() {
         // alwaysOn / setupDone are owned by the HUD switch and the setup wizard — don't overwrite them.
-        repo.update { cur -> _draft.value.copy(alwaysOn = cur.alwaysOn, setupDone = cur.setupDone) }
+        val ok = repo.save(_draft.value.copy(alwaysOn = repo.current.alwaysOn, setupDone = repo.current.setupDone))
         _draft.value = repo.current
-        speech.applySettings()
-        briefing.reschedule()
-        _saved.value = true
+        runCatching { speech.applySettings() }
+        runCatching { briefing.reschedule() }
+        _saved.value = ok
+        _saveFailed.value = !ok
     }
 
     fun testVoice() {

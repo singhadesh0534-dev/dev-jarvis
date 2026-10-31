@@ -71,6 +71,7 @@ fun SettingsScreen(
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
+    val saveFailed by viewModel.saveFailed.collectAsStateWithLifecycle()
     var showVoices by remember { mutableStateOf(false) }
 
     Column(
@@ -98,18 +99,19 @@ fun SettingsScreen(
             UpdatesBlock(viewModel.updater)
 
             Section("API KEYS")
+            Hint("JARVIS ka dimaag chalu karne ke liye Gemini key zaruri hai (bilkul free). Button dabao → key banao → copy karo → yahan paste karo → SAVE.")
             SecretField(
                 label = "Gemini API key",
                 value = draft.geminiApiKey,
                 onChange = { v -> viewModel.edit { it.copy(geminiApiKey = v) } },
             )
-            LinkText("Free key yahan se lo: aistudio.google.com/apikey", JarvisConfig.GEMINI_KEY_URL)
+            OpenLinkButton("Get free Gemini key", JarvisConfig.GEMINI_KEY_URL)
             SecretField(
                 label = "Groq API key (backup brain + Whisper)",
                 value = draft.groqApiKey,
                 onChange = { v -> viewModel.edit { it.copy(groqApiKey = v) } },
             )
-            LinkText("Free key: console.groq.com/keys", JarvisConfig.GROQ_KEY_URL)
+            OpenLinkButton("Get free Groq key", JarvisConfig.GROQ_KEY_URL)
 
             Section("VOICE ENGINE")
             ChoiceRow(
@@ -238,9 +240,9 @@ fun SettingsScreen(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                if (saved) "Saved ✓" else "",
+                if (saveFailed) "Save fail hua — Diagnostics dekho" else if (saved) "Saved ✓" else "",
                 style = MaterialTheme.typography.labelMedium,
-                color = Hud.Cyan,
+                color = if (saveFailed) Hud.Amber else Hud.Cyan,
                 modifier = Modifier.weight(1f),
             )
             Button(
@@ -326,6 +328,15 @@ private fun LinkText(text: String, url: String) {
             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         },
     )
+}
+
+/** Clear button that opens a URL in the browser (e.g. "Get free Gemini key"). */
+@Composable
+private fun OpenLinkButton(text: String, url: String) {
+    val context = LocalContext.current
+    OutlinedButton(onClick = {
+        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }) { Text("$text  ↗", color = Hud.Cyan) }
 }
 
 @Composable
