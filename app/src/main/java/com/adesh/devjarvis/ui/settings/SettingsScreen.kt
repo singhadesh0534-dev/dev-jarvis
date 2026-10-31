@@ -52,10 +52,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.core.JarvisConfig
 import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.ui.theme.Hud
+import com.adesh.devjarvis.update.AppUpdater
 import com.adesh.devjarvis.voice.VoiceInfo
 
 @Composable
@@ -90,6 +94,9 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            Section("UPDATES")
+            UpdatesBlock(viewModel.updater)
+
             Section("API KEYS")
             SecretField(
                 label = "Gemini API key",
@@ -362,6 +369,51 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun UpdatesBlock(updater: AppUpdater) {
+    val state by updater.state.collectAsStateWithLifecycle()
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        // Came back from "Install unknown apps" settings? Continue the install.
+        if ((state as? AppUpdater.State.Installing)?.needsPermission == true) updater.retryInstall()
+    }
+    Text("Installed: ${updater.currentVersion}", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+    val status = when (val st = state) {
+        AppUpdater.State.Idle -> "Naya version dekhne ke liye Check dabao."
+        AppUpdater.State.Checking -> "Checking…"
+        AppUpdater.State.UpToDate -> "Sab latest hai, Sir. ✓"
+        is AppUpdater.State.Available -> "Naya version ${st.versionName} (${st.versionCode}) — ~${st.sizeMb} MB"
+        is AppUpdater.State.Downloading -> "Downloading… ${st.percent}%"
+        is AppUpdater.State.Installing ->
+            if (st.needsPermission) "Ek baar: JARVIS ke liye \"Allow from this source\" ON karo, phir wapas aao."
+            else "Android installer khula hai — Update / Install dabao."
+        is AppUpdater.State.Failed -> "Update fail: ${st.message}"
+    }
+    Hint(status)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = updater::check) { Text("Check for update", color = Hud.Cyan) }
+        if (state is AppUpdater.State.Available) {
+            Button(
+                onClick = { updater.downloadAndInstall() },
+                colors = ButtonDefaults.buttonColors(containerColor = Hud.Cyan, contentColor = Hud.Background),
+            ) { Text("INSTALL", style = MaterialTheme.typography.labelMedium) }
+        }
+    }
+    if (!Edition.isFull) {
+        Text("Get Full edition", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice, modifier = Modifier.padding(top = 6.dp))
+        Hint(
+            "Full mein screen agent, screen padhna, lock/screenshot aur notifications (alerts, reply) bhi hain. " +
+                "Google Play Protect browser/file se install hone wale aise apps (Accessibility + Notification access) block karta hai, " +
+                "isliye Full ek baar in do mein se kisi tareeke se install karna hoga — data same rehta hai:"
+        )
+        Hint(
+            "1) Laptop + USB: `adb install -r JARVIS.apk` (ADB se install block nahi hota).\n" +
+                "2) Ya kuch der ke liye: Play Store > profile photo > Play Protect > ⚙ > \"Scan apps with Play Protect\" OFF → " +
+                "neeche wala button → install → Play Protect wapas ON."
+        )
+        OutlinedButton(onClick = { updater.downloadAndInstall(full = true) }) { Text("Download Full edition", color = Hud.Cyan) }
+    }
 }
 
 @Composable

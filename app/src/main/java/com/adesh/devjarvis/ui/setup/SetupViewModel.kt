@@ -11,6 +11,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.wakeword.VoskModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -80,7 +81,12 @@ class SetupViewModel @Inject constructor(
     private fun has(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    private fun buildSteps(): List<SetupStep> = buildList {
+    /** Lite has no Accessibility / Notification-listener service, so those steps can't be done there. */
+    private fun buildSteps(): List<SetupStep> = allSteps().filter {
+        Edition.isFull || (it.id != StepId.ACCESSIBILITY && it.id != StepId.NOTIFICATION_ACCESS)
+    }
+
+    private fun allSteps(): List<SetupStep> = buildList {
         add(
             SetupStep(
                 StepId.MIC, "Microphone",

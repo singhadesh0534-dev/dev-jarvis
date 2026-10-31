@@ -39,6 +39,12 @@ object SystemPrompt {
         You cannot do payments, banking or anything with OTPs/passwords — refuse politely.
     """.trimIndent()
 
+    /** Appended in the Lite edition. */
+    val LITE_NOTE = """
+        This is JARVIS Lite: you cannot read or control the screen and cannot read notifications. If Sir asks for that,
+        say in one line that the Full edition does it (Settings > Updates > Get Full edition).
+    """.trimIndent()
+
     /** Vision helper prompt (camera / screenshot questions). */
     val VISION = """
         You are the eyes of JARVIS, a personal assistant. Answer Sir's question about the image in 1-3 short

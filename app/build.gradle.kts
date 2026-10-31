@@ -14,16 +14,58 @@ android {
         applicationId = "com.adesh.devjarvis"
         minSdk = 26
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.6.0-phase6"
+        // CI run number -> every build has a higher versionCode, so in-app updates install over the old one.
+        val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
+        versionCode = 100 + (run ?: 0)
+        versionName = "1.0." + (run ?: 0)
+        buildConfigField("String", "UPDATE_REPO", "\"singhadesh0534-dev/dev-jarvis\"")
     }
 
+    // One fixed key for every build, so a new APK installs over the old one (live updates keep data).
+    // The key is never in the repo: CI gets it from the JARVIS_KEYSTORE_B64 secret, a laptop from
+    // JARVIS_KEYSTORE_PATH. Without it builds fall back to the (per-machine) debug key. See app/signing/README.md.
+    fun env(name: String) = System.getenv(name)?.takeIf { it.isNotBlank() }
+    val keystore = env("JARVIS_KEYSTORE_PATH")?.let { file(it) }?.takeIf { it.exists() }
+    signingConfigs {
+        if (keystore != null) {
+            create("personal") {
+                storeFile = keystore
+                storePassword = env("JARVIS_KEYSTORE_PASSWORD") ?: "jarvis-personal"
+                keyAlias = env("JARVIS_KEY_ALIAS") ?: "jarvis"
+                keyPassword = env("JARVIS_KEY_PASSWORD") ?: "jarvis-personal"
+            }
+        }
+    }
+    val signing = if (keystore != null) signingConfigs.getByName("personal") else signingConfigs.getByName("debug")
+
     buildTypes {
+        debug {
+            signingConfig = signing
+        }
         release {
             isMinifyEnabled = false
-            // Personal sideload build: sign the release with the debug key so it installs directly.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signing
         }
+    }
+
+    flavorDimensions += "edition"
+    productFlavors {
+        // Everything, incl. Accessibility (screen agent) and Notification access (alerts/replies).
+        create("full") {
+            dimension = "edition"
+        }
+        // No Accessibility / Notification-listener services, so Play Protect's sideloading fraud check doesn't
+        // block the install. Same package: upgrading Lite -> Full keeps all data.
+        create("lite") {
+            dimension = "edition"
+            versionNameSuffix = "-lite"
+        }
+    }
+
+    lint {
+        // Personal sideload app: don't fail release builds on lint warnings.
+        checkReleaseBuilds = false
+        abortOnError = false
     }
 
     compileOptions {

@@ -1,6 +1,7 @@
 package com.adesh.devjarvis.tools
 
 import com.adesh.devjarvis.brain.GroqMessages
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.memory.MemoryTools
 import com.adesh.devjarvis.notifications.NotificationTools
 import com.adesh.devjarvis.screen.ScreenTools
@@ -26,7 +27,8 @@ class ToolRegistry @Inject constructor(
     notifications: NotificationTools,
     screen: ScreenTools,
 ) {
-    val tools: List<JarvisTool> = communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools
+    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools)
+        .filter { Edition.isFull || it.name !in Edition.FULL_ONLY_TOOLS }
     private val byName = tools.associateBy { it.name }
 
     val declarations: List<JsonObject> = tools.map { it.declaration() }

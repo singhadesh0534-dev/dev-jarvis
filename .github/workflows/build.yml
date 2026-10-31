@@ -8,7 +8,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to publish the APK as a release asset
+      contents: write   # needed to publish the APKs as release assets
     steps:
       - uses: actions/checkout@v4
 
@@ -26,29 +26,59 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Unit tests
-        run: ./gradlew testDebugUnitTest --no-daemon --stacktrace
+      # Stable signing key from the repo secret JARVIS_KEYSTORE_B64 (base64 of the .jks). Passwords are optional
+      # secrets. Without the key every run signs with a fresh debug key and updates can't install over old builds.
+      - name: Signing key from secrets
+        env:
+          KS_B64: ${{ secrets.JARVIS_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.JARVIS_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.JARVIS_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/jarvis.jks"
+            echo "JARVIS_KEYSTORE_PATH=$RUNNER_TEMP/jarvis.jks" >> "$GITHUB_ENV"
+            [ -n "$KS_PASS" ] && echo "JARVIS_KEYSTORE_PASSWORD=$KS_PASS" >> "$GITHUB_ENV"
+            [ -n "$KEY_ALIAS" ] && echo "JARVIS_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            [ -n "$KEY_PASS" ] && echo "JARVIS_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "Signing with the stable JARVIS key from secrets"
+          else
+            echo "::warning::JARVIS_KEYSTORE_B64 secret not set - signing with a throwaway debug key; in-app updates won't install over older builds."
+          fi
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+      - name: Unit tests
+        run: ./gradlew testFullDebugUnitTest --no-daemon --stacktrace
+
+      - name: Build Full + Lite APKs
+        run: ./gradlew assembleFullRelease assembleLiteRelease --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
         with:
-          name: JARVIS-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: JARVIS-apks
+          path: |
+            app/build/outputs/apk/full/release/*.apk
+            app/build/outputs/apk/lite/release/*.apk
 
-      # Direct phone download, no login / zip:
-      # https://github.com/<owner>/<repo>/releases/download/jarvis-latest/JARVIS.apk
-      - name: Publish APK to the "jarvis-latest" release
+      # Direct phone downloads, no login / zip:
+      #   https://github.com/<owner>/<repo>/releases/download/jarvis-latest/JARVIS-lite.apk
+      #   https://github.com/<owner>/<repo>/releases/download/jarvis-latest/JARVIS.apk
+      # The body carries versionCode — the in-app updater compares it with the installed build.
+      - name: Publish APKs to the "jarvis-latest" release
         if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/heads/')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk JARVIS.apk
+          cp app/build/outputs/apk/full/release/app-full-release.apk JARVIS.apk
+          cp app/build/outputs/apk/lite/release/app-lite-release.apk JARVIS-lite.apk
+          NOTES="Auto-built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}.
+          JARVIS-lite.apk: installs normally (no Accessibility / Notification access).
+          JARVIS.apk: Full edition (Play Protect may block a browser install; see app Settings > Updates).
+          versionCode=$((100 + GITHUB_RUN_NUMBER))
+          versionName=1.0.${GITHUB_RUN_NUMBER}"
           gh release delete jarvis-latest --yes --cleanup-tag || true
-          gh release create jarvis-latest JARVIS.apk \
+          gh release create jarvis-latest JARVIS-lite.apk JARVIS.apk \
             --title "JARVIS (latest build)" \
-            --notes "Auto-built from ${GITHUB_REF_NAME} @ ${GITHUB_SHA::7}. Install JARVIS.apk on the phone." \
+            --notes "$NOTES" \
             --prerelease \
             --target "$GITHUB_SHA"
 

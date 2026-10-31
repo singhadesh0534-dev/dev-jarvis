@@ -19,6 +19,7 @@ import com.adesh.devjarvis.ui.memory.MemoryScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
 import com.adesh.devjarvis.ui.setup.SetupScreen
 import com.adesh.devjarvis.ui.theme.JarvisTheme
+import com.adesh.devjarvis.update.AppUpdater
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
@@ -27,6 +28,7 @@ class MainActivity : ComponentActivity() {
 
     @Inject lateinit var session: JarvisSession
     @Inject lateinit var settings: SettingsRepository
+    @Inject lateinit var updater: AppUpdater
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,7 +79,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        if (savedInstanceState == null) handleAssist(intent)
+        if (savedInstanceState == null) {
+            handleAssist(intent)
+            updater.checkIfDue() // quiet; HUD shows a banner if a newer build exists
+        }
     }
 
     override fun onNewIntent(intent: Intent) {

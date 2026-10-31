@@ -40,6 +40,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import com.adesh.devjarvis.core.CrashReporter
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.memory.MemoryRepository
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.ui.theme.Hud
@@ -47,8 +48,8 @@ import com.adesh.devjarvis.ui.theme.Orbitron
 import com.adesh.devjarvis.wakeword.VoskModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.delay
 import javax.inject.Inject
+import kotlinx.coroutines.delay
 
 /** One system-check line: label ... status. */
 data class BootCheck(val label: String, val status: String, val ok: Boolean)
@@ -70,6 +71,7 @@ class BootViewModel @Inject constructor(
         val crashed = CrashReporter.lastCrash(context) != null
         return listOf(
             BootCheck("CORE SYSTEMS", "OK", true),
+            BootCheck("EDITION", Edition.label, true),
             BootCheck("NEURAL LINK · GEMINI", if (s.hasGeminiKey) "OK" else "NO KEY", s.hasGeminiKey),
             BootCheck("BACKUP LINK · GROQ", if (s.hasGroqKey) "OK" else "STANDBY", s.hasGroqKey),
             BootCheck("AUDIO SENSORS", if (has(Manifest.permission.RECORD_AUDIO)) "OK" else "OFFLINE", has(Manifest.permission.RECORD_AUDIO)),

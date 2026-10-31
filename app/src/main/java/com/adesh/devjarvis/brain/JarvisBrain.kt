@@ -1,6 +1,7 @@
 package com.adesh.devjarvis.brain
 
 import com.adesh.devjarvis.core.DeviceStatus
+import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.core.JarvisConfig
 import com.adesh.devjarvis.core.Provider
 import com.adesh.devjarvis.core.UsageTracker
@@ -93,6 +94,7 @@ class JarvisBrain @Inject constructor(
         append(s.systemPrompt.trim())
         append("\n\n")
         append(if (forLive) SystemPrompt.LIVE_RULES else SystemPrompt.SPEECH_FORMAT_RULES)
+        if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(
             ContextBlock.build(

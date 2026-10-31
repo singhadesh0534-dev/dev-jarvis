@@ -66,6 +66,7 @@ import com.adesh.devjarvis.core.HudUiState
 import com.adesh.devjarvis.core.JarvisState
 import com.adesh.devjarvis.core.NetworkKind
 import com.adesh.devjarvis.ui.theme.Hud
+import com.adesh.devjarvis.update.AppUpdater
 
 @Composable
 fun HudScreen(
@@ -114,6 +115,20 @@ fun HudScreen(
             StatusRow(ui)
             AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
+            val update by viewModel.update.collectAsStateWithLifecycle()
+            (update as? AppUpdater.State.Available)?.let { u ->
+                Text(
+                    "⬆  Naya JARVIS ${u.versionName} available — Settings > Updates",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Hud.Cyan,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .border(1.dp, Hud.Cyan.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                        .clickable(onClick = onOpenSettings)
+                        .padding(10.dp),
+                )
+            }
 
             Box(
                 Modifier.fillMaxWidth().weight(1f, fill = false),

@@ -6,11 +6,12 @@ import com.adesh.devjarvis.core.HudUiState
 import com.adesh.devjarvis.core.JarvisSession
 import com.adesh.devjarvis.service.ServiceController
 import com.adesh.devjarvis.settings.SettingsRepository
+import com.adesh.devjarvis.update.AppUpdater
 import com.adesh.devjarvis.wakeword.VoskModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
+import kotlinx.coroutines.flow.StateFlow
 
 /** HUD ka thin wrapper — asli dimaag [JarvisSession] mein hai (service ke saath shared). */
 @HiltViewModel
@@ -19,7 +20,9 @@ class HudViewModel @Inject constructor(
     private val session: JarvisSession,
     private val settings: SettingsRepository,
     private val models: VoskModelManager,
+    updater: AppUpdater,
 ) : ViewModel() {
+    val update: StateFlow<AppUpdater.State> = updater.state
 
     val ui: StateFlow<HudUiState> = session.ui
     val speechLevel: StateFlow<Float> = session.speechLevel

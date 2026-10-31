@@ -1,23 +1,24 @@
 package com.adesh.devjarvis.ui.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SystemPrompt
-import android.content.Context
 import com.adesh.devjarvis.core.CrashReporter
 import com.adesh.devjarvis.core.JarvisConfig
-import dagger.hilt.android.qualifiers.ApplicationContext
 import com.adesh.devjarvis.proactive.BriefingScheduler
 import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.settings.SettingsRepository
+import com.adesh.devjarvis.update.AppUpdater
 import com.adesh.devjarvis.voice.SpeechOutput
 import com.adesh.devjarvis.voice.VoiceInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import javax.inject.Inject
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -26,6 +27,7 @@ class SettingsViewModel @Inject constructor(
     private val brain: JarvisBrain,
     private val briefing: BriefingScheduler,
     @ApplicationContext private val context: Context,
+    val updater: AppUpdater,
 ) : ViewModel() {
     /** Last crash + recovered errors, for Settings > Diagnostics (no keys or personal data inside). */
     fun diagnostics(): String? = listOfNotNull(CrashReporter.lastCrash(context), CrashReporter.recoveredLog(context))

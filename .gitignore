@@ -8,3 +8,7 @@ captures/
 *.apk
 *.aab
 .DS_Store
+
+# Signing keys never go in the repo (use the JARVIS_KEYSTORE_B64 GitHub secret)
+*.jks
+*.keystore

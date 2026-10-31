@@ -9,7 +9,48 @@ Bilkul free: Gemini ki free API key, open-source libraries, koi paid cheez nahi.
 > "Hello Dev" bolo → JARVIS Gemini Live ki asli awaaz mein turant jawab deta hai, aap beech mein bol ke tok sakte ho
 > → "Mummy ko call karo, phir subah 6 ka alarm" → confirm karke dono kaam. Quota khatam? Chupchaap backup pe.
 >
-> **Direct APK:** https://github.com/singhadesh0534-dev/dev-jarvis/releases/download/jarvis-latest/JARVIS.apk
+> **Direct APK (pehle ye — normal install hota hai):**
+> https://github.com/singhadesh0534-dev/dev-jarvis/releases/download/jarvis-latest/JARVIS-lite.apk
+>
+> Full edition: https://github.com/singhadesh0534-dev/dev-jarvis/releases/download/jarvis-latest/JARVIS.apk
+> (Play Protect browser se install block karta hai — neeche "Lite vs Full" dekho.)
+
+## Lite vs Full (Play Protect)
+
+Google Play Protect ka **fraud protection** (India + kuch aur desh) browser / file manager / WhatsApp se install hone
+wale us app ko **block** kar deta hai jo *Accessibility* ya *Notification access* maangta hai — chahe app aapka apna ho.
+Isliye do editions hain (same package, same data):
+
+| | **JARVIS Lite** | **JARVIS Full** |
+|---|---|---|
+| Browser se install | ✅ normal | ❌ Play Protect block |
+| Voice, "Hello Dev", Live mode, Groq fallback | ✅ | ✅ |
+| Calls, SMS, WhatsApp (pre-fill), apps, alarm, timer, reminders, torch, volume, media, weather | ✅ | ✅ |
+| Memory, morning briefing, low battery, reminders bolna | ✅ | ✅ |
+| Camera vision ("ye kya hai?") | ✅ | ✅ |
+| Screen padhna / screenshot / tap / screen agent / lock screen | — | ✅ |
+| Notifications padhna, reply, important-message alerts | — | ✅ |
+| Lock screen / doosre app ke upar se apps kholna (bina tap) | notification tap chahiye* | ✅ |
+
+\* Lite mein "Display over other apps" ON karo — floating reactor dikhte hue apps khulna aasaan hota hai.
+
+**Lite → Full (data same rehta hai):** app → Settings → **Updates** → *Download Full edition*. Us ek install ke liye
+Play Protect ko rasta dena hoga — do seedhe tareeke:
+1. **Laptop + USB (best):** `adb install -r JARVIS.apk` — ADB se install block nahi hota.
+2. **Ya** Play Store → profile photo → **Play Protect** → ⚙️ → *Scan apps with Play Protect* **OFF** → Full install
+   → Play Protect wapas **ON**.
+
+## Live update
+
+Settings → **Updates** → *Check for update* → **INSTALL** → Android installer → *Update*. HUD pe bhi banner aata hai
+jab naya build ho.
+
+**Ek baar ka setup (zaruri):** Android update tabhi install karta hai jab naya APK **usi signing key** se sign ho.
+Wo key private rehni chahiye, isliye repo mein nahi — GitHub secret `JARVIS_KEYSTORE_B64` mein. Steps:
+`app/signing/README.md`. Secret ke bina har build alag throwaway key se banta hai: naya install chalega, lekin
+purane ke upar update "App not installed" dega.
+> ⚠️ Secret lagne se **pehle** ke builds alag key se sign hue the — un par se pehli baar ek uninstall + install
+> karna hoga; uske baad live updates seedhe chalenge aur data bana rahega.
 
 ## Phase 7 mein naya — polish
 
@@ -259,15 +300,16 @@ Keys app ke andar **Settings** mein daalni hain — code mein kabhi mat likhna, 
 
 ### Option B — Terminal + ADB
 ```bash
-./gradlew assembleDebug          # Windows pe: gradlew.bat assembleDebug
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleFullDebug      # Windows pe: gradlew.bat assembleFullDebug
+adb install -r app/build/outputs/apk/full/debug/app-full-debug.apk
 ```
 
 ### Option C — Bina laptop build ke (GitHub Actions)
-Har push pe GitHub khud APK banata hai:
-1. GitHub pe repo → **Actions** tab → "Build JARVIS APK" ka latest run (hara ✓).
-2. Neeche **Artifacts** → `JARVIS-debug-apk` download → unzip → `app-debug.apk`.
-3. APK phone pe bhejo (USB / Drive / Telegram) aur tap karke install karo. "Install unknown apps" allow karna padega.
+Har push pe GitHub khud dono APK banata hai aur release pe daalta hai — upar wale direct links. (Actions →
+latest run → Artifacts → `JARVIS-apks` mein bhi hain.)
+
+Laptop se khud build: `./gradlew assembleLiteRelease` (ya `assembleFullRelease`) →
+`app/build/outputs/apk/lite/release/app-lite-release.apk`.
 
 ---
 
