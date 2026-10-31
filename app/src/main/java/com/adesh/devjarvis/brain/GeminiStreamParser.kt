@@ -11,10 +11,19 @@ import kotlinx.serialization.json.jsonPrimitive
 /** Gemini `streamGenerateContent?alt=sse` ki ek-ek line ko parse karta hai. Pure Kotlin, unit-tested. */
 object GeminiStreamParser {
 
-    sealed interface Chunk {
-        data class Text(val text: String) : Chunk
-        data class Blocked(val reason: String) : Chunk
-    }
+    data class FunctionCall(val name: String, val args: JsonObject, val id: String?)
+
+    data class Chunk(
+        /** Speakable text in this chunk (thought parts excluded). */
+        val text: String = "",
+        val calls: List<FunctionCall> = emptyList(),
+        /**
+         * Every part exactly as received, incl. `thoughtSignature`. Gemini 3 needs these sent back unchanged
+         * in the next request when tools are used.
+         */
+        val rawParts: List<JsonObject> = emptyList(),
+        val blockedReason: String? = null,
+    )
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -26,24 +35,34 @@ object GeminiStreamParser {
         val root = runCatching { json.parseToJsonElement(payload).jsonObject }.getOrNull() ?: return null
 
         (root["promptFeedback"] as? JsonObject)?.get("blockReason")?.jsonPrimitive?.contentOrNull?.let {
-            return Chunk.Blocked(it)
+            return Chunk(blockedReason = it)
         }
 
         val candidate = (root["candidates"] as? JsonArray)?.firstOrNull()?.jsonObject ?: return null
-        val parts = (candidate["content"] as? JsonObject)?.get("parts") as? JsonArray
-        val text = (parts ?: JsonArray(emptyList()))
-            .map { it.jsonObject }
+        val parts = ((candidate["content"] as? JsonObject)?.get("parts") as? JsonArray)
+            ?.mapNotNull { it as? JsonObject }
+            .orEmpty()
+
+        val text = StringBuilder()
+        val calls = mutableListOf<FunctionCall>()
+        for (p in parts) {
             // "thought" parts are the model's private reasoning — never speak them.
-            .filter { it["thought"]?.jsonPrimitive?.booleanOrNull != true }
-            .mapNotNull { it["text"]?.jsonPrimitive?.contentOrNull }
-            .joinToString("")
-        if (text.isNotEmpty()) return Chunk.Text(text)
+            if (p["thought"]?.jsonPrimitive?.booleanOrNull == true) continue
+            p["text"]?.jsonPrimitive?.contentOrNull?.let { text.append(it) }
+            (p["functionCall"] as? JsonObject)?.let { fc ->
+                val name = fc["name"]?.jsonPrimitive?.contentOrNull ?: return@let
+                calls += FunctionCall(
+                    name = name,
+                    args = fc["args"] as? JsonObject ?: JsonObject(emptyMap()),
+                    id = fc["id"]?.jsonPrimitive?.contentOrNull,
+                )
+            }
+        }
 
         val finish = candidate["finishReason"]?.jsonPrimitive?.contentOrNull
-        if (finish == "SAFETY" || finish == "PROHIBITED_CONTENT" || finish == "BLOCKLIST") {
-            return Chunk.Blocked(finish)
-        }
-        return null
+        val blocked = finish?.takeIf { it == "SAFETY" || it == "PROHIBITED_CONTENT" || it == "BLOCKLIST" }
+        if (parts.isEmpty() && blocked == null) return null
+        return Chunk(text.toString(), calls, parts, blocked)
     }
 
     /** Pulls the human-readable message out of a Gemini error body, if any. */

@@ -1,10 +1,15 @@
 package com.adesh.devjarvis.core
 
 import com.adesh.devjarvis.brain.BrainError
+import com.adesh.devjarvis.brain.BrainEvent
 import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SentenceChunker
 import com.adesh.devjarvis.brain.SpeechSanitizer
 import com.adesh.devjarvis.settings.SettingsRepository
+import com.adesh.devjarvis.tools.ConfirmationParser
+import com.adesh.devjarvis.tools.ToolContext
+import com.adesh.devjarvis.tools.ToolRegistry
+import com.adesh.devjarvis.tools.ToolResult
 import com.adesh.devjarvis.voice.AudioFocusHelper
 import com.adesh.devjarvis.voice.Earcons
 import com.adesh.devjarvis.voice.SpeechInput
@@ -13,6 +18,7 @@ import com.adesh.devjarvis.wakeword.VoskModelManager
 import com.adesh.devjarvis.wakeword.WakePhraseMatcher
 import com.adesh.devjarvis.wakeword.WakeWordEngine
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -27,6 +33,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.serialization.json.JsonObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,6 +60,8 @@ data class HudUiState(
     val inConversation: Boolean = false,
     val wakeHeard: String = "",
     val wakeNotice: String? = null,
+    /** Non-null while JARVIS waits for "haan / nahi" (HUD shows YES / NO buttons). */
+    val pendingConfirmation: String? = null,
     /** Voice pipeline in use. Phase 4 adds "LIVE" (Gemini Live) and "FALLBACK" (Groq). */
     val mode: String = "STREAM",
 )
@@ -83,6 +93,8 @@ class JarvisSession @Inject constructor(
     private val models: VoskModelManager,
     private val earcons: Earcons,
     private val focus: AudioFocusHelper,
+    private val registry: ToolRegistry,
+    private val activityLog: ActivityLog,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -100,6 +112,13 @@ class JarvisSession @Inject constructor(
     private var serviceActive = false
     /** Text JARVIS is currently saying — used to ignore him "hearing" his own barge-in words. */
     private var speakingText = ""
+    /** Set by a tool like make_call: close the conversation after this reply instead of listening on. */
+    private var endAfterReply = false
+    private var confirmAnswer: CompletableDeferred<Boolean>? = null
+
+    private val toolContext = object : ToolContext {
+        override suspend fun confirm(question: String): Boolean = confirmByVoice(question)
+    }
 
     init {
         scope.launch {
@@ -149,6 +168,7 @@ class JarvisSession @Inject constructor(
         when (_ui.value.state) {
             JarvisState.LISTENING -> {
                 listenJob?.cancel()
+                if (_ui.value.pendingConfirmation != null) interrupt()
                 endConversation(chime = false)
             }
             JarvisState.THINKING, JarvisState.SPEAKING -> {
@@ -177,6 +197,19 @@ class JarvisSession @Inject constructor(
         // Typed chat: no follow-up listening afterwards (mic shouldn't open on its own).
         _ui.update { it.copy(inConversation = false) }
         ask(text.trim())
+    }
+
+    /** YES / NO buttons on the HUD while a confirmation is pending. */
+    fun answerConfirmation(yes: Boolean) {
+        confirmAnswer?.complete(yes)
+    }
+
+    /** Proactive line (e.g. a reminder). Spoken only if JARVIS is idle and no call is going on. */
+    fun announce(text: String) {
+        addLine(fromUser = false, text = text)
+        if (_ui.value.state != JarvisState.IDLE || focus.inCall()) return
+        earcons.tick()
+        say(text)
     }
 
     fun stopEverything() {
@@ -348,17 +381,32 @@ class JarvisSession @Inject constructor(
     private fun ask(userText: String) {
         interrupt()
         addLine(fromUser = true, text = userText)
-        val lineId = nextId++
+        val firstLineId = nextId++
         setState(JarvisState.THINKING)
+        endAfterReply = false
         replyJob = scope.launch {
             val chunker = SentenceChunker()
             val full = StringBuilder()
+            var lineId = firstLineId
+            var lineStart = 0
             try {
-                brain.reply(userText).collect { delta ->
-                    full.append(delta)
-                    speakingText = full.toString()
-                    upsertLine(lineId, SpeechSanitizer.clean(full.toString()))
-                    chunker.feed(delta).forEach(::speakPiece)
+                brain.reply(userText, ::runTool).collect { ev ->
+                    when (ev) {
+                        is BrainEvent.Text -> {
+                            full.append(ev.delta)
+                            speakingText = full.toString()
+                            upsertLine(lineId, SpeechSanitizer.clean(full.substring(lineStart)))
+                            chunker.feed(ev.delta).forEach(::speakPiece)
+                        }
+                        is BrainEvent.ToolStarted -> {
+                            // Say what was already streamed before the action, then start a fresh line after it.
+                            chunker.flush()?.let(::speakPiece)
+                            if (full.isNotEmpty()) full.append(' ')
+                            lineId = nextId++
+                            lineStart = full.length
+                        }
+                        is BrainEvent.ToolFinished -> Unit
+                    }
                 }
                 chunker.flush()?.let(::speakPiece)
                 brain.remember(userText, full.toString())
@@ -387,9 +435,82 @@ class JarvisSession @Inject constructor(
     /** Continuous conversation: jawab ke baad bina wake word ke ~8 sec follow-up suno. */
     private fun afterReply(userText: String) {
         val keepGoing = _ui.value.inConversation &&
+            !endAfterReply &&
             settings.current.continuousConversation &&
             !ConversationRules.isEnder(userText)
         if (keepGoing) startListening(followUp = true) else endConversation(chime = false)
+    }
+
+    // ---------------------------------------------------------------- tools
+
+    private suspend fun runTool(name: String, args: JsonObject): ToolResult {
+        setState(JarvisState.THINKING)
+        val argText = args.entries.joinToString(", ") { (k, v) -> "$k=${v.toString().trim('"')}" }
+        val lineId = nextId++
+        upsertLine(lineId, "⚙ $name($argText)", system = true)
+        val result = registry.execute(name, args, toolContext)
+        if (result.endsConversation) endAfterReply = true
+        upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: ${result.message}", system = true)
+        activityLog.add(name, argText, result.ok, result.message)
+        return result
+    }
+
+    /** Ask out loud, then wait for "haan / nahi" by voice or a YES / NO tap. No answer = no. */
+    private suspend fun confirmByVoice(question: String): Boolean {
+        speechOut.awaitIdle()
+        addLine(fromUser = false, text = question)
+        speakingText = question
+        speechOut.speak(question)
+        setState(JarvisState.SPEAKING)
+        speechOut.awaitIdle()
+
+        val answer = CompletableDeferred<Boolean>()
+        confirmAnswer = answer
+        _ui.update { it.copy(pendingConfirmation = question) }
+        val voice = scope.launch {
+            repeat(2) { attempt ->
+                setState(JarvisState.LISTENING)
+                wake.stop()
+                wake.awaitStopped()
+                val heard = listenOnce()
+                if (heard != null) addLine(fromUser = true, text = heard)
+                when (ConfirmationParser.parse(heard)) {
+                    ConfirmationParser.Answer.YES -> { answer.complete(true); return@launch }
+                    ConfirmationParser.Answer.NO -> { answer.complete(false); return@launch }
+                    ConfirmationParser.Answer.UNCLEAR -> if (attempt == 0 && heard != null) {
+                        val again = "Haan ya naa, Sir?"
+                        addLine(fromUser = false, text = again)
+                        speechOut.speak(again)
+                        setState(JarvisState.SPEAKING)
+                        speechOut.awaitIdle()
+                    }
+                }
+            }
+            answer.complete(false)
+        }
+        return try {
+            withTimeoutOrNull(CONFIRM_TIMEOUT_MS) { answer.await() } ?: false
+        } finally {
+            voice.cancel()
+            confirmAnswer = null
+            _ui.update { it.copy(pendingConfirmation = null, partial = "", micLevel = 0f) }
+            setState(JarvisState.THINKING)
+        }
+    }
+
+    /** One recognizer pass; returns the text or null if nothing usable was heard. */
+    private suspend fun listenOnce(): String? {
+        var text: String? = null
+        speechIn.listen(settings.current.sttLanguage).collect { ev ->
+            when (ev) {
+                is SpeechInput.Event.Level -> _ui.update { it.copy(micLevel = ev.value) }
+                is SpeechInput.Event.Partial -> _ui.update { it.copy(partial = ev.text) }
+                is SpeechInput.Event.Final -> text = ev.text
+                else -> Unit
+            }
+        }
+        _ui.update { it.copy(partial = "", micLevel = 0f) }
+        return text
     }
 
     private fun errorLine(e: BrainError): String = when (e) {
@@ -438,13 +559,13 @@ class JarvisSession @Inject constructor(
         _ui.update { it.copy(transcript = (it.transcript + line).takeLast(MAX_LINES)) }
     }
 
-    private fun upsertLine(id: Long, text: String) {
+    private fun upsertLine(id: Long, text: String, system: Boolean = false) {
         _ui.update { st ->
             val existing = st.transcript.indexOfFirst { it.id == id }
             val list = if (existing >= 0) {
                 st.transcript.toMutableList().also { it[existing] = it[existing].copy(text = text) }
             } else {
-                (st.transcript + TranscriptLine(id, fromUser = false, text = text)).takeLast(MAX_LINES)
+                (st.transcript + TranscriptLine(id, fromUser = false, text = text, isSystem = system)).takeLast(MAX_LINES)
             }
             st.copy(transcript = list)
         }
@@ -452,5 +573,6 @@ class JarvisSession @Inject constructor(
 
     private companion object {
         const val MAX_LINES = 100
+        const val CONFIRM_TIMEOUT_MS = 25_000L
     }
 }

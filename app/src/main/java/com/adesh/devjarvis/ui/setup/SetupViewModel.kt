@@ -21,7 +21,10 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
-enum class StepId { MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK, OVERLAY, ASSISTANT }
+enum class StepId {
+    MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK,
+    CALL_PHONE, CONTACTS, SMS, ACCESSIBILITY, WRITE_SETTINGS, OVERLAY, ASSISTANT,
+}
 
 /** How the step's main button works. */
 enum class StepAction { RUNTIME_PERMISSION, OPEN_SETTINGS, DOWNLOAD, MANUAL_CONFIRM }
@@ -67,6 +70,11 @@ class SetupViewModel @Inject constructor(
     fun downloadModel() = models.download()
 
     fun finish() = settings.update { it.copy(setupDone = true) }
+
+    private fun accessibilityEnabled(): Boolean {
+        val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        return enabled.split(':').any { it.startsWith(context.packageName + "/") }
+    }
 
     private fun has(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
@@ -140,6 +148,59 @@ class SetupViewModel @Inject constructor(
                 ),
                 StepAction.MANUAL_CONFIRM, "",
                 granted = prefs.getBoolean(StepId.XOS_RECENTS_LOCK.name, false), optional = false,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.CALL_PHONE, "Phone calls",
+                "\"Mummy ko call karo\" — JARVIS seedha call laga sake (har baar pehle aapse poochhega).",
+                listOf("Allow dabao."),
+                StepAction.RUNTIME_PERMISSION, "Allow calls",
+                granted = has(Manifest.permission.CALL_PHONE), optional = false,
+                permission = Manifest.permission.CALL_PHONE,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.CONTACTS, "Contacts",
+                "Naam se call/SMS/WhatsApp ke liye (\"Bhai\", \"Papa\"). Contacts phone se bahar nahi jaate — sirf naam match hota hai.",
+                listOf("Allow dabao."),
+                StepAction.RUNTIME_PERMISSION, "Allow contacts",
+                granted = has(Manifest.permission.READ_CONTACTS), optional = false,
+                permission = Manifest.permission.READ_CONTACTS,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.SMS, "Send SMS",
+                "\"Papa ko SMS karo ki main late hoon\" — bhejne se pehle JARVIS message padh ke sunata hai aur poochhta hai.",
+                listOf("Allow dabao."),
+                StepAction.RUNTIME_PERMISSION, "Allow SMS",
+                granted = has(Manifest.permission.SEND_SMS), optional = false,
+                permission = Manifest.permission.SEND_SMS,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.ACCESSIBILITY, "Accessibility (JARVIS ke haath)",
+                "Screen lock, screenshot, home — aur screen band/lock hone par bhi apps, calls aur alarms khol paana. " +
+                    "Iske bina Android background se apps kholne nahi deta.",
+                listOf(
+                    "Open setting dabao → Installed apps / Downloaded apps → JARVIS → ON → Allow.",
+                    "Agar \"Restricted setting\" likha aaye: phone Settings > Apps > JARVIS > upar ⋮ > \"Allow restricted settings\" — phir dobara try.",
+                    "JARVIS abhi sirf global actions use karta hai; screen padhna Phase 6 mein aayega.",
+                ),
+                StepAction.OPEN_SETTINGS, "Open setting",
+                granted = accessibilityEnabled(), optional = false,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.WRITE_SETTINGS, "Modify system settings (optional)",
+                "Sirf brightness badalne ke liye (\"brightness 30 karo\").",
+                listOf("JARVIS ke saamne switch ON karo."),
+                StepAction.OPEN_SETTINGS, "Open setting",
+                granted = Settings.System.canWrite(context), optional = true,
             )
         )
         add(

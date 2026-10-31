@@ -102,6 +102,9 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSetup
             Hint("Default: ${JarvisConfig.GEMINI_MODEL}. Naya model aaye to naam yahan badlo.")
             TextButton(onClick = viewModel::resetModel) { Text("Reset model", color = Hud.Cyan) }
 
+            HudField("Home city (weather)", draft.homeCity, { v -> viewModel.edit { it.copy(homeCity = v) } })
+            Hint("Jaise: Mumbai. \"Mausam kaisa hai?\" bina city ke pucho to yahi use hoga.")
+
             Section("VOICE")
             Text("Speech language (sunne ki bhasha)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

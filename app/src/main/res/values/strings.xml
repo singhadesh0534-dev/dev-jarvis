@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">JARVIS</string>
+    <string name="accessibility_description">JARVIS ko aapke voice command pe screen lock, screenshot, home/back karne deta hai, aur screen band hone par bhi apps, calls aur alarms kholne deta hai. JARVIS abhi screen ka content nahi padhta aur kuch bhi phone se bahar nahi bhejta.</string>
 </resources>

@@ -19,6 +19,11 @@ object SetupIntents {
     fun overlay(context: Context) =
         Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))
 
+    fun accessibility() = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+
+    fun writeSettings(context: Context) =
+        Intent(Settings.ACTION_MANAGE_WRITE_SETTINGS, Uri.parse("package:${context.packageName}"))
+
     fun defaultAssistant() = listOf(
         Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS),
         Intent(Settings.ACTION_VOICE_INPUT_SETTINGS),

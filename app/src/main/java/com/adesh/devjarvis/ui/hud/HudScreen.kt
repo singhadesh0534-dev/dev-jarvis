@@ -27,11 +27,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -66,6 +70,7 @@ import com.adesh.devjarvis.ui.theme.Hud
 fun HudScreen(
     viewModel: HudViewModel,
     onOpenSettings: () -> Unit,
+    onOpenActivity: () -> Unit,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
@@ -103,7 +108,7 @@ fun HudScreen(
             .imePadding()
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            TopBar(onOpenSettings)
+            TopBar(onOpenSettings, onOpenActivity)
             StatusRow(ui)
             AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
@@ -130,6 +135,7 @@ fun HudScreen(
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 8.dp),
             )
 
+            ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
             Transcript(ui, Modifier.weight(1f))
             InputRow(onSend = viewModel::onTextSubmitted)
         }
@@ -137,7 +143,7 @@ fun HudScreen(
 }
 
 @Composable
-private fun TopBar(onOpenSettings: () -> Unit) {
+private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -145,6 +151,9 @@ private fun TopBar(onOpenSettings: () -> Unit) {
         Column(Modifier.weight(1f)) {
             Text("J.A.R.V.I.S.", style = MaterialTheme.typography.headlineSmall, color = Hud.Cyan)
             Text("JUST A RATHER VERY INTELLIGENT SYSTEM", style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
+        }
+        IconButton(onClick = onOpenActivity) {
+            Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Activity log", tint = Hud.Cyan)
         }
         IconButton(onClick = onOpenSettings) {
             Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = Hud.Cyan)
@@ -206,6 +215,31 @@ private fun AlwaysOnRow(ui: HudUiState, onToggle: (Boolean) -> Unit) {
                     uncheckedTrackColor = Hud.Faint,
                 ),
             )
+        }
+    }
+}
+
+@Composable
+private fun ConfirmCard(question: String, onAnswer: (Boolean) -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .border(1.dp, Hud.Amber, RoundedCornerShape(6.dp))
+            .background(Hud.Panel, RoundedCornerShape(6.dp))
+            .padding(12.dp),
+    ) {
+        Text("CONFIRM", style = MaterialTheme.typography.labelSmall, color = Hud.Amber)
+        Text(question, style = MaterialTheme.typography.bodyLarge, color = Hud.White)
+        Text("Boliye \"haan\" / \"nahi\" — ya tap kijiye", style = MaterialTheme.typography.bodySmall, color = Hud.Dim)
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = { onAnswer(true) },
+                colors = ButtonDefaults.buttonColors(containerColor = Hud.Cyan, contentColor = Hud.Background),
+            ) { Text("YES", style = MaterialTheme.typography.labelMedium) }
+            OutlinedButton(onClick = { onAnswer(false) }) {
+                Text("NO", style = MaterialTheme.typography.labelMedium, color = Hud.Amber)
+            }
         }
     }
 }

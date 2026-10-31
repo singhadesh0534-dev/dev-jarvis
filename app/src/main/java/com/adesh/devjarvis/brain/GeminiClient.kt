@@ -5,7 +5,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.transform
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -34,12 +36,26 @@ import javax.net.ssl.SSLException
 @Singleton
 class GeminiClient @Inject constructor(private val http: OkHttpClient) {
 
+    /** Plain chat helper: history of text turns -> streamed text. */
     fun streamReply(
         apiKey: String,
         model: String,
         systemInstruction: String,
         history: List<Turn>,
-    ): Flow<String> = channelFlow {
+    ): Flow<String> = streamTurn(apiKey, model, systemInstruction, GeminiContents.fromTurns(history), tools = null)
+        .transform { chunk -> if (chunk.text.isNotEmpty()) emit(chunk.text) }
+
+    /**
+     * One model turn. Emits parsed chunks (text, function calls, raw parts).
+     * [contents] is the full Gemini `contents` array; [tools] the `tools` array or null.
+     */
+    fun streamTurn(
+        apiKey: String,
+        model: String,
+        systemInstruction: String,
+        contents: JsonArray,
+        tools: JsonArray?,
+    ): Flow<GeminiStreamParser.Chunk> = channelFlow {
         if (apiKey.isBlank()) throw BrainError.MissingKey()
 
         var useThinking = JarvisConfig.GEMINI_THINKING_LEVEL.isNotBlank()
@@ -50,7 +66,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
                     .url("${JarvisConfig.GEMINI_BASE_URL}/models/$model:streamGenerateContent?alt=sse")
                     // Key header mein — URL mein nahi, taaki kisi log mein na dikhe.
                     .header("x-goog-api-key", apiKey)
-                    .post(buildBody(systemInstruction, history, useThinking).toString().toRequestBody(JSON))
+                    .post(buildBody(systemInstruction, contents, tools, useThinking).toString().toRequestBody(JSON))
                     .build()
                 val current = http.newCall(request).also { call.set(it) }
                 val response = try {
@@ -73,11 +89,9 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
                     try {
                         while (true) {
                             val line = source.readUtf8Line() ?: break
-                            when (val chunk = GeminiStreamParser.parseLine(line)) {
-                                is GeminiStreamParser.Chunk.Text -> send(chunk.text)
-                                is GeminiStreamParser.Chunk.Blocked -> throw BrainError.Blocked(chunk.reason)
-                                null -> Unit
-                            }
+                            val chunk = GeminiStreamParser.parseLine(line) ?: continue
+                            chunk.blockedReason?.let { throw BrainError.Blocked(it) }
+                            send(chunk)
                         }
                     } catch (e: IOException) {
                         throw mapIoError(e)
@@ -89,19 +103,13 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
         awaitClose { call.get()?.cancel(); reader.cancel() }
     }
 
-    private fun buildBody(systemInstruction: String, history: List<Turn>, thinking: Boolean): JsonObject =
+    private fun buildBody(systemInstruction: String, contents: JsonArray, tools: JsonArray?, thinking: Boolean): JsonObject =
         buildJsonObject {
             putJsonObject("system_instruction") {
                 putJsonArray("parts") { addJsonObject { put("text", systemInstruction) } }
             }
-            putJsonArray("contents") {
-                history.forEach { turn ->
-                    addJsonObject {
-                        put("role", turn.role.geminiRole)
-                        putJsonArray("parts") { addJsonObject { put("text", turn.text) } }
-                    }
-                }
-            }
+            put("contents", contents)
+            if (tools != null) put("tools", tools)
             putJsonObject("generationConfig") {
                 put("temperature", JarvisConfig.GEMINI_TEMPERATURE)
                 put("maxOutputTokens", JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS)

@@ -12,6 +12,7 @@ import androidx.navigation.compose.rememberNavController
 import com.adesh.devjarvis.core.JarvisSession
 import com.adesh.devjarvis.service.ServiceController
 import com.adesh.devjarvis.settings.SettingsRepository
+import com.adesh.devjarvis.ui.activity.ActivityLogScreen
 import com.adesh.devjarvis.ui.hud.HudScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
 import com.adesh.devjarvis.ui.setup.SetupScreen
@@ -34,7 +35,14 @@ class MainActivity : ComponentActivity() {
                 val nav = rememberNavController()
                 NavHost(navController = nav, startDestination = start) {
                     composable(ROUTE_HUD) {
-                        HudScreen(viewModel = hiltViewModel(), onOpenSettings = { nav.navigate(ROUTE_SETTINGS) })
+                        HudScreen(
+                            viewModel = hiltViewModel(),
+                            onOpenSettings = { nav.navigate(ROUTE_SETTINGS) },
+                            onOpenActivity = { nav.navigate(ROUTE_ACTIVITY) },
+                        )
+                    }
+                    composable(ROUTE_ACTIVITY) {
+                        ActivityLogScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() })
                     }
                     composable(ROUTE_SETTINGS) {
                         SettingsScreen(
@@ -80,6 +88,7 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val ROUTE_HUD = "hud"
         const val ROUTE_SETTINGS = "settings"
+        const val ROUTE_ACTIVITY = "activity"
         const val ROUTE_SETUP_FIRST = "setup_first"
         const val ROUTE_SETUP = "setup"
     }

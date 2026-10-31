@@ -32,6 +32,8 @@ data class JarvisSettings(
     /** JARVIS bolte waqt "Jarvis"/"stop"/"ruko" bolke rokna. */
     val voiceBargeIn: Boolean = true,
     val setupDone: Boolean = false,
+    /** Weather / briefing default city. */
+    val homeCity: String = "",
 ) {
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
 }
@@ -74,6 +76,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_CONTINUOUS, cleaned.continuousConversation)
             .putBoolean(K_BARGE_IN, cleaned.voiceBargeIn)
             .putBoolean(K_SETUP_DONE, cleaned.setupDone)
+            .putString(K_HOME_CITY, cleaned.homeCity.trim())
             .apply()
         _settings.value = cleaned
     }
@@ -94,6 +97,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             continuousConversation = prefs.getBoolean(K_CONTINUOUS, d.continuousConversation),
             voiceBargeIn = prefs.getBoolean(K_BARGE_IN, d.voiceBargeIn),
             setupDone = prefs.getBoolean(K_SETUP_DONE, d.setupDone),
+            homeCity = prefs.getString(K_HOME_CITY, d.homeCity).orEmpty(),
         )
     }
 
@@ -133,5 +137,6 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_CONTINUOUS = "continuous_conversation"
         const val K_BARGE_IN = "voice_barge_in"
         const val K_SETUP_DONE = "setup_done"
+        const val K_HOME_CITY = "home_city"
     }
 }

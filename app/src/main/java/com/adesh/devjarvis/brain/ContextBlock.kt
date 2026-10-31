@@ -19,6 +19,7 @@ object ContextBlock {
 
     fun build(
         device: DeviceSnapshot,
+        homeCity: String = "",
         now: ZonedDateTime = ZonedDateTime.now(),
     ): String = buildString {
         appendLine("[Live context — use only if relevant, never read it out as a list]")
@@ -26,6 +27,7 @@ object ContextBlock {
         if (device.batteryPercent >= 0) {
             appendLine("Battery: ${device.batteryPercent}%" + if (device.charging) ", charging" else ", not charging")
         }
+        if (homeCity.isNotBlank()) appendLine("Home city: $homeCity")
         appendLine("Network: " + if (device.network == NetworkKind.NONE) "offline" else device.network.label.lowercase())
         device.nextAlarmMillis?.let {
             val alarm = Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault())
