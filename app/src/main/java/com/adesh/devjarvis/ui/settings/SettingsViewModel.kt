@@ -41,7 +41,8 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun save() {
-        repo.save(_draft.value)
+        // alwaysOn / setupDone are owned by the HUD switch and the setup wizard — don't overwrite them.
+        repo.update { cur -> _draft.value.copy(alwaysOn = cur.alwaysOn, setupDone = cur.setupDone) }
         _draft.value = repo.current
         speech.applySettings()
         _saved.value = true

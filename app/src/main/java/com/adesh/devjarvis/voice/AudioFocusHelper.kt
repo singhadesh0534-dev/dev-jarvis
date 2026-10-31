@@ -1,0 +1,43 @@
+package com.adesh.devjarvis.voice
+
+import android.content.Context
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
+import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/** Baat-cheet ke dauraan music pause/duck karo; khatam hone pe wapas. */
+@Singleton
+class AudioFocusHelper @Inject constructor(@ApplicationContext context: Context) {
+    private val audio = context.getSystemService(AudioManager::class.java)
+    private val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
+        .setOnAudioFocusChangeListener { }
+        .build()
+    private var held = false
+
+    @Synchronized
+    fun acquire() {
+        if (held || audio == null) return
+        held = audio.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+    }
+
+    @Synchronized
+    fun release() {
+        if (!held || audio == null) return
+        audio.abandonAudioFocusRequest(request)
+        held = false
+    }
+
+    /** True if the user is in a call or the phone is ringing — JARVIS should stay quiet. */
+    fun inCall(): Boolean = audio?.mode == AudioManager.MODE_IN_CALL ||
+        audio?.mode == AudioManager.MODE_IN_COMMUNICATION ||
+        audio?.mode == AudioManager.MODE_RINGTONE
+}

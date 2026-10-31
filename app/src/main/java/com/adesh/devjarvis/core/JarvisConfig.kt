@@ -54,6 +54,36 @@ object JarvisConfig {
         "en-in-x-ene", "en-in-x-end",
     )
 
+    // ---- Wake word (offline, Vosk) ----
+    /**
+     * Vosk small Indian-English model (~36 MB), first-run pe ek baar download hota hai.
+     * Doosra model chahiye to https://alphacephei.com/vosk/models se naam/URL yahan badlo.
+     */
+    const val VOSK_MODEL_NAME = "vosk-model-small-en-in-0.4"
+    const val VOSK_MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-en-in-0.4.zip"
+
+    /**
+     * Grammar phrases jo JARVIS ko jagaate hain. "dev" model ki vocabulary mein na ho to
+     * Vosk use chupchaap ignore karta hai — isliye milte-julte variants bhi rakhe hain.
+     */
+    val WAKE_PHRASES = listOf("hello dev", "hello dave", "hey dev", "hello deb", "jarvis", "hey jarvis", "ok jarvis")
+    /** JARVIS bol raha ho tab ye bolke rok sakte ho (voice barge-in). */
+    val BARGE_IN_PHRASES = listOf("jarvis", "hello dev", "hello dave", "stop", "ruko", "bas", "stop jarvis", "ruko jarvis")
+
+    const val WAKE_SENSITIVITY_DEFAULT = 0.6f
+
+    // ---- Conversation flow ----
+    /** Jawab ke baad kitni der bina wake word ke follow-up sunta hai. */
+    const val FOLLOW_UP_WINDOW_MS = 8_000L
+    /** User ye bole to follow-up window band — seedha standby. */
+    val CONVERSATION_ENDERS = listOf(
+        "bas", "bas itna", "that's all", "thats all", "that is all", "thank you", "thanks", "shukriya",
+        "dhanyavaad", "bye", "ok bye", "goodbye", "good night", "chalo bye", "theek hai bas",
+    )
+
+    // ---- Service survival ----
+    const val WATCHDOG_INTERVAL_MINUTES = 15L
+
     // ---- Links shown in Settings ----
     const val GEMINI_KEY_URL = "https://aistudio.google.com/apikey"
     const val GROQ_KEY_URL = "https://console.groq.com/keys"

@@ -35,6 +35,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -55,7 +57,7 @@ import com.adesh.devjarvis.ui.theme.Hud
 import com.adesh.devjarvis.voice.VoiceInfo
 
 @Composable
-fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
+fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSetup: () -> Unit) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     var showVoices by remember { mutableStateOf(false) }
@@ -131,6 +133,22 @@ fun SettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
             }
             LabeledSlider("Pitch", draft.ttsPitch, 0.5f..1.5f) { v -> viewModel.edit { it.copy(ttsPitch = v) } }
             LabeledSlider("Speed", draft.ttsRate, 0.6f..1.5f) { v -> viewModel.edit { it.copy(ttsRate = v) } }
+
+            Section("WAKE WORD & CONVERSATION")
+            Hint("Wake phrases: \"Hello Dev\", \"Jarvis\". Always-on switch HUD pe hai.")
+            LabeledSlider("Sensitivity", draft.wakeSensitivity, 0f..1f) { v -> viewModel.edit { it.copy(wakeSensitivity = v) } }
+            Hint("Kam = sirf saaf bola hua wake word. Zyada = jaldi jaagta hai, par galti se bhi jaag sakta hai. 0.8+ pe sabse tez.")
+            ToggleRow(
+                "Continuous conversation",
+                "Jawab ke baad ~8 sec bina wake word ke follow-up sunta hai.",
+                draft.continuousConversation,
+            ) { v -> viewModel.edit { it.copy(continuousConversation = v) } }
+            ToggleRow(
+                "Voice barge-in",
+                "JARVIS bolte waqt \"Jarvis\" / \"stop\" / \"ruko\" bolke rok do (always-on ke saath).",
+                draft.voiceBargeIn,
+            ) { v -> viewModel.edit { it.copy(voiceBargeIn = v) } }
+            OutlinedButton(onClick = onOpenSetup) { Text("Setup & permissions checklist", color = Hud.Cyan) }
 
             Section("PERSONALITY")
             OutlinedTextField(
@@ -283,6 +301,21 @@ private fun SecretField(label: String, value: String, onChange: (String) -> Unit
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+@Composable
+private fun ToggleRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Hud.Dim)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onChange,
+            colors = SwitchDefaults.colors(checkedThumbColor = Hud.Background, checkedTrackColor = Hud.Cyan),
+        )
+    }
 }
 
 @Composable

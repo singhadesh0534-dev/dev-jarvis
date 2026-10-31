@@ -34,6 +34,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +57,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.adesh.devjarvis.core.HudUiState
+import com.adesh.devjarvis.core.JarvisState
 import com.adesh.devjarvis.core.NetworkKind
 import com.adesh.devjarvis.ui.theme.Hud
 
@@ -70,6 +74,14 @@ fun HudScreen(
 
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) viewModel.onReactorTap() else viewModel.onMicPermissionDenied()
+    }
+    val alwaysOnPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.setAlwaysOn(true) else viewModel.onMicPermissionDenied()
+    }
+    val onAlwaysOnToggle: (Boolean) -> Unit = { on ->
+        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!on || granted) viewModel.setAlwaysOn(on) else alwaysOnPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshDevice() }
@@ -93,6 +105,7 @@ fun HudScreen(
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             TopBar(onOpenSettings)
             StatusRow(ui)
+            AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
 
             Box(
@@ -111,7 +124,7 @@ fun HudScreen(
                 )
             }
             Text(
-                ui.state.label,
+                if (ui.state == JarvisState.LISTENING && ui.inConversation && ui.transcript.lastOrNull()?.fromUser == false) "FOLLOW-UP" else ui.state.label,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (ui.state == JarvisState.IDLE) Hud.Dim else Hud.Cyan,
                 modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 8.dp),
@@ -148,7 +161,7 @@ private fun StatusRow(ui: HudUiState) {
         val battWarn = ui.batteryPercent in 0..19 && !ui.charging
         Chip("PWR", if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%", battWarn, Modifier.weight(1f))
         Chip("NET", ui.network.label, ui.network == NetworkKind.NONE, Modifier.weight(1f))
-        Chip("MODE", ui.mode, false, Modifier.weight(1f))
+        Chip("MODE", if (ui.alwaysOn) "ALWAYS-ON" else ui.mode, false, Modifier.weight(1f))
         Chip("FUEL", "${ui.fuelPercent}%", ui.fuelPercent < 15, Modifier.weight(1f))
     }
 }
@@ -165,6 +178,35 @@ private fun Chip(label: String, value: String, warn: Boolean, modifier: Modifier
     ) {
         Text(label, style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
         Text(value, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
+    }
+}
+
+@Composable
+private fun AlwaysOnRow(ui: HudUiState, onToggle: (Boolean) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(bottom = 6.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    "\u201CHELLO DEV\u201D ALWAYS-ON",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (ui.alwaysOn) Hud.Cyan else Hud.Dim,
+                )
+                val sub = ui.wakeNotice
+                    ?: if (ui.alwaysOn && ui.wakeHeard.isNotBlank()) "heard: ${ui.wakeHeard}" else null
+                    ?: if (ui.alwaysOn) "Listening for wake word — screen off bhi chalega" else "Off — sirf tap se baat"
+                Text(sub, style = MaterialTheme.typography.bodySmall, color = if (ui.wakeNotice != null) Hud.Amber else Hud.Dim, maxLines = 1)
+            }
+            Switch(
+                checked = ui.alwaysOn,
+                onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Hud.Background,
+                    checkedTrackColor = Hud.Cyan,
+                    uncheckedThumbColor = Hud.Dim,
+                    uncheckedTrackColor = Hud.Faint,
+                ),
+            )
+        }
     }
 }
 

@@ -1,5 +1,6 @@
 package com.adesh.devjarvis
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -8,33 +9,78 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.adesh.devjarvis.core.JarvisSession
+import com.adesh.devjarvis.service.ServiceController
+import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.ui.hud.HudScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
+import com.adesh.devjarvis.ui.setup.SetupScreen
 import com.adesh.devjarvis.ui.theme.JarvisTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var session: JarvisSession
+    @Inject lateinit var settings: SettingsRepository
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        val start = if (settings.current.setupDone) ROUTE_HUD else ROUTE_SETUP_FIRST
         setContent {
             JarvisTheme {
                 val nav = rememberNavController()
-                NavHost(navController = nav, startDestination = ROUTE_HUD) {
+                NavHost(navController = nav, startDestination = start) {
                     composable(ROUTE_HUD) {
                         HudScreen(viewModel = hiltViewModel(), onOpenSettings = { nav.navigate(ROUTE_SETTINGS) })
                     }
                     composable(ROUTE_SETTINGS) {
-                        SettingsScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() })
+                        SettingsScreen(
+                            viewModel = hiltViewModel(),
+                            onBack = { nav.popBackStack() },
+                            onOpenSetup = { nav.navigate(ROUTE_SETUP) },
+                        )
+                    }
+                    composable(ROUTE_SETUP_FIRST) {
+                        SetupScreen(viewModel = hiltViewModel(), onDone = {
+                            nav.navigate(ROUTE_HUD) { popUpTo(ROUTE_SETUP_FIRST) { inclusive = true } }
+                        })
+                    }
+                    composable(ROUTE_SETUP) {
+                        SetupScreen(viewModel = hiltViewModel(), onDone = { nav.popBackStack() })
                     }
                 }
             }
+        }
+        if (savedInstanceState == null) handleAssist(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleAssist(intent)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // App khula hai = foreground: yahi sahi waqt hai mic service ko (dobara) start karne ka,
+        // e.g. reboot ya XOS ke maarne ke baad.
+        if (settings.current.alwaysOn && !session.ui.value.alwaysOn) ServiceController.start(this)
+    }
+
+    /** Home long-press / assistant button: seedha sunna shuru. */
+    private fun handleAssist(intent: Intent?) {
+        val action = intent?.action ?: return
+        if (action == Intent.ACTION_ASSIST || action == Intent.ACTION_VOICE_COMMAND) {
+            if (ServiceController.hasMicPermission(this)) session.onAssistLaunch()
         }
     }
 
     private companion object {
         const val ROUTE_HUD = "hud"
         const val ROUTE_SETTINGS = "settings"
+        const val ROUTE_SETUP_FIRST = "setup_first"
+        const val ROUTE_SETUP = "setup"
     }
 }

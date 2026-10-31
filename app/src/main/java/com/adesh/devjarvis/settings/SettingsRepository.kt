@@ -23,6 +23,15 @@ data class JarvisSettings(
     val ttsVoiceName: String = "",
     val ttsPitch: Float = JarvisConfig.TTS_PITCH_DEFAULT,
     val ttsRate: Float = JarvisConfig.TTS_RATE_DEFAULT,
+    /** Background mein "Hello Dev" sunta rahe (foreground service). */
+    val alwaysOn: Boolean = false,
+    /** 0 = sirf saaf bola hua wake word, 1 = jaldi trigger (zyada false alarms). */
+    val wakeSensitivity: Float = JarvisConfig.WAKE_SENSITIVITY_DEFAULT,
+    /** Jawab ke baad ~8 sec follow-up sunna. */
+    val continuousConversation: Boolean = true,
+    /** JARVIS bolte waqt "Jarvis"/"stop"/"ruko" bolke rokna. */
+    val voiceBargeIn: Boolean = true,
+    val setupDone: Boolean = false,
 ) {
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
 }
@@ -40,6 +49,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
 
     val current: JarvisSettings get() = _settings.value
 
+    /** Small atomic update, e.g. `update { it.copy(alwaysOn = true) }`. */
+    @Synchronized
+    fun update(change: (JarvisSettings) -> JarvisSettings) = save(change(current))
+
     fun save(new: JarvisSettings) {
         val cleaned = new.copy(
             geminiApiKey = new.geminiApiKey.trim(),
@@ -56,6 +69,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_VOICE, cleaned.ttsVoiceName)
             .putFloat(K_PITCH, cleaned.ttsPitch)
             .putFloat(K_RATE, cleaned.ttsRate)
+            .putBoolean(K_ALWAYS_ON, cleaned.alwaysOn)
+            .putFloat(K_WAKE_SENS, cleaned.wakeSensitivity)
+            .putBoolean(K_CONTINUOUS, cleaned.continuousConversation)
+            .putBoolean(K_BARGE_IN, cleaned.voiceBargeIn)
+            .putBoolean(K_SETUP_DONE, cleaned.setupDone)
             .apply()
         _settings.value = cleaned
     }
@@ -71,6 +89,11 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             ttsVoiceName = prefs.getString(K_VOICE, d.ttsVoiceName).orEmpty(),
             ttsPitch = prefs.getFloat(K_PITCH, d.ttsPitch),
             ttsRate = prefs.getFloat(K_RATE, d.ttsRate),
+            alwaysOn = prefs.getBoolean(K_ALWAYS_ON, d.alwaysOn),
+            wakeSensitivity = prefs.getFloat(K_WAKE_SENS, d.wakeSensitivity),
+            continuousConversation = prefs.getBoolean(K_CONTINUOUS, d.continuousConversation),
+            voiceBargeIn = prefs.getBoolean(K_BARGE_IN, d.voiceBargeIn),
+            setupDone = prefs.getBoolean(K_SETUP_DONE, d.setupDone),
         )
     }
 
@@ -105,5 +128,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_VOICE = "tts_voice"
         const val K_PITCH = "tts_pitch"
         const val K_RATE = "tts_rate"
+        const val K_ALWAYS_ON = "always_on"
+        const val K_WAKE_SENS = "wake_sensitivity"
+        const val K_CONTINUOUS = "continuous_conversation"
+        const val K_BARGE_IN = "voice_barge_in"
+        const val K_SETUP_DONE = "setup_done"
     }
 }

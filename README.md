@@ -3,9 +3,28 @@
 Tony Stark ke JARVIS jaisa personal voice assistant, native Android (Kotlin + Jetpack Compose).
 Bilkul free: Gemini ki free API key, open-source libraries, koi paid cheez nahi.
 
-> **Abhi kya bana hai: Phase 1 — Core voice loop.**
-> Reactor pe tap karo → bolo → Gemini sochta hai → JARVIS streaming mein jawab bolta hai.
-> Wake word, phone control, memory waghera agle phases mein aayenge (neeche roadmap dekho).
+> **Abhi kya bana hai: Phase 1 + Phase 2 — voice loop + always-on.**
+> "Hello Dev" ya "Jarvis" bolo (screen off / lock mein bhi) → chime → bolo → JARVIS streaming mein jawab deta hai
+> → ~8 sec follow-up sunta hai. Phone control, memory waghera agle phases mein (neeche roadmap).
+
+## Phase 2 mein naya
+
+| Feature | Kaise |
+|---|---|
+| "Hello Dev" / "Jarvis" wake word, offline | Vosk keyword spotting (small Indian-English model, ~36 MB, ek baar download) |
+| Screen off / lock mein bhi sunna | Foreground service (type *microphone*), notification "JARVIS online" |
+| Jaagne pe chime + haptic tick | Code se banai gayi 2-note chime, koi audio file nahi |
+| Continuous conversation | Jawab ke baad ~8 sec bina wake word ke follow-up. "Bas" / "thank you" / "bye" bolo to turant standby |
+| Voice barge-in | JARVIS bol raha ho tab "Jarvis" / "stop" / "ruko" bolo → chup ho ke sunta hai (echo canceller ke saath) |
+| Setup wizard | Har permission ki alag screen, "Open setting" button, green tick ✓ |
+| Infinix XOS survival | Battery optimization off, Phone Master auto-start deep link, recents lock guide, START_STICKY, boot pe restart, 15-min watchdog |
+| Default digital assistant | Home button long-press se JARVIS khule (optional) |
+| Music pause | Baat-cheet ke dauraan music ruk jaata hai, baad mein wapas |
+
+**Wake word engine kyun Vosk?** openWakeWord (ONNX) zyada accurate hai, lekin har naye phrase ("Hello Dev") ke liye
+alag model *train* karna padta hai. Vosk ke grammar mode mein koi bhi phrase bas config mein likh do, poora offline,
+aur ek core ka chhota hissa leta hai. Hindi model ki zarurat nahi — "hello dev" / "jarvis" English words hain.
+Phrases `core/JarvisConfig.kt` mein `WAKE_PHRASES` mein hain.
 
 ---
 
@@ -35,6 +54,10 @@ app/src/main/java/com/adesh/devjarvis/
 ├── core/DeviceStatus.kt      ← battery, network, next alarm
 ├── core/UsageTracker.kt      ← "FUEL %" (roz ke requests)
 ├── settings/SettingsRepository.kt ← encrypted settings (API keys, voice, prompt)
+├── core/JarvisSession.kt     ← sunna/sochna/bolna + mic ka hisaab (HUD aur service dono isi ko use karte hain)
+├── wakeword/                 ← Vosk wake word engine + model download
+├── service/                  ← always-on service, boot receiver, watchdog
+├── ui/setup/                 ← setup wizard (permissions + Infinix steps)
 ├── brain/SystemPrompt.kt     ← JARVIS ki personality
 ├── brain/JarvisBrain.kt      ← prompt + context + history jod ke Gemini ko bhejta hai
 ├── brain/GeminiClient.kt     ← streaming HTTP (SSE) client
@@ -106,8 +129,31 @@ Har push pe GitHub khud APK banata hai:
 
 ---
 
-## 5. Pehli baar chalana (Phase 1 test)
+## 5. Pehli baar chalana
 
+### 5.0 Setup wizard (pehli baar khud khulta hai)
+Har step pe **button** dabao → system setting khulegi → allow karo → wapas aao → green **✓ DONE** dikhega.
+1. Microphone → Allow
+2. Notifications → Allow
+3. Wake word model → Download (~36 MB, Wi-Fi behtar)
+4. Battery optimization → "Allow" / "Don't optimize"
+5. **Infinix: Auto-start** → Phone Master mein JARVIS ka Auto-start ON; App info → Battery → "No restrictions" → wapas aake **HO GAYA**
+6. **Infinix: Recents lock** → recent apps kholo → JARVIS card neeche kheencho → 🔒 → **HO GAYA**
+7. Display over other apps (optional)
+8. Default digital assistant (optional) → JARVIS chuno
+
+Baad mein bhi: Settings → *Setup & permissions checklist*.
+
+### 5.1 Phase 2 test (always-on)
+1. HUD pe **"HELLO DEV" ALWAYS-ON** switch ON karo. Notification bar mein "JARVIS online" aayega.
+2. Screen lock kar do. Bolo **"Hello Dev"** → chime + vibration → bolo "Aaj ka din kaisa hai?"
+3. Jawab ke baad bina wake word ke bolo "Aur kal?" (follow-up, ~8 sec).
+4. Lambe jawab ke beech mein bolo **"Jarvis"** ya **"stop"** → wo rukega aur sunega.
+5. Bolo "bas, thank you" → wo jawab dega aur standby (soft chime).
+6. HUD pe switch ke neeche `heard: ...` dikhata hai ki wake engine ne kya suna — sensitivity tune karne mein kaam aata hai
+   (Settings → Wake word → Sensitivity).
+
+### 5.2 Phase 1 test (tap-to-talk)
 1. JARVIS app kholo → upar right ⚙️ **Settings**.
 2. **Gemini API key** paste karo → neeche **SAVE**.
 3. *VOICE* section mein **Test voice** dabao. Awaaz pasand nahi aayi to **Choose voice** se koi aur chuno (`en-gb-x-rjs`, `en-gb-x-gbd`, `en-in-x-ene` deep male voices hain). *Offline* wali voice tez hoti hai.
@@ -136,13 +182,18 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 | Gradle sync fail | Internet check karo; *File → Invalidate Caches → Restart*; SDK mein API 36 installed hai check karo. |
 | Phone Android Studio mein nahi dikhta | Dusri USB cable (data wali) try karo; phone pe USB mode "File transfer" karo; USB debugging dobara on/off. |
 | Hinglish galat samajhta hai | Settings → Speech language `en-IN` ↔ `hi-IN` badal ke dekho. |
+| "Hello Dev" pe nahi jaagta | HUD pe `heard:` dekho. Kuch nahi aata → mic/notification permission + always-on switch check karo. Galat shabd aata hai → Sensitivity badhao (0.7–0.9), ya "Jarvis" bolo (ye sabse reliable hai). |
+| Bina bole khud jaag jaata hai | Sensitivity kam karo (0.3–0.5). TV/music ke paas false alarms zyada hote hain. |
+| "JARVIS standby mein hai — tap karke online kijiye" notification | Android ne background mein mic rok diya (reboot ke baad ya XOS ne app maara). Notification pe ek tap → wapas online. Bar-bar aaye to Setup ke Infinix steps dobara karo. |
+| Thodi der baad JARVIS online notification gayab | XOS ne maar diya: Auto-start ON, Battery "No restrictions", Recents lock — teeno zaruri. |
+| Wake model download fail | Internet check karo, Setup → Wake word model → dobara Download. |
 
 ---
 
 ## 7. Roadmap
 
-1. **Phase 1 — Core voice loop** ✅ *(ye version)*
-2. Phase 2 — Always-on: foreground service, "Hello Dev"/"Jarvis" wake word (offline), continuous conversation, voice barge-in, setup wizard, Infinix XOS survival
+1. **Phase 1 — Core voice loop** ✅
+2. **Phase 2 — Always-on** ✅ *(ye version)*: foreground service, "Hello Dev"/"Jarvis" wake word (offline), continuous conversation, voice barge-in, setup wizard, Infinix XOS survival
 3. Phase 3 — Phone control: call, SMS, WhatsApp, apps, alarm, timer, reminder, flashlight, volume, media — confirmation ke saath
 4. Phase 4 — Gemini Live API (native audio) + Groq fallback + real fuel tracking
 5. Phase 5 — Memory DB + morning briefing + proactive alerts
@@ -154,6 +205,16 @@ Reactor ke states: **STANDBY** (dheere pulse) → **LISTENING** (mic ke saath ph
 - Brain ke liye internet chahiye. Offline sirf (Phase 2 ka) wake word chalega.
 - Free tiers ki daily limits hain; app unke andar rehne ke liye design hai, lekin limit Google/Groq decide karte hain.
 - Phase 1 mein sunna Android ke speech recognizer se hota hai (Google app). Ye bhi internet use kar sakta hai.
+- **Reboot ke baad ek tap:** Android 15+ boot ke waqt kisi bhi app ko background se mic service start nahi karne deta.
+  Isliye restart ke baad "tap karke online kijiye" notification aata hai — ek tap aur JARVIS wapas. (Ye Android ka
+  security rule hai, koi app isse bypass nahi kar sakta.)
+- **Voice barge-in sirf keywords pe:** loudspeaker pe JARVIS ki apni awaaz mic mein aati hai, isliye "koi bhi awaaz pe
+  ruk jao" reliable nahi hota. Isliye "Jarvis" / "stop" / "ruko" — ya reactor pe tap. Phase 4 (Gemini Live) mein
+  native interruption aayega.
+- **Wake word accuracy:** Vosk grammar-based spotting hai, Alexa jaisa trained detector nahi. Shor-sharabe mein
+  kabhi miss/false alarm hoga — sensitivity slider se tune karo.
+- **Battery:** always-on wake word lagataar mic + thoda CPU use karta hai. Andaazan kuch % per din extra; raat ko
+  notification ka "Sleep" button dabao.
 - Android normal apps ko Wi-Fi / mobile data / airplane mode seedha toggle nahi karne deta — Phase 3 mein JARVIS sahi settings panel kholega.
 
 ## License / credits
