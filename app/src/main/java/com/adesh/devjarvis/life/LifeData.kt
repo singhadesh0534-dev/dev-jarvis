@@ -35,6 +35,10 @@ data class LifeData(
     val habits: Map<String, List<Long>> = emptyMap(),
     /** Tasks Sir taught by doing them once: name -> recorded steps. */
     val macros: Map<String, List<MacroStep>> = emptyMap(),
+    /** "Jab X ho tab Y karo". */
+    val triggers: List<Trigger> = emptyList(),
+    /** ISO date -> what happened that day. */
+    val diary: Map<String, String> = emptyMap(),
 )
 
 object LifeCodec {
@@ -47,6 +51,10 @@ object LifeCodec {
         put("expenses", buildJsonArray {
             d.expenses.forEach { add(buildJsonObject { put("t", it.time); put("amount", it.amount); put("cat", it.category); put("note", it.note) }) }
         })
+        put("triggers", buildJsonArray {
+            d.triggers.forEach { add(buildJsonObject { put("id", it.id); put("event", it.event); put("param", it.param); put("action", it.action); put("fired", it.lastFired) }) }
+        })
+        put("diary", buildJsonObject { d.diary.forEach { (k, v) -> put(k, v) } })
         put("macros", buildJsonObject {
             d.macros.forEach { (name, steps) ->
                 put(name, buildJsonArray {
@@ -73,6 +81,8 @@ object LifeCodec {
             notes = arr("notes").map { Note(it.l("t"), it.s("text")) },
             lists = obj("lists")?.mapValues { e -> (e.value as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull } }.orEmpty(),
             expenses = arr("expenses").map { Expense(it.l("t"), it.d("amount"), it.s("cat"), it.s("note")) },
+            triggers = arr("triggers").map { Trigger(it.l("id"), it.s("event"), it.s("param"), it.s("action"), it.l("fired")) },
+            diary = obj("diary")?.mapValues { it.value.jsonPrimitive.contentOrNull.orEmpty() }.orEmpty(),
             macros = obj("macros")?.mapValues { e ->
                 (e.value as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { MacroStep(it.s("k"), it.s("a"), it.s("l"), it.s("v"), it.s("t")) }
             }.orEmpty(),

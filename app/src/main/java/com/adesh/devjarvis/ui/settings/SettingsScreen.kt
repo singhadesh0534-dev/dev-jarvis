@@ -226,6 +226,17 @@ fun SettingsScreen(
             }
             Hint("Quiet hours, DND, silent mode (bina headphones) ya call ke dauraan JARVIS khud se nahi bolta — sirf notification. Aapke apne reminders raat mein bhi bolte hain.")
             ToggleRow(
+                "Aadat se sujhaav",
+                "Jo kaam aap aksar isi waqt karwate hain (app kholna, gaana, Wi-Fi), JARVIS ek baar pooch leta hai. Din mein zyada se zyada 3.",
+                draft.suggestHabits,
+            ) { v -> viewModel.edit { it.copy(suggestHabits = v) } }
+            ToggleRow(
+                "Roz ki diary",
+                "Raat 11:40 pe din bhar ka chhota saar likh leta hai. Poochhiye: \"kal maine kya kiya tha?\"",
+                draft.diaryEnabled,
+            ) { v -> viewModel.edit { it.copy(diaryEnabled = v) } }
+            Hint("Rules (\"jab charger lage tab…\", \"roz 10 baje…\", \"jab Papa ka message aaye…\") awaaz se banaiye. Ye tabhi chalte hain jab always-on chalu ho.")
+            ToggleRow(
                 "Incoming call batana",
                 "Kaun call kar raha hai bolta hai, phir \"uthao\" ya \"kaat do\" sunta hai. Full edition + Notification access. Silent/DND mein chup.",
                 draft.announceCalls,

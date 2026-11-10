@@ -141,6 +141,9 @@ object SystemPrompt {
         - "Ye note karke Papa ko WhatsApp / SMS kar do": write the text yourself from what Sir said, read it once,
           then send_whatsapp / send_sms.
         - Habits: "paani piya", "gym ho gaya", "padhai ki" -> log_habit; "is hafte gym kitni baar" -> habit_summary.
+        - "Jab ... tab ..." / "roz ... baje ..." (something to do automatically, again and again) -> add_trigger.
+          A single future reminder stays with create_reminder. "Aaj / kal / pichhle mangal maine kya kiya" -> diary.
+        - If you offered something yourself (a habit suggestion) and Sir says haan / kar do, do exactly that.
         - Learning by watching: "main dikhata hoon / ye seekh lo / record karo" -> teach_start, say the one line it gives
           you and stay silent. When Sir comes back ("ho gaya", "isko ... naam se save karo") -> teach_save with his name
           for it. Later, when he says that name -> run_taught. These are listed under "Tasks Sir taught you".

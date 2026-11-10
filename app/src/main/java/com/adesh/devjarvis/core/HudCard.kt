@@ -15,6 +15,7 @@ object HudCards {
         "make_call" to "CALL", "send_sms" to "SMS", "send_whatsapp" to "WHATSAPP", "emergency_sos" to "EMERGENCY SOS",
         "add_expense" to "EXPENSE", "expense_summary" to "EXPENSES", "add_note" to "NOTE", "get_notes" to "NOTES",
         "list_add" to "LIST", "list_get" to "LIST", "device_status" to "DEVICE", "read_notifications" to "NOTIFICATIONS",
+        "add_trigger" to "RULE", "list_triggers" to "RULES", "diary" to "DIARY", "run_taught" to "TAUGHT TASK", "teach_save" to "LEARNED",
         "look" to "CAMERA", "look_at_screen" to "SCREEN", "do_task_on_screen" to "SCREEN TASK", "save_routine" to "ROUTINE",
     )
     const val MAX_BODY = 320

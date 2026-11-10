@@ -294,6 +294,23 @@ class JarvisSession @Inject constructor(
         say("Sir, bina microphone permission ke main sun nahi sakta. Tab tak type kar dijiye.")
     }
 
+    /**
+     * A rule Sir set up has fired ("jab charger lage tab ..."): do [instruction] as if he had just said it.
+     * Never during a call, and never on top of a conversation that is already going on.
+     */
+    fun runAutomation(instruction: String, rule: String): Boolean {
+        if (focus.inCall() || _ui.value.state != JarvisState.IDLE || _ui.value.inConversation || liveActive) {
+            addLine(fromUser = false, text = "⚡ Rule abhi nahi chala (JARVIS busy / call): $rule", system = true)
+            SessionTrace.add("AUTO skipped (busy)")
+            return false
+        }
+        addLine(fromUser = false, text = "⚡ $rule", system = true)
+        memoryJob?.cancel()
+        _ui.update { it.copy(inConversation = false) }
+        ask("[Automatic rule that Sir set up earlier has just fired: \"$rule\". Carry out the action now with your tools and confirm in one short line. Do not ask him anything.]")
+        return true
+    }
+
     fun onTextSubmitted(text: String) {
         if (text.isBlank()) return
         memoryJob?.cancel()

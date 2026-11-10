@@ -90,6 +90,10 @@ data class JarvisSettings(
     val extraApiKey: String = "",
     val extraBaseUrl: String = JarvisConfig.EXTRA_BASE_URL,
     val extraModel: String = "",
+    /** Offer, once, what Sir usually does at this time of day. */
+    val suggestHabits: Boolean = true,
+    /** Write a short diary entry every night. */
+    val diaryEnabled: Boolean = true,
 ) {
     val hasExtraBrain: Boolean get() = extraApiKey.isNotBlank() && extraModel.isNotBlank() && extraBaseUrl.startsWith("https://")
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
@@ -189,6 +193,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_EXTRA_KEY, cleaned.extraApiKey.trim())
             .putString(K_EXTRA_URL, cleaned.extraBaseUrl.trim().ifBlank { JarvisConfig.EXTRA_BASE_URL })
             .putString(K_EXTRA_MODEL, cleaned.extraModel.trim())
+            .putBoolean(K_SUGGEST, cleaned.suggestHabits)
+            .putBoolean(K_DIARY, cleaned.diaryEnabled)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -250,6 +256,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             extraApiKey = prefs.getString(K_EXTRA_KEY, d.extraApiKey).orEmpty(),
             extraBaseUrl = prefs.getString(K_EXTRA_URL, d.extraBaseUrl).orEmpty().ifBlank { d.extraBaseUrl },
             extraModel = prefs.getString(K_EXTRA_MODEL, d.extraModel).orEmpty(),
+            suggestHabits = prefs.getBoolean(K_SUGGEST, d.suggestHabits),
+            diaryEnabled = prefs.getBoolean(K_DIARY, d.diaryEnabled),
         )
     }
 
@@ -305,6 +313,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_EXTRA_KEY = "extra_api_key"
         const val K_EXTRA_URL = "extra_base_url"
         const val K_EXTRA_MODEL = "extra_model"
+        const val K_SUGGEST = "suggest_habits"
+        const val K_DIARY = "diary_enabled"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

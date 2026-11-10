@@ -43,6 +43,7 @@ class JarvisService : Service() {
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var alerts: NotificationAlerts
     @Inject lateinit var speaker: ProactiveSpeaker
+    @Inject lateinit var automation: com.adesh.devjarvis.proactive.AutomationEngine
 
     private var batteryWarnedAt = 101 // last % we warned at; reset when charging
     private val batteryReceiver = object : BroadcastReceiver() {
@@ -78,6 +79,7 @@ class JarvisService : Service() {
         super.onCreate()
         ServiceController.ensureChannels(this)
         alerts.start(scope)
+        automation.start(scope)
         startBubble()
         ContextCompat.registerReceiver(this, batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
         scope.launch {
@@ -177,6 +179,7 @@ class JarvisService : Service() {
         wakeLock = null
         bubble?.hide()
         runCatching { unregisterReceiver(batteryReceiver) }
+        automation.stop()
         session.setServiceActive(false)
         session.stopEverything()
         scope.cancel()

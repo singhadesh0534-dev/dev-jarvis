@@ -291,6 +291,9 @@ class JarvisBrain @Inject constructor(
         return System.currentTimeMillis() + if (daily) 12 * 3_600_000L else 60_000L
     }
 
+    /** JARVIS offered something by himself (habit suggestion): remember it so "haan" can be understood. */
+    fun noteOffer(text: String) = conversation.addOffer(text)
+
     /** Call after a reply finished (or was interrupted) so the next turn has context. */
     fun remember(userText: String, jarvisText: String) {
         if (userText.isNotBlank() && jarvisText.isNotBlank()) {

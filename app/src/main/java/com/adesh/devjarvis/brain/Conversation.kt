@@ -18,6 +18,10 @@ class Conversation(private val maxTurns: Int) {
         while (turns.size > maxTurns * 2) turns.removeFirst()
     }
 
+    /** Something JARVIS said on his own (a suggestion): kept so Sir's "haan, kar do" has something to refer to. */
+    @Synchronized
+    fun addOffer(jarvis: String) = addExchange("[Nobody spoke. You offered this yourself.]", jarvis)
+
     @Synchronized
     fun clear() = turns.clear()
 }
