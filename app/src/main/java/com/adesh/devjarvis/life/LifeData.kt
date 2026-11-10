@@ -1,5 +1,6 @@
 package com.adesh.devjarvis.life
 
+import com.adesh.devjarvis.screen.MacroStep
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +33,8 @@ data class LifeData(
     val placeReminders: List<PlaceReminder> = emptyList(),
     /** Habit name -> times it was done (epoch millis). */
     val habits: Map<String, List<Long>> = emptyMap(),
+    /** Tasks Sir taught by doing them once: name -> recorded steps. */
+    val macros: Map<String, List<MacroStep>> = emptyMap(),
 )
 
 object LifeCodec {
@@ -43,6 +46,13 @@ object LifeCodec {
         put("lists", buildJsonObject { d.lists.forEach { (k, v) -> put(k, JsonArray(v.map { JsonPrimitive(it) })) } })
         put("expenses", buildJsonArray {
             d.expenses.forEach { add(buildJsonObject { put("t", it.time); put("amount", it.amount); put("cat", it.category); put("note", it.note) }) }
+        })
+        put("macros", buildJsonObject {
+            d.macros.forEach { (name, steps) ->
+                put(name, buildJsonArray {
+                    steps.forEach { add(buildJsonObject { put("k", it.kind); put("a", it.app); put("l", it.label); put("v", it.viewId); put("t", it.text) }) }
+                })
+            }
         })
         put("habits", buildJsonObject { d.habits.forEach { (k, v) -> put(k, JsonArray(v.map { JsonPrimitive(it) })) } })
         put("places", buildJsonArray { d.places.forEach { add(buildJsonObject { put("name", it.name); put("lat", it.lat); put("lon", it.lon) }) } })
@@ -63,6 +73,9 @@ object LifeCodec {
             notes = arr("notes").map { Note(it.l("t"), it.s("text")) },
             lists = obj("lists")?.mapValues { e -> (e.value as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull } }.orEmpty(),
             expenses = arr("expenses").map { Expense(it.l("t"), it.d("amount"), it.s("cat"), it.s("note")) },
+            macros = obj("macros")?.mapValues { e ->
+                (e.value as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.map { MacroStep(it.s("k"), it.s("a"), it.s("l"), it.s("v"), it.s("t")) }
+            }.orEmpty(),
             habits = obj("habits")?.mapValues { e -> (e.value as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.longOrNull } }.orEmpty(),
             places = arr("places").map { Place(it.s("name"), it.d("lat"), it.d("lon")) },
             placeReminders = arr("placeReminders").map { PlaceReminder(it.l("id"), it.s("place"), it.s("text"), it["armed"]?.jsonPrimitive?.contentOrNull != "false") },

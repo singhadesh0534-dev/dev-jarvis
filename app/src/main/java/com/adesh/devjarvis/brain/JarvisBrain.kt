@@ -182,6 +182,11 @@ class JarvisBrain @Inject constructor(
             append("\n\n[Sir's routines / shortcuts — when he says one of these names, carry out its steps with your tools, in order]\n")
             routines.forEach { (name, steps) -> append("- \"").append(name).append("\": ").append(steps).append('\n') }
         }
+        val taught = life.get().macros
+        if (taught.isNotEmpty()) {
+            append("\n\n[Tasks Sir taught you by showing them once — when he says a name, call run_taught with it]\n")
+            taught.forEach { (name, steps) -> append("- \"").append(name).append("\" (").append(steps.size).append(" steps)\n") }
+        }
         if (forLive) {
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {

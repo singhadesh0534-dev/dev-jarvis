@@ -10,6 +10,8 @@ import android.os.Bundle
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.adesh.devjarvis.screen.MacroLogic
+import com.adesh.devjarvis.screen.MacroStep
 import com.adesh.devjarvis.screen.ScreenElement
 import com.adesh.devjarvis.screen.ScreenSnapshot
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -30,7 +32,93 @@ class JarvisAccessibilityService : AccessibilityService() {
         instance = this
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    // ---------------------------------------------------------------- learning by watching (only while Sir asked for it)
+
+    @Volatile private var recording = false
+    private var recorded: List<MacroStep> = emptyList()
+    private var recordingSince = 0L
+    private var recordedApp = ""
+
+    val isRecording: Boolean get() = recording
+
+    /** Sir said "main dikhata hoon": note his taps and typing until [stopRecording] (or 5 minutes). */
+    fun startRecording() {
+        recorded = emptyList()
+        recordedApp = ""
+        recordingSince = System.currentTimeMillis()
+        recording = true
+        listenForTaps(true)
+    }
+
+    fun stopRecording(): List<MacroStep> {
+        recording = false
+        listenForTaps(false)
+        return recorded.also { recorded = emptyList() }
+    }
+
+    /** Clicks and typing are delivered to this service only while a recording is running. */
+    private fun listenForTaps(on: Boolean) {
+        runCatching {
+            serviceInfo = serviceInfo?.apply {
+                eventTypes = if (on) {
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED or AccessibilityEvent.TYPE_VIEW_CLICKED or
+                        AccessibilityEvent.TYPE_VIEW_LONG_CLICKED or AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED
+                } else {
+                    AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                }
+            }
+        }
+    }
+
+    private fun isSkippedApp(pkg: String): Boolean {
+        if (pkg.isEmpty() || pkg == packageName || pkg == "com.android.systemui") return true
+        if (com.adesh.devjarvis.notifications.SensitiveFilter.isSensitive(pkg, null, null)) return true // banking / payment: never recorded
+        val keyboard = runCatching {
+            android.provider.Settings.Secure.getString(contentResolver, android.provider.Settings.Secure.DEFAULT_INPUT_METHOD).orEmpty()
+        }.getOrDefault("")
+        if (keyboard.startsWith("$pkg/")) return true
+        val home = runCatching {
+            packageManager.resolveActivity(
+                android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME), 0,
+            )?.activityInfo?.packageName
+        }.getOrNull()
+        return pkg == home
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (!recording || event == null) return
+        if (System.currentTimeMillis() - recordingSince > MAX_RECORDING_MS) {
+            recording = false
+            listenForTaps(false)
+            return
+        }
+        val pkg = event.packageName?.toString().orEmpty()
+        if (isSkippedApp(pkg)) return
+        val step = when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                if (pkg == recordedApp || packageManager.getLaunchIntentForPackage(pkg) == null) return
+                recordedApp = pkg
+                MacroStep("open", app = pkg)
+            }
+            AccessibilityEvent.TYPE_VIEW_CLICKED, AccessibilityEvent.TYPE_VIEW_LONG_CLICKED -> {
+                val source = runCatching { event.source }.getOrNull()
+                val label = listOf(
+                    event.text?.joinToString(" ").orEmpty(), event.contentDescription?.toString().orEmpty(),
+                    source?.text?.toString().orEmpty(), source?.contentDescription?.toString().orEmpty(),
+                ).firstOrNull { it.isNotBlank() }.orEmpty().trim().take(80)
+                MacroStep(
+                    if (event.eventType == AccessibilityEvent.TYPE_VIEW_LONG_CLICKED) "long_press" else "tap",
+                    pkg, label, source?.viewIdResourceName.orEmpty(),
+                )
+            }
+            AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED -> {
+                if (event.isPassword) return // never a password
+                MacroStep("type", pkg, "", runCatching { event.source?.viewIdResourceName }.getOrNull().orEmpty(), event.text?.joinToString("").orEmpty().take(200))
+            }
+            else -> return
+        }
+        recorded = MacroLogic.add(recorded, step)
+    }
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
@@ -233,6 +321,8 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     companion object {
+        const val MAX_RECORDING_MS = 5 * 60_000L
+
         @Volatile private var instance: JarvisAccessibilityService? = null
 
         val isConnected: Boolean get() = instance != null
