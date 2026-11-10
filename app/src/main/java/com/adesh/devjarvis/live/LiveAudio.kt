@@ -25,8 +25,14 @@ import kotlin.math.sqrt
  */
 class LiveAudio(
     private val audio: AudioManager,
+    /**
+     * true = HD: play on the normal media stream (full quality, media volume) and gate our own echo with [EchoGate].
+     * false = "call mode": phone-call audio path with the system echo canceller (thin sound, but strongest echo removal).
+     */
+    private val hd: Boolean,
     private val onMicChunk: (ByteArray, Int) -> Unit,
 ) {
+    private val echoGate = EchoGate()
     @Volatile var micLevel = 0f
         private set
     @Volatile var outLevel = 0f
@@ -127,6 +133,8 @@ class LiveAudio(
                         bytes[i * 2 + 1] = ((v shr 8) and 0xFF).toByte()
                     }
                     micLevel = (sqrt(sum / n) / 4000.0).coerceIn(0.0, 1.0).toFloat()
+                    // HD mode: while JARVIS is talking, send silence unless Sir clearly speaks over him.
+                    if (hd && !echoGate.pass(isPlaying(), micLevel)) java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
                     onMicChunk(bytes, n * 2)
                 }
             } finally {
@@ -144,7 +152,7 @@ class LiveAudio(
         val t = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                    .setUsage(if (hd) AudioAttributes.USAGE_MEDIA else AudioAttributes.USAGE_VOICE_COMMUNICATION)
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build()
             )
@@ -180,6 +188,7 @@ class LiveAudio(
     }
 
     private fun enterCommunicationMode() {
+        if (hd) return
         previousMode = audio.mode
         runCatching { audio.mode = AudioManager.MODE_IN_COMMUNICATION }
         // Headset / Bluetooth connected? Use it. Otherwise force the loudspeaker (not the earpiece).
@@ -197,6 +206,7 @@ class LiveAudio(
     }
 
     private fun leaveCommunicationMode() {
+        if (hd) return
         if (Build.VERSION.SDK_INT >= 31) runCatching { audio.clearCommunicationDevice() } else setSpeakerphone(false)
         runCatching { audio.mode = if (previousMode == AudioManager.MODE_IN_COMMUNICATION) AudioManager.MODE_NORMAL else previousMode }
     }

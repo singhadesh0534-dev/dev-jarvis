@@ -123,6 +123,11 @@ fun SettingsScreen(
                 "LIVE = Gemini Live: asli awaaz, sabse tez, beech mein bol ke tok sakte ho. Quota/error pe khud CLASSIC pe aa jaata hai. " +
                     "CLASSIC = sunna -> text -> Android TTS (offline voice, kam data)."
             )
+            ToggleRow(
+                "HD Live voice",
+                "ON = saaf, poori quality (media volume). Agar JARVIS apni hi awaaz sun ke khud ko tokne lage to OFF karo (call-mode, awaaz patli par echo kam).",
+                draft.liveHdAudio,
+            ) { v -> viewModel.edit { it.copy(liveHdAudio = v) } }
             HudField("Live model", draft.liveModel, { v -> viewModel.edit { it.copy(liveModel = v) } })
             HudField("Live voice", draft.liveVoice, { v -> viewModel.edit { it.copy(liveVoice = v) } })
             Hint("Voices: Charon (deep, calm — default), Orus (firm), Fenrir, Puck, Kore, Aoede.")
@@ -439,7 +444,7 @@ private fun DiagnosticsBlock(viewModel: SettingsViewModel) {
         return
     }
     Text(
-        log!!.take(1500),
+        log!!.takeLast(2500),
         style = MaterialTheme.typography.bodySmall,
         color = Hud.Dim,
         modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp).verticalScroll(rememberScrollState())
@@ -452,7 +457,7 @@ private fun DiagnosticsBlock(viewModel: SettingsViewModel) {
         }) { Text("Share log", color = Hud.Cyan) }
         TextButton(onClick = { viewModel.clearDiagnostics(); log = null }) { Text("Clear", color = Hud.Dim) }
     }
-    Hint("Log mein sirf error ka stack trace + phone/app version hota hai — API keys ya baat-cheet nahi.")
+    Hint("Isme errors aur JARVIS ke andar ke events (jaagna, Live connect, kitni der lagi) hote hain — API keys ya baat-cheet ka text nahi. Kuch gadbad lage to turant yahan aake Share log dabao.")
 }
 
 /** "07:30" style field; invalid text is ignored until it parses. */

@@ -6,6 +6,7 @@ import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SystemPrompt
 import com.adesh.devjarvis.core.CrashReporter
 import com.adesh.devjarvis.core.JarvisConfig
+import com.adesh.devjarvis.core.SessionTrace
 import com.adesh.devjarvis.proactive.BriefingScheduler
 import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.settings.SettingsRepository
@@ -30,10 +31,16 @@ class SettingsViewModel @Inject constructor(
     val updater: AppUpdater,
 ) : ViewModel() {
     /** Last crash + recovered errors, for Settings > Diagnostics (no keys or personal data inside). */
-    fun diagnostics(): String? = listOfNotNull(CrashReporter.lastCrash(context), CrashReporter.recoveredLog(context))
-        .joinToString("\n\n").ifBlank { null }
+    fun diagnostics(): String? = listOfNotNull(
+        CrashReporter.lastCrash(context),
+        CrashReporter.recoveredLog(context),
+        SessionTrace.dump().takeIf { it.isNotBlank() }?.let { "FLIGHT RECORDER (latest events)\n$it" },
+    ).joinToString("\n\n").ifBlank { null }
 
-    fun clearDiagnostics() = CrashReporter.clear(context)
+    fun clearDiagnostics() {
+        CrashReporter.clear(context)
+        SessionTrace.clear()
+    }
 
 
     /** Editable copy; written to encrypted storage only on Save. */

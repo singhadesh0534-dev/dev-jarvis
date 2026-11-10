@@ -349,6 +349,7 @@ class JarvisSession @Inject constructor(
 
     private fun onDetection(d: WakeWordEngine.Detection) {
         val state = _ui.value.state
+        SessionTrace.add("WAKE ${d.mode} phrase='${d.phrase}' state=$state")
         when (d.mode) {
             WakeWordEngine.Mode.WAKE -> if (state == JarvisState.IDLE) {
                 earcons.wake()
@@ -365,6 +366,7 @@ class JarvisSession @Inject constructor(
     }
 
     private fun onWakeProblem(problem: WakeWordEngine.Problem?) {
+        if (problem != null) SessionTrace.add("WAKE ENGINE problem: $problem")
         when (problem) {
             WakeWordEngine.Problem.MIC_SILENCED -> if (serviceActive) {
                 if (focus.inCall()) {
@@ -440,6 +442,7 @@ class JarvisSession @Inject constructor(
 
     private fun startListening(followUp: Boolean) {
         listenJob?.cancel()
+        SessionTrace.add("CLASSIC listen followUp=$followUp stt=${settings.current.sttEngine}")
         _ui.update { it.copy(partial = "", micLevel = 0f) }
         setState(JarvisState.LISTENING)
         listenJob = scope.launch {
@@ -501,6 +504,7 @@ class JarvisSession @Inject constructor(
     }
 
     private fun onListenFailed(reason: SpeechInput.Reason) {
+        SessionTrace.add("CLASSIC listen failed: $reason")
         when (reason) {
             SpeechInput.Reason.NOTHING_HEARD -> endConversation(chime = false)
             SpeechInput.Reason.NETWORK -> say("Sir, network gayab hai, abhi offline hoon.")
@@ -583,6 +587,7 @@ class JarvisSession @Inject constructor(
         val lineId = nextId++
         upsertLine(lineId, "⚙ $name($argText)", system = true)
         val result = registry.execute(name, args, toolContext)
+        SessionTrace.add("TOOL $name ok=${result.ok} awaitingConfirm=${result.awaitingConfirmation}")
         if (result.awaitingConfirmation) {
             upsertLine(lineId, "? $name: Sir ki haan/naa ka intezaar", system = true)
             return result
@@ -728,7 +733,9 @@ class JarvisSession @Inject constructor(
 
             val conn = LiveConnection(http, s.geminiApiKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
-            val audio = LiveAudio(audioManager) { bytes, n -> conn.sendAudio(bytes, n) }
+            val audio = LiveAudio(audioManager, hd = s.liveHdAudio) { bytes, n -> conn.sendAudio(bytes, n) }
+            SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} patientVad=${!liveVadRejected}")
+            var firstAudioLogged = false
             liveConn = conn
             liveAudio = audio
             val startedAt = System.currentTimeMillis()
@@ -796,6 +803,10 @@ class JarvisSession @Inject constructor(
                             if (_ui.value.state != JarvisState.SPEAKING) setState(JarvisState.LISTENING)
                         }
                         is LiveMessages.ServerEvent.Audio -> {
+                            if (!firstAudioLogged) {
+                                firstAudioLogged = true
+                                SessionTrace.add("LIVE first audio after ${System.currentTimeMillis() - startedAt} ms")
+                            }
                             anyReply = true
                             followUp?.cancel()
                             audio.enqueue(e.pcm)
@@ -810,6 +821,7 @@ class JarvisSession @Inject constructor(
                             upsertLine(jarvisLine, jarvisSaid.toString().trim())
                         }
                         LiveMessages.ServerEvent.Interrupted -> {
+                            SessionTrace.add("LIVE interrupted (server heard speech over JARVIS)")
                             // Sir spoke over JARVIS: stop the speaker right now.
                             audio.flushPlayback()
                             commitTurn()
@@ -827,7 +839,9 @@ class JarvisSession @Inject constructor(
                             setState(JarvisState.LISTENING)
                         }
                         is LiveMessages.ServerEvent.GoAway -> Unit // server ends the session soon; we close on Closed
-                        is LiveMessages.ServerEvent.ToolCancelled, LiveMessages.ServerEvent.SetupComplete -> Unit
+                        LiveMessages.ServerEvent.SetupComplete ->
+                            SessionTrace.add("LIVE connected + setup ok after ${System.currentTimeMillis() - startedAt} ms")
+                        is LiveMessages.ServerEvent.ToolCancelled -> Unit
                     }
                 }
             } catch (e: CancellationException) {
@@ -858,6 +872,7 @@ class JarvisSession @Inject constructor(
     private fun onLiveEnded(kind: LiveMessages.CloseKind?, detail: String, anyReply: Boolean) {
         liveJob = null
         updateMode()
+        SessionTrace.add("LIVE ended kind=$kind detail='$detail' anyReply=$anyReply byUs=$liveClosingByUs")
         if (liveClosingByUs) return // closeLive() already handled the ending
         if (!anyReply && liveUsedPatientVad && kind == LiveMessages.CloseKind.OTHER && _ui.value.inConversation) {
             // Maybe this model doesn't accept the turn-taking config: try once more without it before giving up on Live.
@@ -899,7 +914,9 @@ class JarvisSession @Inject constructor(
         }
     }
 
-    private fun errorLine(e: BrainError): String = when (e) {
+    private fun errorLine(e: BrainError): String = SessionTrace.add("BRAIN error ${e.javaClass.simpleName}: ${e.message?.take(120)}").let { errorText(e) }
+
+    private fun errorText(e: BrainError): String = when (e) {
         is BrainError.MissingKey -> "Sir, mera dimaag abhi plug-in nahi hua. Settings mein Gemini API key daal dijiye."
         is BrainError.NoNetwork -> "Sir, network gayab hai, abhi offline hoon."
         is BrainError.RateLimited -> "Sir, aaj ka free fuel khatam ho gaya. Thodi der baad phir koshish karte hain."

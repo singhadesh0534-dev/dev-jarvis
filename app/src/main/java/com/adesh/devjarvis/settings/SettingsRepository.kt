@@ -70,6 +70,8 @@ data class JarvisSettings(
     val speakerThreshold: Float = com.adesh.devjarvis.wakeword.SpeakerVerification.DEFAULT_THRESHOLD,
     /** Comma-separated wake phrases set by Sir. Blank = defaults ("hello dev", "jarvis"). */
     val customWakePhrases: String = "",
+    /** Live voice on the media stream (full quality). Off = phone-call audio path (strongest echo cancelling). */
+    val liveHdAudio: Boolean = true,
 ) {
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
@@ -157,6 +159,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_SPK_PROFILE, cleaned.speakerProfile)
             .putFloat(K_SPK_THRESHOLD, cleaned.speakerThreshold)
             .putString(K_WAKE_PHRASES, cleaned.customWakePhrases)
+            .putBoolean(K_LIVE_HD, cleaned.liveHdAudio)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -207,6 +210,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             speakerProfile = prefs.getString(K_SPK_PROFILE, d.speakerProfile).orEmpty(),
             speakerThreshold = prefs.getFloat(K_SPK_THRESHOLD, d.speakerThreshold),
             customWakePhrases = prefs.getString(K_WAKE_PHRASES, d.customWakePhrases).orEmpty(),
+            liveHdAudio = prefs.getBoolean(K_LIVE_HD, d.liveHdAudio),
         )
     }
 
@@ -251,6 +255,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SPK_PROFILE = "speaker_profile"
         const val K_SPK_THRESHOLD = "speaker_threshold"
         const val K_WAKE_PHRASES = "custom_wake_phrases"
+        const val K_LIVE_HD = "live_hd_audio"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"
