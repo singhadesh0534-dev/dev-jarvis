@@ -4,6 +4,11 @@ on:
   push:
   workflow_dispatch:
 
+# One build at a time: two pushes in a row used to race while replacing the release.
+concurrency:
+  group: jarvis-build
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -75,12 +80,17 @@ jobs:
           JARVIS.apk: Full edition (Play Protect may block a browser install; see app Settings > Updates).
           versionCode=$((100 + GITHUB_RUN_NUMBER))
           versionName=1.0.${GITHUB_RUN_NUMBER}"
-          gh release delete jarvis-latest --yes --cleanup-tag || true
-          gh release create jarvis-latest JARVIS-lite.apk JARVIS.apk \
-            --title "JARVIS (latest build)" \
-            --notes "$NOTES" \
-            --prerelease \
-            --target "$GITHUB_SHA"
+          # Replace the APKs in place (keeps the download links alive the whole time); create only if missing.
+          if gh release view jarvis-latest > /dev/null 2>&1; then
+            gh release upload jarvis-latest JARVIS-lite.apk JARVIS.apk --clobber
+            gh release edit jarvis-latest --notes "$NOTES"
+          else
+            gh release create jarvis-latest JARVIS-lite.apk JARVIS.apk \
+              --title "JARVIS (latest build)" \
+              --notes "$NOTES" \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
 
       - uses: actions/upload-artifact@v4
         if: failure()
