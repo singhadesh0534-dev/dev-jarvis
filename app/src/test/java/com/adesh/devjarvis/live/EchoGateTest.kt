@@ -7,36 +7,25 @@ import org.junit.Test
 class EchoGateTest {
     @Test fun passesEverythingWhenJarvisIsQuiet() {
         val g = EchoGate()
-        repeat(10) { assertTrue(g.pass(playing = false, level = 0.05f)) }
+        repeat(10) { assertTrue(g.pass(playing = false, headphones = false)) }
     }
 
-    @Test fun blocksOwnEchoWhilePlaying() {
+    @Test fun neverPassesOwnVoiceOnLoudspeaker() {
         val g = EchoGate()
-        repeat(40) { assertFalse(g.pass(playing = true, level = 0.15f)) }
-    }
-
-    @Test fun opensWhenSirSpeaksOverJarvis() {
-        val g = EchoGate(loudChunksToOpen = 3)
-        assertFalse(g.pass(true, 0.6f))
-        assertFalse(g.pass(true, 0.7f))
-        assertTrue(g.pass(true, 0.8f))          // third loud chunk in a row
-        assertTrue(g.pass(true, 0.1f))          // stays open for the rest of this playback
-    }
-
-    @Test fun shortClickDoesNotOpen() {
-        val g = EchoGate(loudChunksToOpen = 3)
-        assertFalse(g.pass(true, 0.9f))
-        assertFalse(g.pass(true, 0.1f))
-        assertFalse(g.pass(true, 0.9f))
-        assertFalse(g.pass(true, 0.9f))
+        repeat(200) { assertFalse(g.pass(playing = true, headphones = false)) } // however loud the echo is
     }
 
     @Test fun echoTailStaysBlockedThenReopens() {
         val g = EchoGate(tailChunks = 3)
-        g.pass(true, 0.1f)
-        assertFalse(g.pass(false, 0.2f))
-        assertFalse(g.pass(false, 0.2f))
-        assertFalse(g.pass(false, 0.2f))
-        assertTrue(g.pass(false, 0.2f))
+        g.pass(true, false)
+        assertFalse(g.pass(false, false))
+        assertFalse(g.pass(false, false))
+        assertFalse(g.pass(false, false))
+        assertTrue(g.pass(false, false))
+    }
+
+    @Test fun headphonesKeepTheMicOpenForBargeIn() {
+        val g = EchoGate()
+        repeat(20) { assertTrue(g.pass(playing = true, headphones = true)) }
     }
 }

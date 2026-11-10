@@ -30,9 +30,12 @@ class LiveAudio(
      * false = "call mode": phone-call audio path with the system echo canceller (thin sound, but strongest echo removal).
      */
     private val hd: Boolean,
+    /** [NearFieldGate] level: 0 off, 1 normal, 2 strong. */
+    noiseFilter: Int = NearFieldGate.NORMAL,
     private val onMicChunk: (ByteArray, Int) -> Unit,
 ) {
     private val echoGate = EchoGate()
+    private val noiseGate = NearFieldGate.forLevel(noiseFilter)
     @Volatile var micLevel = 0f
         private set
     @Volatile var outLevel = 0f
@@ -122,7 +125,11 @@ class LiveAudio(
                 rec.startRecording()
                 val samples = ShortArray(rate / 20) // 50 ms
                 val bytes = ByteArray(samples.size * 2)
+                val preRoll = ArrayDeque<ByteArray>() // last ~250 ms before the noise gate opened
+                var headphones = false
+                var chunkNo = 0
                 while (micRunning) {
+                    if (chunkNo++ % 20 == 0) headphones = runCatching { audio.isWiredHeadsetOnCompat() }.getOrDefault(false)
                     val n = rec.read(samples, 0, samples.size)
                     if (n <= 0) continue
                     var sum = 0.0
@@ -133,8 +140,25 @@ class LiveAudio(
                         bytes[i * 2 + 1] = ((v shr 8) and 0xFF).toByte()
                     }
                     micLevel = (sqrt(sum / n) / 4000.0).coerceIn(0.0, 1.0).toFloat()
-                    // HD mode: while JARVIS is talking, send silence unless Sir clearly speaks over him.
-                    if (hd && !echoGate.pass(isPlaying(), micLevel)) java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
+                    val gate = noiseGate
+                    if (hd && !echoGate.pass(isPlaying(), headphones)) {
+                        // JARVIS is talking through the loudspeaker: the mic only hears him. Send silence.
+                        java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
+                        preRoll.clear()
+                    } else if (gate != null) {
+                        val wasOpen = gate.isOpen
+                        if (gate.offer(micLevel)) {
+                            if (!wasOpen) { // send the start of the word too
+                                preRoll.forEach { onMicChunk(it, it.size) }
+                                preRoll.clear()
+                            }
+                        } else {
+                            // Background only (far voices, traffic, music): the server gets silence.
+                            preRoll.addLast(bytes.copyOf(n * 2))
+                            while (preRoll.size > 5) preRoll.removeFirst()
+                            java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
+                        }
+                    }
                     onMicChunk(bytes, n * 2)
                 }
             } finally {

@@ -1,31 +1,28 @@
 package com.adesh.devjarvis.live
 
 /**
- * HD Live audio: JARVIS speaker pe (media stream) bolta hai, to uski apni awaaz mic mein wapas aati hai.
- * Jab tak wo bol raha hai, mic ka audio server ko "silence" bana ke bhejte hain — jab tak Sir saaf, zor se
- * na bolen (barge-in). Pure, unit-tested.
+ * JARVIS loudspeaker pe bolta hai to uski apni awaaz mic mein wapas aati hai. Server use "Sir bol rahe hain"
+ * samajh ke JARVIS ko beech mein kaat deta tha ("Hello Sir" ka sirf "Hel"). Isliye: jab tak speaker se awaaz
+ * nikal rahi hai (aur uske ~350 ms baad tak) mic ka audio server ko silence bana ke jaata hai — hamesha.
+ * Earphones lage hon to goonj hoti hi nahi, tab mic khula rehta hai aur Sir beech mein bol ke rok sakte hain.
+ * Pure, unit-tested.
  */
-class EchoGate(
-    private val threshold: Float = 0.35f,
-    private val loudChunksToOpen: Int = 3,
-    private val tailChunks: Int = 6,
-) {
-    private var loud = 0
+class EchoGate(private val tailChunks: Int = 7) {
     private var tail = 0
-    private var open = false
 
     /** @return true = send the real mic chunk, false = send silence instead. Call once per ~50 ms chunk. */
-    fun pass(playing: Boolean, level: Float): Boolean {
+    fun pass(playing: Boolean, headphones: Boolean): Boolean {
+        if (headphones) {
+            tail = 0
+            return true
+        }
         if (playing) {
             tail = tailChunks
-            loud = if (level >= threshold) loud + 1 else 0
-            if (loud >= loudChunksToOpen) open = true // Sir is talking over JARVIS: let it through until he stops playing
-            return open
+            return false
         }
-        if (tail > 0) { // speaker just went quiet: room echo is still dying away
+        if (tail > 0) { // speaker just went quiet: output latency + room echo are still dying away
             tail--
-            if (tail == 0) { open = false; loud = 0 }
-            return open
+            return false
         }
         return true
     }

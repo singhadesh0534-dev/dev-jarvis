@@ -53,6 +53,9 @@ class WakeWordEngine @Inject constructor(
     private val _detections = MutableSharedFlow<Detection>(extraBufferCapacity = 8)
     val detections: SharedFlow<Detection> = _detections.asSharedFlow()
 
+    /** Wake phrase heard but refused (too soft / too short / lost in background): for the problem journal. */
+    val rejected = MutableSharedFlow<String>(extraBufferCapacity = 8)
+
     private val _running = MutableStateFlow(false)
     val running: StateFlow<Boolean> = _running.asStateFlow()
 
@@ -147,6 +150,7 @@ class WakeWordEngine @Inject constructor(
             var cooldownUntil = 0L
             val gate = EnergyGate()
             var partialStreak = 0
+            val levels = ArrayDeque<Float>() // RMS of the last ~4 s, to compare the phrase with what came before
 
             while (!stopRequested) {
                 if (mode != currentMode) {
@@ -167,6 +171,9 @@ class WakeWordEngine @Inject constructor(
                     _problem.value = Problem.MIC_SILENCED
                     break
                 }
+
+                levels.addLast(rms(buffer, n))
+                while (levels.size > 40) levels.removeFirst()
 
                 // Battery: only decode when there's sound (with pre-roll so the first word isn't clipped).
                 val chunks = when (val g = gate.offer(buffer, n)) {
@@ -204,7 +211,17 @@ class WakeWordEngine @Inject constructor(
                         isFinal = true
                         _lastHeard.value = heard.text
                     }
-                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity) ?: continue
+                    // Barge-in words are short commands over JARVIS's own voice: no loudness comparison there.
+                    val loudness = if (currentMode == Mode.WAKE) {
+                        WakePhraseMatcher.loudnessOverBackground(levels.toList(), ((heard.duration ?: 0.8f) * 10).toInt() + 3)
+                    } else null
+                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity, loudness)
+                    if (phrase == null) {
+                        if (isFinal && WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) != null) {
+                            rejected.tryEmit("'${heard.text}' conf=${heard.weakest} dur=${heard.duration} lead=${heard.leadingUnknown} loud=$loudness")
+                        }
+                        continue
+                    }
 
                     if (lockOnThisTurn) {
                         val profile = speakerProfile
@@ -274,6 +291,12 @@ class WakeWordEngine @Inject constructor(
         if (mode == Mode.WAKE) wakePhrases else JarvisConfig.BARGE_IN_PHRASES
 
     private fun grammarFor(mode: Mode) = WakePhraseMatcher.grammarJson(phrasesFor(mode))
+
+    private fun rms(a: ShortArray, n: Int): Float {
+        var sum = 0.0
+        for (i in 0 until n) { val v = a[i].toDouble(); sum += v * v }
+        return kotlin.math.sqrt(sum / n.coerceAtLeast(1)).toFloat()
+    }
 
     private fun ShortArray.allZero(n: Int): Boolean {
         for (i in 0 until n) if (this[i].toInt() != 0) return false

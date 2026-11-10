@@ -213,6 +213,7 @@ class JarvisSession @Inject constructor(
         scope.launch { wake.detections.collect(::onDetection) }
         scope.launch { screenTools.progress.collect { line -> addLine(fromUser = false, text = line, system = true) } }
         scope.launch { wake.problem.collect(::onWakeProblem) }
+        scope.launch { wake.rejected.collect { SessionTrace.add("WAKE refused $it") } }
         // Call shuru/khatam hone par turant react: beech mein JARVIS turant chup aur mic chhod de.
         focus.watchCallState { scope.launch { onCallStateChanged() } }
         scope.launch {
@@ -799,8 +800,8 @@ class JarvisSession @Inject constructor(
 
             val conn = LiveConnection(http, s.geminiApiKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
-            val audio = LiveAudio(audioManager, hd = s.liveHdAudio) { bytes, n -> conn.sendAudio(bytes, n) }
-            SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} patientVad=${!liveVadRejected}")
+            val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter) { bytes, n -> conn.sendAudio(bytes, n) }
+            SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
             var firstAudioLogged = false
             var userSpoke = false
             liveConn = conn

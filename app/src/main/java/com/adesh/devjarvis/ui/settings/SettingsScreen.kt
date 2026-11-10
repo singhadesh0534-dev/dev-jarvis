@@ -125,9 +125,15 @@ fun SettingsScreen(
             )
             ToggleRow(
                 "HD Live voice",
-                "ON = saaf, poori quality (media volume). Agar JARVIS apni hi awaaz sun ke khud ko tokne lage to OFF karo (call-mode, awaaz patli par echo kam).",
+                "ON = saaf, poori quality (media volume). Speaker pe JARVIS bolte waqt mic band rehta hai (apni awaaz se khud ko nahi kaat-ta); beech mein rokna ho to reactor tap karo, ya earphones lagao.",
                 draft.liveHdAudio,
             ) { v -> viewModel.edit { it.copy(liveHdAudio = v) } }
+            Text("Shor filter (Live)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(
+                options = listOf("0" to "OFF", "1" to "NORMAL", "2" to "STRONG"),
+                selected = draft.noiseFilter.toString(),
+            ) { v -> viewModel.edit { it.copy(noiseFilter = v.toIntOrNull() ?: 1) } }
+            Hint("Sirf paas ki, shor se saaf tez awaaz JARVIS tak jaati hai — door ki baatein, TV, gaadi, music nahi. Bahut shor (DJ, bike) mein STRONG karo aur phone ke paas bolo. Agar JARVIS aapki awaaz hi na sune to NORMAL / OFF.")
             HudField("Live model", draft.liveModel, { v -> viewModel.edit { it.copy(liveModel = v) } })
             HudField("Live voice", draft.liveVoice, { v -> viewModel.edit { it.copy(liveVoice = v) } })
             Hint("Voices: Charon (deep, calm — default), Orus (firm), Fenrir, Puck, Kore, Aoede.")
