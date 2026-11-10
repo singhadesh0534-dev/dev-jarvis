@@ -1,6 +1,6 @@
 package com.adesh.devjarvis.di
 
-import com.adesh.devjarvis.voice.AndroidTts
+import com.adesh.devjarvis.voice.JarvisVoice
 import com.adesh.devjarvis.voice.SpeechOutput
 import dagger.Binds
 import dagger.Module
@@ -31,5 +31,5 @@ abstract class VoiceModule {
     /** TTS pluggable hai: naya engine banao, yahan bind badlo. */
     @Binds
     @Singleton
-    abstract fun speechOutput(impl: AndroidTts): SpeechOutput
+    abstract fun speechOutput(impl: JarvisVoice): SpeechOutput
 }

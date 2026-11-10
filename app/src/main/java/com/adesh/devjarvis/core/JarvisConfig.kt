@@ -117,4 +117,12 @@ object JarvisConfig {
     const val OPENROUTER_KEY_URL = "https://openrouter.ai/keys"
     const val OPENROUTER_MODELS_URL = "https://openrouter.ai/models?max_price=0"
     const val CEREBRAS_KEY_URL = "https://cloud.cerebras.ai"
+
+    // ---- Optional better voice for Classic mode: ElevenLabs (free tier has a small monthly character allowance)
+    const val ELEVEN_BASE_URL = "https://api.elevenlabs.io/v1"
+    const val ELEVEN_KEY_URL = "https://elevenlabs.io/app/settings/api-keys"
+    /** "Daniel": a default (premade) British male voice every account has. Settings > ElevenLabs voice id to change. */
+    const val ELEVEN_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"
+    /** Fast multilingual model (reads Hinglish). */
+    const val ELEVEN_MODEL = "eleven_flash_v2_5"
 }

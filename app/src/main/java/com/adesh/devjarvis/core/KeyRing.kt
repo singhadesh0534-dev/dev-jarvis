@@ -10,6 +10,8 @@ class KeyRing @Inject constructor() {
     val groq = KeyPool()
     /** Third brain (OpenRouter, Cerebras or any OpenAI-compatible service). */
     val extra = KeyPool()
+    /** ElevenLabs voice. */
+    val eleven = KeyPool()
     /** Live has its own quota, so its own resting list (same keys). */
     val live = KeyPool()
 }

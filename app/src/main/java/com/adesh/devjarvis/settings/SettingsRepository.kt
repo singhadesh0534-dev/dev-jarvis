@@ -96,6 +96,10 @@ data class JarvisSettings(
     val diaryEnabled: Boolean = true,
     /** Torch, volume, timer, open app... done at once without the AI (works offline, costs no quota). */
     val instantCommands: Boolean = true,
+    // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
+    val elevenApiKey: String = "",
+    val elevenVoiceId: String = "",
+    val elevenModel: String = "",
 ) {
     val hasExtraBrain: Boolean get() = extraApiKey.isNotBlank() && extraModel.isNotBlank() && extraBaseUrl.startsWith("https://")
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
@@ -198,6 +202,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_SUGGEST, cleaned.suggestHabits)
             .putBoolean(K_DIARY, cleaned.diaryEnabled)
             .putBoolean(K_INSTANT, cleaned.instantCommands)
+            .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
+            .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
+            .putString(K_ELEVEN_MODEL, cleaned.elevenModel.trim())
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -262,6 +269,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             suggestHabits = prefs.getBoolean(K_SUGGEST, d.suggestHabits),
             diaryEnabled = prefs.getBoolean(K_DIARY, d.diaryEnabled),
             instantCommands = prefs.getBoolean(K_INSTANT, d.instantCommands),
+            elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
+            elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
+            elevenModel = prefs.getString(K_ELEVEN_MODEL, d.elevenModel).orEmpty(),
         )
     }
 
@@ -320,6 +330,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SUGGEST = "suggest_habits"
         const val K_DIARY = "diary_enabled"
         const val K_INSTANT = "instant_commands"
+        const val K_ELEVEN_KEY = "eleven_api_key"
+        const val K_ELEVEN_VOICE = "eleven_voice_id"
+        const val K_ELEVEN_MODEL = "eleven_model"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"
