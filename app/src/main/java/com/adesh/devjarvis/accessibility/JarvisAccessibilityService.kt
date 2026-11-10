@@ -46,6 +46,8 @@ class JarvisAccessibilityService : AccessibilityService() {
         val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
         val nodes = LinkedHashMap<Int, AccessibilityNodeInfo>()
         val elements = mutableListOf<ScreenElement>()
+        val dm = resources.displayMetrics
+        val bounds = Rect()
         fun walk(n: AccessibilityNodeInfo?, depth: Int) {
             if (n == null || depth > 40 || elements.size >= 250) return
             if (!n.isVisibleToUser) return
@@ -66,6 +68,12 @@ class JarvisAccessibilityService : AccessibilityService() {
                     scrollable = n.isScrollable,
                     password = n.isPassword,
                     focused = n.isFocused,
+                    region = runCatching {
+                        n.getBoundsInScreen(bounds)
+                        com.adesh.devjarvis.screen.ScreenFormatter.region(
+                            bounds.exactCenterX() / dm.widthPixels.coerceAtLeast(1), bounds.exactCenterY() / dm.heightPixels.coerceAtLeast(1),
+                        )
+                    }.getOrDefault(""),
                 )
             }
             for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)
@@ -91,8 +99,16 @@ class JarvisAccessibilityService : AccessibilityService() {
         return r.width() > 0 && tapAt(r.exactCenterX(), r.exactCenterY())
     }
 
-    /** Type into [id] (or the focused / first input). Replaces the field's text. */
-    fun type(id: Int?, text: String): Boolean {
+    /** Screen rectangles of everything tappable in the last snapshot, by element number (for numbered screenshots). */
+    fun marks(): List<Pair<Int, Rect>> = lastNodes.mapNotNull { (id, n) ->
+        if (!(n.isClickable || n.isEditable)) return@mapNotNull null
+        val r = Rect()
+        n.getBoundsInScreen(r)
+        if (r.width() > 0 && r.height() > 0) id to r else null
+    }
+
+    /** Type into [id] (or the focused / first input). Replaces the field's text. [submit] = press Enter / Search after. */
+    fun type(id: Int?, text: String, submit: Boolean = false): Boolean {
         val target = id?.let { lastNodes[it] }?.takeIf { it.isEditable }
             ?: lastNodes.values.firstOrNull { it.isEditable && it.isFocused }
             ?: lastNodes.values.firstOrNull { it.isEditable }
@@ -100,7 +116,11 @@ class JarvisAccessibilityService : AccessibilityService() {
         if (target.isPassword) return false
         target.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
         val args = Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) }
-        return target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        val typed = target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        if (typed && submit && Build.VERSION.SDK_INT >= 30) {
+            runCatching { target.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id) }
+        }
+        return typed
     }
 
     suspend fun scroll(down: Boolean): Boolean {

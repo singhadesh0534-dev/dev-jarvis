@@ -89,8 +89,10 @@ class ScreenTools @Inject constructor(
     }
 
     private val lookAtScreen = object : SimpleTool(
-        "look_at_screen", "Look at the current screen (screenshot) and answer Sir's question about it.",
-        params { string("question", "e.g. \"is screen pe kya likha hai?\"", required = true) },
+        "look_at_screen",
+        "Look at the current screen as a picture (screenshot with a yellow number on every tappable thing) and answer a question " +
+            "about it. Use it for icons, images, colours, layout, or to find the number of an icon that read_screen shows as (no label).",
+        params { string("question", "e.g. \"is screen pe kya hai?\" or \"search icon ka number kya hai?\"", required = true) },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
@@ -101,99 +103,164 @@ class ScreenTools @Inject constructor(
                 }
             }
             val bmp = svc.screenshot()
-                ?: return snap?.let { ToolResult.ok("screen text: " + ScreenFormatter.readable(it)) }
+                ?: return snap?.let { ToolResult.ok("no screenshot on this phone; screen as text:\n" + ScreenFormatter.compact(it, 60)) }
                     ?: ToolResult.fail("couldn't capture the screen (needs Android 11+)")
-            val jpeg = ImageUtil.toJpeg(bmp)
+            val marked = runCatching { ImageUtil.withMarks(bmp, svc.marks()) }.getOrDefault(bmp)
+            val jpeg = ImageUtil.toJpeg(marked, maxSide = 1280, quality = 75)
+            if (marked !== bmp) marked.recycle()
             bmp.recycle()
-            val answer = brain.see(jpeg, args.requireString("question"))
-                ?: return snap?.let { ToolResult.ok("screen text: " + ScreenFormatter.readable(it)) } ?: ToolResult.fail("vision unavailable")
+            val answer = brain.see(jpeg, args.requireString("question") + MARKS_NOTE)
+                ?: return snap?.let { ToolResult.ok("the vision model did not answer; screen as text:\n" + ScreenFormatter.compact(it, 60)) }
+                    ?: ToolResult.fail("vision unavailable")
             return ToolResult.ok(answer)
         }
     }
 
-    private val readScreen = object : SimpleTool("read_screen", "Read the visible text of the current screen (fast, no image).") {
+    private val readScreen = object : SimpleTool(
+        "read_screen",
+        "Read the current screen as a numbered list of everything on it: [number] kind \"label\". Then act with the number: " +
+            "tap(id), long_press(id), type_text(id). Fast, no image. Things shown as (no label) are icons: their place is given " +
+            "(@top-right...), or use look_at_screen to see which is which.",
+    ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
-            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen")
+            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen — try look_at_screen")
             (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let { return ToolResult.fail("private screen (${it.reason}) — not reading") }
-            return ToolResult.ok("${snap.appLabel}: " + ScreenFormatter.readable(snap))
+            return ToolResult.ok(ScreenFormatter.compact(snap, 70))
         }
     }
 
     // ---------------------------------------------------------------- hands (single steps)
 
+    /**
+     * After every action: wait for the UI, read the screen again and hand it back. So each step is checked
+     * ("did it work?") without a second request, and the next step uses fresh numbers.
+     */
+    private suspend fun observe(svc: JarvisAccessibilityService, did: String, settleMs: Long = 700): ToolResult {
+        delay(settleMs)
+        val snap = svc.snapshot() ?: return ToolResult.ok("$did. (The new screen can't be read as text; use look_at_screen to check.)")
+        (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let {
+            return ToolResult.ok("$did. The screen now is private (${it.reason}) — stop here and let Sir do this part himself.")
+        }
+        return ToolResult.ok("$did. Check that it did what you wanted — screen now:\n" + ScreenFormatter.compact(snap, 45))
+    }
+
+    private fun notThere(snap: ScreenSnapshot, id: Int?, label: String?): ToolResult = ToolResult.fail(
+        "no ${label?.let { "'$it'" } ?: "number $id"} on this screen. Don't repeat the same tap: pick from what IS here, scroll, " +
+            "or use look_at_screen. Screen:\n" + ScreenFormatter.compact(snap, 45),
+    )
+
     private val tap = object : SimpleTool(
-        "tap", "Tap a button/item on the current screen by its visible label.",
-        params { string("text", "Visible label, e.g. Search, Rahul, Like", required = true) },
+        "tap",
+        "Tap something on the current screen. Best: its number from read_screen or from the last action's \"screen now\" list " +
+            "(add the label too as a cross-check). Or just its visible label. Returns the screen after the tap.",
+        params {
+            integer("id", "Element number")
+            string("text", "Visible label, e.g. Search, Rahul, Like")
+        },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
-            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen")
+            val id = args.int("id")
+            val label = args.string("text")
+            if (id == null && label == null) return ToolResult.fail("tap what? give the number or the label")
+            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen — try look_at_screen")
             (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let { return ToolResult.fail("stopped: ${it.reason}") }
-            val label = args.requireString("text")
-            val el = AgentProtocol.findByLabel(snap, label) ?: return ToolResult.fail("no '$label' on screen")
+            val el = AgentProtocol.pick(snap, id, label) ?: return notThere(snap, id, label)
             when (FinalActionDetector.classify(el.label)) {
                 FinalActionDetector.Kind.FORBIDDEN -> return ToolResult.fail("I don't tap payment/purchase buttons")
                 FinalActionDetector.Kind.NEEDS_CONFIRMATION ->
                     if (!ctx.confirm("Sir, '${el.label}' dabaun?")) return ToolResult.ok("cancelled — Sir said no")
                 FinalActionDetector.Kind.NORMAL -> Unit
             }
-            return if (svc.tap(el.id)) ToolResult.ok("tapped '${el.label}'") else ToolResult.fail("tap didn't work")
+            return if (svc.tap(el.id)) observe(svc, "tapped ${el.label.ifBlank { "number ${el.id}" }}") else ToolResult.fail("the tap didn't register")
         }
     }
 
     private val typeText = object : SimpleTool(
-        "type_text", "Type text into the focused (or first) input box on screen. Never for passwords/OTPs.",
-        params { string("text", "Text to type", required = true) },
+        "type_text",
+        "Type into an input box on screen (the focused one, or give its number). submit=true presses Enter / Search afterwards. " +
+            "Never for passwords/OTPs. Returns the screen after typing.",
+        params {
+            string("text", "Text to type", required = true)
+            integer("id", "Number of the input box (optional)")
+            boolean("submit", "true = press Enter / Search after typing")
+        },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
-            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen")
+            var snap: ScreenSnapshot = currentScreen(svc) ?: return ToolResult.fail("can't read this screen — try look_at_screen")
+            // A search box often appears a moment after its icon was tapped: wait for it instead of failing.
+            for (i in 0 until 4) {
+                if (snap.elements.any { it.editable }) break
+                delay(450)
+                svc.snapshot()?.let { snap = it }
+            }
             (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let { return ToolResult.fail("stopped: ${it.reason}") }
-            return if (svc.type(null, args.requireString("text"))) ToolResult.ok("typed") else ToolResult.fail("no text box on screen")
+            if (snap.elements.none { it.editable }) {
+                return ToolResult.fail(
+                    "there is no text box on this screen yet — tap the search icon or the field first (it may be an icon with no label). " +
+                        "Screen:\n" + ScreenFormatter.compact(snap, 45),
+                )
+            }
+            val text = args.requireString("text")
+            val submit = args.bool("submit") == true
+            return if (svc.type(args.int("id"), text, submit)) {
+                observe(svc, "typed '${text.take(40)}'" + if (submit) " and pressed enter" else "", settleMs = if (submit) 1_600 else 600)
+            } else {
+                ToolResult.fail("couldn't type into that box")
+            }
         }
     }
 
     private val scroll = object : SimpleTool(
-        "scroll", "Scroll the current screen.",
+        "scroll", "Scroll the current screen. Returns the screen after scrolling.",
         params { string("direction", "down | up", required = true, enum = listOf("down", "up")) },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
             currentScreen(svc)
-            return if (svc.scroll(args.enum("direction", listOf("down", "up")) != "up")) ToolResult.ok("scrolled") else ToolResult.fail("nothing to scroll")
+            val down = args.enum("direction", listOf("down", "up")) != "up"
+            return if (svc.scroll(down)) observe(svc, "scrolled ${if (down) "down" else "up"}") else ToolResult.fail("nothing to scroll here")
         }
     }
 
     private val swipe = object : SimpleTool(
-        "swipe", "Swipe the current screen: left = next (next reel / page / photo), right = previous, up / down = move the page.",
+        "swipe", "Swipe the current screen: left = next (next reel / page / photo), right = previous, up / down = move the page. Returns the screen after.",
         params { string("direction", "left | right | up | down", required = true, enum = AgentProtocol.SWIPE_DIRECTIONS) },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
             currentScreen(svc)
             val dir = args.enum("direction", AgentProtocol.SWIPE_DIRECTIONS) ?: return ToolResult.fail("direction must be left, right, up or down")
-            return if (svc.swipe(dir)) ToolResult.ok("swiped $dir") else ToolResult.fail("swipe didn't work")
+            return if (svc.swipe(dir)) observe(svc, "swiped $dir") else ToolResult.fail("swipe didn't work")
         }
     }
 
     private val longPress = object : SimpleTool(
-        "long_press", "Long-press an item on the current screen by its visible label (to select it or open its menu).",
-        params { string("text", "Visible label of the item", required = true) },
+        "long_press", "Long-press an item on the current screen, by number or label (to select it or open its menu). Returns the screen after.",
+        params {
+            integer("id", "Element number")
+            string("text", "Visible label of the item")
+        },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val svc = service() ?: return needsAccessibility()
-            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen")
+            val id = args.int("id")
+            val label = args.string("text")
+            if (id == null && label == null) return ToolResult.fail("long-press what? give the number or the label")
+            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen — try look_at_screen")
             (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let { return ToolResult.fail("stopped: ${it.reason}") }
-            val label = args.requireString("text")
-            val el = AgentProtocol.findByLabel(snap, label) ?: return ToolResult.fail("no '$label' on screen")
-            return if (svc.longPress(el.id)) ToolResult.ok("long-pressed '${el.label}'") else ToolResult.fail("long-press didn't work")
+            val el = AgentProtocol.pick(snap, id, label) ?: return notThere(snap, id, label)
+            return if (svc.longPress(el.id)) observe(svc, "long-pressed ${el.label.ifBlank { "number ${el.id}" }}") else ToolResult.fail("long-press didn't work")
         }
     }
 
-    private val goBack = object : SimpleTool("go_back", "Press Back.") {
-        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult =
-            if (JarvisAccessibilityService.global(AccessibilityService.GLOBAL_ACTION_BACK)) ToolResult.ok("went back") else needsAccessibility()
+    private val goBack = object : SimpleTool("go_back", "Press Back. Returns the screen after.") {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val svc = service() ?: return needsAccessibility()
+            return if (svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)) observe(svc, "went back") else ToolResult.fail("back didn't work")
+        }
     }
 
     private val goHome = object : SimpleTool("go_home", "Go to the home screen.") {
@@ -243,7 +310,7 @@ class ScreenTools @Inject constructor(
                         }
                         svc.tap(el.id)
                     }
-                    is AgentAction.Type -> svc.type(action.id, action.text)
+                    is AgentAction.Type -> svc.type(action.id, action.text, action.submit)
                     is AgentAction.Scroll -> svc.scroll(action.down)
                     is AgentAction.Swipe -> svc.swipe(action.direction)
                     is AgentAction.LongPress -> svc.longPress(action.id)
@@ -261,6 +328,11 @@ class ScreenTools @Inject constructor(
             }
             return ToolResult.fail("took more than ${AgentProtocol.MAX_STEPS} steps — stopped")
         }
+    }
+
+    private companion object {
+        const val MARKS_NOTE = "\n(The yellow numbers on the screenshot are element numbers. When Sir or the next step needs " +
+            "one, say it: e.g. \"search icon is number 14\".)"
     }
 
     val tools: List<JarvisTool> = listOf(look, lookAtScreen, readScreen, tap, longPress, typeText, scroll, swipe, goBack, goHome, doTask)

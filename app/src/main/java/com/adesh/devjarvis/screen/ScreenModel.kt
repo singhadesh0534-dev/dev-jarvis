@@ -20,6 +20,8 @@ data class ScreenElement(
     val scrollable: Boolean,
     val password: Boolean,
     val focused: Boolean,
+    /** Where it sits on the screen ("top-right", "middle-center"...); blank if unknown. */
+    val region: String = "",
 ) {
     val label: String get() = text.ifBlank { description }.ifBlank { viewId.substringAfterLast('/').replace('_', ' ') }
     val kind: String get() = when {
@@ -36,12 +38,24 @@ data class ScreenSnapshot(val packageName: String, val appLabel: String, val ele
 
 /** Screen ko LLM ke liye chhote text mein badalna. Pure, unit-tested. */
 object ScreenFormatter {
+    /** "top-left" ... "bottom-right" from a position given as fractions (0..1) of the screen. */
+    fun region(fx: Float, fy: Float): String {
+        val v = when { fy < 0.25f -> "top"; fy > 0.75f -> "bottom"; else -> "middle" }
+        val h = when { fx < 0.33f -> "left"; fx > 0.67f -> "right"; else -> "center" }
+        return "$v-$h"
+    }
+
+    /**
+     * Every element with its number: `[12] button "Search"`. Icons without any label are listed too, as
+     * `[14] button (no label) @top-right`, so nothing tappable is invisible to the brain.
+     */
     fun compact(s: ScreenSnapshot, max: Int = 80): String = buildString {
         appendLine("App: ${s.appLabel} (${s.packageName})")
-        val useful = s.elements.filter { it.label.isNotBlank() || it.editable || it.scrollable }
+        val useful = s.elements.filter { it.label.isNotBlank() || it.editable || it.scrollable || it.clickable }
         useful.take(max).forEach { e ->
             append("[${e.id}] ${e.kind}")
-            if (e.label.isNotBlank()) append(" \"${e.label.take(80)}\"")
+            if (e.label.isNotBlank()) append(" \"${e.label.take(80)}\"") else if (e.clickable && !e.scrollable) append(" (no label)")
+            if (e.region.isNotEmpty() && e.label.isBlank() && e.clickable) append(" @${e.region}")
             if (e.editable && e.focused) append(" (focused)")
             if (e.clickable && e.kind == "text") append(" (tappable)")
             appendLine()
@@ -97,7 +111,7 @@ object FinalActionDetector {
 /** Screen agent ka ek kadam, LLM ke JSON se. Pure, unit-tested. */
 sealed interface AgentAction {
     data class Tap(val id: Int) : AgentAction
-    data class Type(val id: Int?, val text: String) : AgentAction
+    data class Type(val id: Int?, val text: String, val submit: Boolean = false) : AgentAction
     data class Scroll(val down: Boolean) : AgentAction
     data class Swipe(val direction: String) : AgentAction
     data class LongPress(val id: Int) : AgentAction
@@ -117,7 +131,7 @@ object AgentProtocol {
         You operate Sir's Android phone through accessibility to finish ONE goal. Each turn you get the goal,
         the steps already taken, and the current screen as numbered elements.
         Reply with JSON only, one action per turn:
-        {"action":"tap","id":12} | {"action":"long_press","id":12} | {"action":"type","id":5,"text":"..."} |
+        {"action":"tap","id":12} | {"action":"long_press","id":12} | {"action":"type","id":5,"text":"...","submit":true} |
         {"action":"scroll","direction":"down"|"up"} | {"action":"swipe","direction":"left"|"right"|"up"|"down"} |
         {"action":"back"} | {"action":"home"} | {"action":"open_app","app":"WhatsApp"} | {"action":"wait"} |
         {"action":"done","note":"what was achieved, one short sentence for Sir"} | {"action":"fail","note":"why"}
@@ -125,7 +139,10 @@ object AgentProtocol {
         - Think before each step: what does the goal need, what is on this screen, which single action moves closest to
           it. After an action, check on the next screen that it worked; if it didn't, try a different way.
         - To select items (photos, messages, files) long_press the first one, then tap the others, then the toolbar action.
-        - Not everything is visible: scroll or swipe to find it, and use an app's search box when it has one.
+        - Not everything is visible: scroll or swipe to find it, and use an app's search box when it has one
+          ("submit":true presses Enter / Search after typing).
+        - Elements shown as (no label) are icons; their place on the screen is given (@top-right ...). A search
+          magnifier or a three-dot menu is usually @top-right, back is @top-left.
         - Use only ids that exist on the current screen. Prefer the most direct path; open_app is faster than hunting for icons.
         - Never type passwords, PINs, OTPs, card or bank details. Never pay, buy, order, recharge or transfer money.
           If the screen asks for any of that, reply fail.
@@ -152,7 +169,7 @@ object AgentProtocol {
         fun int(k: String) = o[k]?.jsonPrimitive?.let { it.intOrNull ?: it.contentOrNull?.toIntOrNull() }
         return when (str("action")?.lowercase()) {
             "tap", "click" -> int("id")?.let { AgentAction.Tap(it) }
-            "type" -> str("text")?.let { AgentAction.Type(int("id"), it) }
+            "type" -> str("text")?.let { AgentAction.Type(int("id"), it, submit = str("submit")?.lowercase() == "true") }
             "scroll" -> AgentAction.Scroll(down = str("direction")?.lowercase() != "up")
             "swipe" -> str("direction")?.lowercase()?.takeIf { it in SWIPE_DIRECTIONS }?.let { AgentAction.Swipe(it) }
             "long_press", "longpress", "hold" -> int("id")?.let { AgentAction.LongPress(it) }
@@ -183,6 +200,17 @@ object AgentProtocol {
     /** Same action 3 times in a row = stuck. */
     fun isLooping(history: List<String>): Boolean =
         history.size >= 3 && history.takeLast(3).distinct().size == 1
+
+    /**
+     * The element Sir's brain means: by number when it exists (and agrees with the label, if one was given too),
+     * otherwise by label. A number that points at something else falls back to the label.
+     */
+    fun pick(s: ScreenSnapshot, id: Int?, label: String?): ScreenElement? {
+        val byId = id?.let { n -> s.elements.firstOrNull { it.id == n } }
+        val wanted = label?.takeIf { it.isNotBlank() }
+        if (byId != null && (wanted == null || byId.label.isBlank() || FuzzyMatcher.score(wanted, byId.label) >= 0.6)) return byId
+        return wanted?.let { findByLabel(s, it) } ?: byId
+    }
 
     /** Best element for "tap Send" style requests. */
     fun findByLabel(s: ScreenSnapshot, label: String): ScreenElement? =

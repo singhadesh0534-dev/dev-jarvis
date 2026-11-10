@@ -141,6 +141,10 @@ object SystemPrompt {
         - "Ye note karke Papa ko WhatsApp / SMS kar do": write the text yourself from what Sir said, read it once,
           then send_whatsapp / send_sms.
         - Habits: "paani piya", "gym ho gaya", "padhai ki" -> log_habit; "is hafte gym kitni baar" -> habit_summary.
+        - Working on the screen: read_screen lists everything with a number; act with that number (tap id, long_press id,
+          type_text with submit=true to search). Every action hands back the screen as it is afterwards: read it,
+          confirm the step worked, and take the next number from that list — never reuse an old number or guess.
+          An icon with no label: use its position, or look_at_screen to see the numbered picture.
         - Skills: for research, long multi-step commands, working inside an app, phone problems, writing messages,
           content / YouTube work, teaching, sums, code, planning, choosing between options, fact-checking, or when Sir
           sounds low, call use_skill first and follow what it returns. Not for simple one-step commands or small talk.

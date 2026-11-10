@@ -694,8 +694,10 @@ class JarvisSession @Inject constructor(
         }
         if (result.ok) earcons.success() else earcons.error()
         if (result.endsConversation) endAfterReply = true
-        upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: ${result.message}", system = true)
-        activityLog.add(name, argText, result.ok, result.message)
+        // Screen tools return the whole new screen: the transcript and the log keep the first line only.
+        val headline = result.message.lineSequence().firstOrNull().orEmpty().take(180)
+        upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: $headline", system = true)
+        activityLog.add(name, argText, result.ok, headline)
         HudCards.forTool(lineId, name, result.ok, result.message)?.let(::showCard)
         return result
     }

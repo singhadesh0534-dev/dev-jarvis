@@ -32,9 +32,9 @@ object Skills {
         Skill(
             "screen_operator", "Doing something inside an app on the screen (settings, YouTube Studio, gallery, forms)",
             """
-            1. Look first: read_screen (or look_at_screen when icons / images matter). Never tap from memory of how an app usually looks.
-            2. Prefer text you can see; if the target is not visible, scroll or use the app's search before giving up.
-            3. One action, then read the screen again to confirm it changed as expected.
+            1. Look first: read_screen gives every element a number (look_at_screen shows the numbered picture when icons / images matter). Never tap from memory of how an app usually looks.
+            2. Act by number. If the target is not listed, scroll or use the app's search (type_text with submit=true) before giving up.
+            3. Every action returns the new screen: read it to confirm the step worked before the next one. If it did not, try one other way, not the same tap again.
             4. Stop at any password, payment, OTP or permission-grant screen and tell Sir to do that part himself.
             5. Before a final send / post / delete button, say what will happen and let the app's confirmation run.
             """,

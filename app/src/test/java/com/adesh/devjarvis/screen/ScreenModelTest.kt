@@ -83,3 +83,39 @@ class ScreenModelTest {
         assertNull(AgentProtocol.findByLabel(s, "Delete account"))
     }
 }
+
+class NumberedScreenTest {
+    private fun el(id: Int, text: String = "", click: Boolean = false, edit: Boolean = false, region: String = "") =
+        ScreenElement(id, text, "", "android.widget.ImageButton", "", click, edit, false, false, false, region)
+
+    private val youtube = ScreenSnapshot(
+        "com.google.android.youtube", "YouTube",
+        listOf(el(1, "Home", click = true), el(2, click = true, region = "top-right"), el(3, "Shorts", click = true), el(4, "Guru Randhawa - Lahore")),
+    )
+
+    @Test fun iconsWithoutLabelAreListedWithTheirPlace() {
+        val t = ScreenFormatter.compact(youtube)
+        assertTrue("[2] button (no label) @top-right" in t)
+        assertTrue("[1] button \"Home\"" in t)
+    }
+
+    @Test fun regions() {
+        assertEquals("top-right", ScreenFormatter.region(0.9f, 0.05f))
+        assertEquals("middle-center", ScreenFormatter.region(0.5f, 0.5f))
+        assertEquals("bottom-left", ScreenFormatter.region(0.1f, 0.95f))
+    }
+
+    @Test fun pickByNumberLabelOrBoth() {
+        assertEquals(2, AgentProtocol.pick(youtube, 2, null)!!.id)              // an icon: number only
+        assertEquals(3, AgentProtocol.pick(youtube, null, "shorts")!!.id)        // label only
+        assertEquals(3, AgentProtocol.pick(youtube, 3, "Shorts")!!.id)           // both agree
+        assertEquals(3, AgentProtocol.pick(youtube, 1, "Shorts")!!.id)           // stale number: the label wins
+        assertEquals(null, AgentProtocol.pick(youtube, 99, "Subscriptions"))     // not on this screen
+        assertEquals(1, AgentProtocol.pick(youtube, 1, "kuch aur")!!.id)         // label matches nothing: keep the number
+    }
+
+    @Test fun typeActionCanSubmit() {
+        assertEquals(AgentAction.Type(5, "guru randhawa", submit = true), AgentProtocol.parse("""{"action":"type","id":5,"text":"guru randhawa","submit":true}"""))
+        assertEquals(AgentAction.Type(5, "hi", submit = false), AgentProtocol.parse("""{"action":"type","id":5,"text":"hi"}"""))
+    }
+}
