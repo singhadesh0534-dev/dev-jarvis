@@ -9,6 +9,7 @@ import com.adesh.devjarvis.screen.ScreenTools
 import com.adesh.devjarvis.tools.impl.CommunicationTools
 import com.adesh.devjarvis.tools.impl.LifeTools
 import com.adesh.devjarvis.tools.impl.ModeTools
+import com.adesh.devjarvis.tools.impl.SafetyTools
 import com.adesh.devjarvis.tools.impl.InfoTools
 import com.adesh.devjarvis.tools.impl.PhoneTools
 import dagger.hilt.android.qualifiers.ApplicationContext
