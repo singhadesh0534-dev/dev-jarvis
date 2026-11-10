@@ -1,6 +1,11 @@
 package com.adesh.devjarvis.tools.impl
 
+import com.adesh.devjarvis.core.LocationFinder
 import com.adesh.devjarvis.life.Expense
+import com.adesh.devjarvis.life.Place
+import com.adesh.devjarvis.life.PlaceLogic
+import com.adesh.devjarvis.life.PlaceReminder
+import com.adesh.devjarvis.life.PlaceReminders
 import com.adesh.devjarvis.life.LifeMath
 import com.adesh.devjarvis.life.LifeStore
 import com.adesh.devjarvis.life.Note
@@ -19,7 +24,76 @@ import javax.inject.Singleton
 
 /** Routines / voice shortcuts, notes, lists, expenses. */
 @Singleton
-class LifeTools @Inject constructor(private val store: LifeStore) {
+class LifeTools @Inject constructor(
+    private val store: LifeStore,
+    private val location: LocationFinder,
+    private val placeReminders: PlaceReminders,
+) {
+    private val noLocation = "location not available — Sir should allow Location for JARVIS (Setup), 'Allow all the time' for place reminders, and keep GPS on"
+
+    private val savePlace = object : SimpleTool(
+        "save_place",
+        "Save the place where Sir is right now under a name (\"ghar\", \"office\", \"gym\") for place reminders. Use when he says \"ye jagah ghar ke naam se save karo\".",
+        params { string("name", "Name for this place", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val name = LifeMath.key(args.requireString("name"))
+            if (name.isEmpty()) return ToolResult.fail("the place needs a name")
+            val fix = location.current() ?: return ToolResult.fail(noLocation)
+            store.update { d -> d.copy(places = d.places.filterNot { LifeMath.key(it.name) == name } + Place(name, fix.latitude, fix.longitude)) }
+            return ToolResult.ok("saved this spot as '$name' (accuracy about ${fix.accuracy.toInt()} m)")
+        }
+    }
+
+    private val remindAtPlace = object : SimpleTool(
+        "remind_at_place",
+        "Remind Sir of something when he next ARRIVES at a saved place (\"ghar pahunchun to yaad dilana ...\"). The place must have been saved with save_place.",
+        params {
+            string("place", "Saved place name, e.g. ghar", required = true)
+            string("text", "What to remind him of", required = true)
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val data = store.get()
+            val place = PlaceLogic.find(data.places, args.requireString("place"))
+                ?: return ToolResult.fail(
+                    "no saved place called '${args.requireString("place")}' (saved: ${data.places.joinToString { it.name }.ifEmpty { "none" }}). " +
+                        "When Sir is there he can say \"ye jagah ... ke naam se save karo\".",
+                )
+            if (!location.hasPermission()) return ToolResult.fail(noLocation)
+            val fix = location.current(4_000L)
+            val alreadyThere = fix != null && PlaceLogic.isInside(place, fix.latitude, fix.longitude)
+            store.update { it.copy(placeReminders = it.placeReminders + PlaceReminder(System.currentTimeMillis(), place.name, args.requireString("text"), armed = !alreadyThere)) }
+            placeReminders.schedule()
+            return ToolResult.ok(
+                "will remind at '${place.name}'" + (if (alreadyThere) " the next time Sir comes back there (he is there now)" else "") +
+                    ". Checked about every 15 minutes, so it can be a few minutes late; needs Location 'Allow all the time'.",
+            )
+        }
+    }
+
+    private val listPlaceReminders = object : SimpleTool("list_place_reminders", "List saved places and the reminders waiting for them.") {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val d = store.get()
+            return ToolResult.ok(
+                "places: ${d.places.joinToString { it.name }.ifEmpty { "none" }}; reminders: " +
+                    d.placeReminders.joinToString(" | ") { "${it.place}: ${it.text}" }.ifEmpty { "none" },
+            )
+        }
+    }
+
+    private val deletePlaceReminder = object : SimpleTool(
+        "delete_place_reminder", "Delete a place reminder (matched by its text or place).",
+        params { string("text", "Words from the reminder, or the place name", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val q = LifeMath.key(args.requireString("text"))
+            val all = store.get().placeReminders
+            val hit = all.firstOrNull { q in LifeMath.key(it.text) || LifeMath.key(it.place) == q } ?: return ToolResult.fail("no place reminder matching '$q'")
+            store.update { it.copy(placeReminders = it.placeReminders - hit) }
+            return ToolResult.ok("deleted: ${hit.place}: ${hit.text}")
+        }
+    }
 
     private val day = SimpleDateFormat("d MMM", Locale.ENGLISH)
 
@@ -183,5 +257,6 @@ class LifeTools @Inject constructor(private val store: LifeStore) {
 
     val tools: List<JarvisTool> = listOf(
         saveRoutine, deleteRoutine, listRoutines, addNote, getNotes, deleteNote, listAdd, listGet, listRemove, addExpense, expenseSummary,
+        savePlace, remindAtPlace, listPlaceReminders, deletePlaceReminder,
     )
 }

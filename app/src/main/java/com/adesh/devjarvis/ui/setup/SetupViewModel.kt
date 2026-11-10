@@ -25,7 +25,7 @@ import javax.inject.Inject
 
 enum class StepId {
     MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK,
-    CALL_PHONE, ANSWER_CALLS, CONTACTS, SMS, LOCATION, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
+    CALL_PHONE, ANSWER_CALLS, CONTACTS, SMS, LOCATION, LOCATION_ALWAYS, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
 }
 
 /** How the step's main button works. */
@@ -87,6 +87,7 @@ class SetupViewModel @Inject constructor(
             StepId.ACCESSIBILITY, StepId.NOTIFICATION_ACCESS -> if (Edition.isFull) null else "full-only"
             StepId.OVERLAY -> Manifest.permission.SYSTEM_ALERT_WINDOW
             StepId.WRITE_SETTINGS -> Manifest.permission.WRITE_SETTINGS
+            StepId.LOCATION_ALWAYS -> Manifest.permission.ACCESS_BACKGROUND_LOCATION
             else -> step.permission
         }
         needs == null || (needs != "full-only" && Edition.declares(context, needs))
@@ -215,6 +216,18 @@ class SetupViewModel @Inject constructor(
                 permission = Manifest.permission.ACCESS_FINE_LOCATION,
             )
         )
+        if (Build.VERSION.SDK_INT >= 29) {
+            add(
+                SetupStep(
+                    StepId.LOCATION_ALWAYS, "Location: all the time (optional)",
+                    "Sirf jagah-wale reminders ke liye (\"ghar pahunchun to yaad dilana\"). JARVIS har ~15 minute mein dekhta hai ki aap " +
+                        "saved jagah pe pahunche ya nahi; location phone se bahar nahi jaati. Nahi chahiye to chhod do.",
+                    listOf("Open setting dabao → Permissions → Location → \"Allow all the time\"."),
+                    StepAction.OPEN_SETTINGS, "Open setting",
+                    granted = has(Manifest.permission.ACCESS_BACKGROUND_LOCATION), optional = true,
+                )
+            )
+        }
         add(
             SetupStep(
                 StepId.ACCESSIBILITY, "Accessibility (JARVIS ke haath)",

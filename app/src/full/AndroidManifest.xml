@@ -7,6 +7,8 @@
     <!-- Emergency SOS location link. Foreground only, asked on demand; no background location. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Place reminders ("ghar pahunchun to yaad dilana"): a check about every 15 minutes, only while one is waiting. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
 
     <!-- Backup way to answer / decline a ringing call by voice. -->
     <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />

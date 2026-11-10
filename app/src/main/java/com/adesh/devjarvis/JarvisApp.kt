@@ -20,6 +20,7 @@ class JarvisApp : Application() {
     @Inject lateinit var briefing: BriefingScheduler
     @Inject lateinit var reminders: ReminderScheduler
     @Inject lateinit var calls: com.adesh.devjarvis.calls.CallMonitor
+    @Inject lateinit var places: com.adesh.devjarvis.life.PlaceReminders
 
     override fun onCreate() {
         super.onCreate()
@@ -32,6 +33,7 @@ class JarvisApp : Application() {
         AppVisibility.install(this)
         briefing.reschedule()
         calls.restoreRing() // in case we were killed while the ring was lowered
+        places.schedule()
         // One-time import of Phase-3 reminders into the database (+ re-arm).
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { runCatching { reminders.rearmAll() } }
     }

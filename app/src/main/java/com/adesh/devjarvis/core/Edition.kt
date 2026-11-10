@@ -25,6 +25,10 @@ object Edition {
         "set_brightness" to "android.permission.WRITE_SETTINGS",
         "uninstall_app" to "android.permission.REQUEST_DELETE_PACKAGES",
         "emergency_sos" to "android.permission.SEND_SMS",
+        "save_place" to "android.permission.ACCESS_FINE_LOCATION",
+        "remind_at_place" to "android.permission.ACCESS_FINE_LOCATION",
+        "list_place_reminders" to "android.permission.ACCESS_FINE_LOCATION",
+        "delete_place_reminder" to "android.permission.ACCESS_FINE_LOCATION",
     )
 
     /** Is [permission] in this build's manifest? (Lite removes several; requesting those would just fail.) */

@@ -19,7 +19,8 @@ data class Note(val time: Long, val text: String)
 data class Expense(val time: Long, val amount: Double, val category: String, val note: String)
 /** A saved place ("ghar", "office") for place reminders. */
 data class Place(val name: String, val lat: Double, val lon: Double)
-data class PlaceReminder(val id: Long, val place: String, val text: String)
+/** [armed] = Sir has been away from the place since he asked, so arriving there now should fire it. */
+data class PlaceReminder(val id: Long, val place: String, val text: String, val armed: Boolean = true)
 
 /** Sir ki roz-marra ki cheezein: routines/shortcuts, notes, lists, kharcha, jagahein. Pure data, unit-tested. */
 data class LifeData(
@@ -43,7 +44,7 @@ object LifeCodec {
         })
         put("places", buildJsonArray { d.places.forEach { add(buildJsonObject { put("name", it.name); put("lat", it.lat); put("lon", it.lon) }) } })
         put("placeReminders", buildJsonArray {
-            d.placeReminders.forEach { add(buildJsonObject { put("id", it.id); put("place", it.place); put("text", it.text) }) }
+            d.placeReminders.forEach { add(buildJsonObject { put("id", it.id); put("place", it.place); put("text", it.text); put("armed", it.armed) }) }
         })
     }.toString()
 
@@ -60,7 +61,7 @@ object LifeCodec {
             lists = obj("lists")?.mapValues { e -> (e.value as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull } }.orEmpty(),
             expenses = arr("expenses").map { Expense(it.l("t"), it.d("amount"), it.s("cat"), it.s("note")) },
             places = arr("places").map { Place(it.s("name"), it.d("lat"), it.d("lon")) },
-            placeReminders = arr("placeReminders").map { PlaceReminder(it.l("id"), it.s("place"), it.s("text")) },
+            placeReminders = arr("placeReminders").map { PlaceReminder(it.l("id"), it.s("place"), it.s("text"), it["armed"]?.jsonPrimitive?.contentOrNull != "false") },
         )
     }
 
@@ -101,5 +102,37 @@ object LifeMath {
         val a = Math.sin(dLat / 2).let { it * it } +
             Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2)) * Math.sin(dLon / 2).let { it * it }
         return 2 * r * Math.asin(Math.sqrt(a))
+    }
+}
+
+/** Jagah-wale reminders: "ghar pahunchun to yaad dilana". Pure, unit-tested. */
+object PlaceLogic {
+    const val RADIUS_M = 200.0
+
+    data class Result(val fire: List<PlaceReminder>, val remaining: List<PlaceReminder>)
+
+    fun find(places: List<Place>, name: String): Place? = LifeMath.key(name).let { k -> places.firstOrNull { LifeMath.key(it.name) == k } }
+
+    fun isInside(place: Place, lat: Double, lon: Double, radius: Double = RADIUS_M): Boolean =
+        LifeMath.distanceMeters(place.lat, place.lon, lat, lon) <= radius
+
+    /**
+     * Sir is at ([lat], [lon]) now. A reminder fires when he is inside its place and it is armed; one that was
+     * created while he was already there arms once he has clearly left (1.5 x the radius), so it fires on his return.
+     */
+    fun check(places: List<Place>, reminders: List<PlaceReminder>, lat: Double, lon: Double, radius: Double = RADIUS_M): Result {
+        val fire = ArrayList<PlaceReminder>()
+        val remaining = ArrayList<PlaceReminder>()
+        for (r in reminders) {
+            val place = find(places, r.place)
+            if (place == null) { remaining += r; continue }
+            val distance = LifeMath.distanceMeters(place.lat, place.lon, lat, lon)
+            when {
+                distance <= radius && r.armed -> fire += r
+                distance > radius * 1.5 && !r.armed -> remaining += r.copy(armed = true)
+                else -> remaining += r
+            }
+        }
+        return Result(fire, remaining)
     }
 }

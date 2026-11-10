@@ -49,3 +49,38 @@ class LifeDataTest {
         assertTrue(oneKm.toString(), oneKm in 950.0..1050.0)
     }
 }
+
+class PlaceLogicTest {
+    private val home = Place("Ghar", 26.8467, 80.9462)
+    private val nearHome = 26.8470 to 80.9465   // ~45 m away
+    private val farAway = 26.8600 to 80.9600    // ~2 km away
+
+    @Test fun firesOnArrivalOnly() {
+        val r = PlaceReminder(1, "ghar", "charger lagana")
+        val away = PlaceLogic.check(listOf(home), listOf(r), farAway.first, farAway.second)
+        assertTrue(away.fire.isEmpty())
+        assertEquals(listOf(r), away.remaining)
+        val there = PlaceLogic.check(listOf(home), listOf(r), nearHome.first, nearHome.second)
+        assertEquals(listOf(r), there.fire)
+        assertTrue(there.remaining.isEmpty())
+    }
+
+    @Test fun createdWhileThereWaitsUntilSirLeavesAndReturns() {
+        val r = PlaceReminder(1, "ghar", "paudhon ko paani", armed = false)
+        val still = PlaceLogic.check(listOf(home), listOf(r), nearHome.first, nearHome.second)
+        assertTrue(still.fire.isEmpty())
+        assertEquals(false, still.remaining.single().armed)
+        val left = PlaceLogic.check(listOf(home), still.remaining, farAway.first, farAway.second)
+        assertEquals(true, left.remaining.single().armed)
+        val back = PlaceLogic.check(listOf(home), left.remaining, nearHome.first, nearHome.second)
+        assertEquals(1, back.fire.size)
+    }
+
+    @Test fun unknownPlaceIsKeptAndCodecKeepsArmedFlag() {
+        val r = PlaceReminder(2, "office", "file dena", armed = false)
+        assertEquals(listOf(r), PlaceLogic.check(listOf(home), listOf(r), nearHome.first, nearHome.second).remaining)
+        val back = LifeCodec.decode(LifeCodec.encode(LifeData(places = listOf(home), placeReminders = listOf(r, PlaceReminder(3, "ghar", "x")))))
+        assertEquals(listOf(false, true), back.placeReminders.map { it.armed })
+        assertEquals(home, PlaceLogic.find(back.places, " GHAR "))
+    }
+}
