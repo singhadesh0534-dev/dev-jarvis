@@ -83,7 +83,7 @@ class ScreenTools @Inject constructor(
             // If Android needed a tap, Sir has a notification; give him time.
             val timeout = if (outcome == ActivityLauncher.Outcome.NEEDS_TAP) 45_000L else 15_000L
             val jpeg = withTimeoutOrNull(timeout) { result.await() } ?: return ToolResult.fail("couldn't take a photo")
-            val answer = brain.see(jpeg, args.requireString("question")) ?: return ToolResult.fail("vision needs a Gemini key and internet")
+            val answer = brain.see(jpeg, args.requireString("question")) ?: return ToolResult.fail("the photo was taken but the vision model did not answer (all Gemini keys at their limit, or the network dropped). Tell Sir exactly that and offer to try again in a minute.")
             return ToolResult.ok(answer)
         }
     }

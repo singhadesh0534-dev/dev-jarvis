@@ -105,6 +105,7 @@ sealed interface SessionSignal {
  */
 @Singleton
 class JarvisSession @Inject constructor(
+    private val keys: KeyRing,
     private val brain: JarvisBrain,
     private val speechIn: SpeechInput,
     private val speechOut: SpeechOutput,
@@ -818,7 +819,8 @@ class JarvisSession @Inject constructor(
             focus.ownCommunicationMode = true
             updateMode()
 
-            val conn = LiveConnection(http, s.geminiApiKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
+            val liveKey = keys.live.current(s.geminiApiKey)
+            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter) { bytes, n -> conn.sendAudio(bytes, n) }
             SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
@@ -993,7 +995,13 @@ class JarvisSession @Inject constructor(
             return
         }
         when (kind) {
-            LiveMessages.CloseKind.QUOTA -> usage.markExhausted(Provider.LIVE)
+            LiveMessages.CloseKind.QUOTA -> {
+                // This key's Live minutes are over: rest it. Another key ready? Carry on in Live on the next wake.
+                val s = settings.current
+                val another = keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), 6 * 3_600_000L)
+                SessionTrace.add("KEY live rotated, ready=${keys.live.readyCount(s.geminiApiKey)}")
+                if (!another) usage.markExhausted(Provider.LIVE)
+            }
             LiveMessages.CloseKind.AUTH, LiveMessages.CloseKind.MODEL, LiveMessages.CloseKind.OTHER ->
                 if (!anyReply) liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
             else -> Unit

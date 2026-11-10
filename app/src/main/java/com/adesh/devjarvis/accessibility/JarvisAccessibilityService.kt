@@ -180,6 +180,38 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
     }
 
+    /**
+     * Turn the main on/off switch of the settings page that is open now to [on].
+     * @return "changed", "already", or null when no switch was found.
+     */
+    fun setSwitch(on: Boolean, hints: List<String>): String? {
+        val root = rootInActiveWindow ?: return null
+        val switches = ArrayList<android.view.accessibility.AccessibilityNodeInfo>()
+        fun walk(n: android.view.accessibility.AccessibilityNodeInfo?, depth: Int) {
+            if (n == null || depth > 40) return
+            val cls = n.className?.toString().orEmpty()
+            if (n.isVisibleToUser && (cls.contains("Switch") || cls.contains("ToggleButton") || (n.isCheckable && !cls.contains("Radio")))) switches += n
+            for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)
+        }
+        walk(root, 0)
+        if (switches.isEmpty()) return null
+        fun labelOf(n: android.view.accessibility.AccessibilityNodeInfo): String {
+            val own = listOfNotNull(n.text, n.contentDescription).joinToString(" ")
+            val p = n.parent
+            val around = if (p == null) "" else (0 until p.childCount).mapNotNull { p.getChild(it)?.text }.joinToString(" ")
+            return "$own $around".lowercase()
+        }
+        val target = switches.firstOrNull { s -> hints.any { it in labelOf(s) } } ?: switches.first()
+        if (target.isChecked == on) return "already"
+        var node: android.view.accessibility.AccessibilityNodeInfo? = target
+        repeat(4) {
+            val n = node ?: return@repeat
+            if (n.isClickable && n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) return "changed"
+            node = n.parent
+        }
+        return null
+    }
+
     companion object {
         @Volatile private var instance: JarvisAccessibilityService? = null
 

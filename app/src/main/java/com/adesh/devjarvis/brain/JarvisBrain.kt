@@ -4,6 +4,7 @@ import android.os.Build
 import com.adesh.devjarvis.core.DeviceStatus
 import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.core.JarvisConfig
+import com.adesh.devjarvis.core.SessionTrace
 import com.adesh.devjarvis.core.Provider
 import com.adesh.devjarvis.core.UsageTracker
 import com.adesh.devjarvis.life.LifeStore
@@ -49,6 +50,7 @@ class JarvisBrain @Inject constructor(
     private val memory: MemoryRepository,
     private val notifications: NotificationStore,
     private val life: LifeStore,
+    private val keys: com.adesh.devjarvis.core.KeyRing,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
     /** Exchanges not yet looked at by the memory extractor. */
@@ -59,6 +61,49 @@ class JarvisBrain @Inject constructor(
     val active: StateFlow<Provider> = _active.asStateFlow()
 
     private class Fallback(cause: BrainError) : Exception(cause)
+
+    /**
+     * One Gemini request with key rotation: if this key's free limit is hit (or the key is rejected) before anything
+     * was said, the next key takes over at once. Same model, same prompt, same memory — only the key changes.
+     */
+    private fun geminiTurn(
+        s: JarvisSettings, model: String, system: String, contents: JsonArray, tools: JsonArray?, jsonMode: Boolean = false,
+    ): Flow<GeminiStreamParser.Chunk> = flow {
+        var tries = 0
+        while (true) {
+            val key = keys.gemini.current(s.geminiApiKey)
+            var started = false
+            try {
+                gemini.streamTurn(key, model, system, contents, tools, jsonMode).collect { started = true; emit(it) }
+                return@flow
+            } catch (e: BrainError) {
+                val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
+                if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !keys.gemini.rest(s.geminiApiKey, key, restFor(e))) throw e
+                SessionTrace.add("KEY gemini rotated (${e.javaClass.simpleName}), ready=${keys.gemini.readyCount(s.geminiApiKey)}")
+            }
+        }
+    }
+
+    private fun groqTurn(
+        s: JarvisSettings, model: String, messages: JsonArray, tools: JsonArray?, jsonMode: Boolean = false,
+    ): Flow<GroqStreamParser.Delta> = flow {
+        var tries = 0
+        while (true) {
+            val key = keys.groq.current(s.groqApiKey)
+            var started = false
+            try {
+                groq.streamChat(key, model, messages, tools, jsonMode).collect { started = true; emit(it) }
+                return@flow
+            } catch (e: BrainError) {
+                val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
+                if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !keys.groq.rest(s.groqApiKey, key, restFor(e))) throw e
+                SessionTrace.add("KEY groq rotated (${e.javaClass.simpleName}), ready=${keys.groq.readyCount(s.groqApiKey)}")
+            }
+        }
+    }
+
+    private fun restFor(e: BrainError): Long =
+        if (e is BrainError.InvalidKey) 6 * 3_600_000L else (cooldownFor(e) - System.currentTimeMillis()).coerceAtLeast(30_000L)
 
     /**
      * Streams JARVIS's reply. [runTool] executes a tool call (the session supplies confirmation UI).
@@ -140,7 +185,7 @@ class JarvisBrain @Inject constructor(
             val calls = mutableListOf<GeminiStreamParser.FunctionCall>()
             usage.recordGeminiRequest()
             try {
-                gemini.streamTurn(s.geminiApiKey, s.geminiModel, system, JsonArray(contents), registry.geminiTools)
+                geminiTurn(s, s.geminiModel, system, JsonArray(contents), registry.geminiTools)
                     .collect { chunk ->
                         rawParts += chunk.rawParts
                         calls += chunk.calls
@@ -184,7 +229,7 @@ class JarvisBrain @Inject constructor(
             val assembler = GroqStreamParser.ToolCallAssembler()
             usage.recordGroqRequest()
             try {
-                groq.streamChat(s.groqApiKey, s.groqModel, JsonArray(messages), registry.groqTools).collect { d ->
+                groqTurn(s, s.groqModel, JsonArray(messages), registry.groqTools).collect { d ->
                     d.toolFragments.forEach(assembler::add)
                     if (d.text.isNotEmpty()) {
                         text.append(d.text)
@@ -248,7 +293,7 @@ class JarvisBrain @Inject constructor(
         return try {
             usage.recordGeminiRequest()
             val out = StringBuilder()
-            gemini.streamTurn(s.geminiApiKey, s.geminiModel, SystemPrompt.VISION, JsonArray(listOf(content)), null)
+            geminiTurn(s, s.geminiModel, SystemPrompt.VISION, JsonArray(listOf(content)), null)
                 .collect { out.append(it.text) }
             out.toString().trim().ifEmpty { null }
         } catch (e: BrainError) {
@@ -267,7 +312,7 @@ class JarvisBrain @Inject constructor(
         return try {
             usage.recordGeminiRequest()
             val out = StringBuilder()
-            gemini.streamTurn(s.geminiApiKey, s.geminiModel, SystemPrompt.WEB + "\n\n" + context, JsonArray(listOf(content)), tools)
+            geminiTurn(s, s.geminiModel, SystemPrompt.WEB + "\n\n" + context, JsonArray(listOf(content)), tools)
                 .collect { out.append(it.text) }
             out.toString().trim().ifEmpty { null }
         } catch (e: BrainError) {
@@ -287,7 +332,7 @@ class JarvisBrain @Inject constructor(
             try {
                 usage.recordGeminiRequest()
                 val out = StringBuilder()
-                gemini.streamTurn(s.geminiApiKey, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json)
+                geminiTurn(s, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json)
                     .collect { out.append(it.text) }
                 return out.toString()
             } catch (e: BrainError) {
@@ -299,7 +344,7 @@ class JarvisBrain @Inject constructor(
                 usage.recordGroqRequest()
                 val out = StringBuilder()
                 val msgs = JsonArray(listOf(GroqMessages.text("system", system), GroqMessages.text("user", user)))
-                groq.streamChat(s.groqApiKey, s.groqModel, msgs, null, jsonMode = json).collect { out.append(it.text) }
+                groqTurn(s, s.groqModel, msgs, null, jsonMode = json).collect { out.append(it.text) }
                 return out.toString()
             } catch (e: BrainError) {
                 if (e is BrainError.RateLimited) usage.markExhausted(Provider.GROQ, cooldownFor(e))
@@ -313,6 +358,7 @@ class JarvisBrain @Inject constructor(
     private companion object {
         /** Max model<->tool round-trips per request (chained actions). */
         const val MAX_TOOL_ROUNDS = 6
+        const val MAX_KEY_TRIES = 8
         const val TOO_MANY_ROUNDS = "Sir, ye kaam thoda zyada ulajh gaya — main yahin rukta hoon."
     }
 }

@@ -337,6 +337,107 @@ class PhoneTools @Inject constructor(
         "gaana" to "com.gaana",
     )
 
+    private val toggleTargets = listOf("bluetooth", "wifi", "mobile_data", "hotspot", "location", "airplane", "nfc")
+
+    private val setToggle = object : SimpleTool(
+        "set_toggle",
+        "Really switch Bluetooth, Wi-Fi, mobile data, hotspot, location, airplane mode or NFC ON or OFF (JARVIS opens the " +
+            "settings page and flips the switch himself). Use this, not open_settings, when Sir says on / off / chalu / band karo.",
+        params {
+            string("target", toggleTargets.joinToString(" | "), required = true, enum = toggleTargets)
+            boolean("on", "true = on, false = off", required = true)
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val target = args.enum("target", toggleTargets) ?: return ToolResult.fail("unknown toggle")
+            val on = args.bool("on") ?: return ToolResult.fail("on or off?")
+            val (action, hints) = when (target) {
+                "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS to listOf("bluetooth")
+                "wifi" -> Settings.ACTION_WIFI_SETTINGS to listOf("wi-fi", "wifi", "wlan")
+                "mobile_data" -> Settings.ACTION_DATA_ROAMING_SETTINGS to listOf("mobile data", "data")
+                "hotspot" -> "android.settings.TETHER_SETTINGS" to listOf("hotspot")
+                "location" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS to listOf("location")
+                "airplane" -> Settings.ACTION_AIRPLANE_MODE_SETTINGS to listOf("airplane", "aeroplane", "flight")
+                else -> Settings.ACTION_NFC_SETTINGS to listOf("nfc")
+            }
+            val svc = com.adesh.devjarvis.accessibility.JarvisAccessibilityService.get()
+            var outcome = launcher.launch(Intent(action), "Open $target settings")
+            if (outcome == ActivityLauncher.Outcome.NOT_FOUND) outcome = launcher.launch(Intent(Settings.ACTION_SETTINGS), "Open settings")
+            if (svc == null || outcome != ActivityLauncher.Outcome.LAUNCHED) {
+                return launcher.result(
+                    outcome,
+                    "$target settings opened, but JARVIS could not flip the switch himself: Accessibility is off (JARVIS Setup). Sir must tap it.",
+                    "Open $target settings",
+                )
+            }
+            var result: String? = null
+            for (attempt in 0 until 5) {
+                kotlinx.coroutines.delay(if (attempt == 0) 1_200 else 600)
+                result = runCatching { svc.setSwitch(on, hints) }.getOrNull()
+                if (result != null) break
+            }
+            val state = if (on) "ON" else "OFF"
+            return when (result) {
+                "changed" -> {
+                    kotlinx.coroutines.delay(500)
+                    svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                    ToolResult.ok("$target switched $state")
+                }
+                "already" -> {
+                    svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
+                    ToolResult.ok("$target was already $state")
+                }
+                else -> ToolResult.fail("$target settings are open but no switch was found on that screen — use read_screen and tap to finish, or tell Sir")
+            }
+        }
+    }
+
+    private val searchApps = listOf("youtube", "youtube_music", "google", "play_store", "maps", "spotify", "amazon", "flipkart")
+
+    private val searchInApp = object : SimpleTool(
+        "search_in_app",
+        "Open an app straight on its search results for a query: YouTube (\"YouTube pe ... search karo / chalao\"), YouTube Music, " +
+            "Google, Play Store, Maps, Spotify, Amazon, Flipkart. One step and instant — always use this instead of tapping through the app.",
+        params {
+            string("app", searchApps.joinToString(" | "), required = true, enum = searchApps)
+            string("query", "What to search for, exactly as Sir said it", required = true)
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val app = args.enum("app", searchApps) ?: return ToolResult.fail("unknown app")
+            val q = args.requireString("query")
+            val e = Uri.encode(q)
+            val intents: List<Intent> = when (app) {
+                "youtube" -> listOf(
+                    Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube").putExtra("query", q),
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=$e")),
+                )
+                "youtube_music" -> listOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://music.youtube.com/search?q=$e")))
+                "google" -> listOf(
+                    Intent(Intent.ACTION_WEB_SEARCH).putExtra("query", q),
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=$e")),
+                )
+                "play_store" -> listOf(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=$e")),
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=$e")),
+                )
+                "maps" -> listOf(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=$e")))
+                "spotify" -> listOf(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:$e")),
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://open.spotify.com/search/$e")),
+                )
+                "amazon" -> listOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.amazon.in/s?k=$e")))
+                else -> listOf(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.flipkart.com/search?q=$e")))
+            }
+            var outcome = ActivityLauncher.Outcome.NOT_FOUND
+            for (i in intents) {
+                outcome = launcher.launch(i, "Search $app")
+                if (outcome != ActivityLauncher.Outcome.NOT_FOUND) break
+            }
+            return launcher.result(outcome, "$app opened on results for '$q'. To play one, read_screen and tap the first result.", "Search $app")
+        }
+    }
+
     private val playMusic = object : SimpleTool(
         "play_music", "Play a song/artist/playlist. Optionally in a specific app.",
         params {
@@ -384,6 +485,6 @@ class PhoneTools @Inject constructor(
 
     val tools: List<JarvisTool> = listOf(
         openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setVolume,
-        setBrightness, openSettings, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
+        setBrightness, openSettings, setToggle, searchInApp, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
     )
 }

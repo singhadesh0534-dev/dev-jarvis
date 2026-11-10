@@ -70,7 +70,7 @@ class GroqWhisperInput @Inject constructor(
         val text = try {
             // hi-IN -> force Hindi; otherwise auto-detect (Hinglish may come back partly in Devanagari — the brain
             // understands both). Forcing "en" would make Whisper translate Hindi into English.
-            groq.transcribe(settings.current.groqApiKey, Wav.fromPcm16(all, total, rate), language.substringBefore('-').takeIf { it == "hi" })
+            groq.transcribe(com.adesh.devjarvis.core.KeyPool().current(settings.current.groqApiKey), Wav.fromPcm16(all, total, rate), language.substringBefore('-').takeIf { it == "hi" })
         } catch (e: BrainError.NoNetwork) {
             emit(SpeechInput.Event.Failed(SpeechInput.Reason.NETWORK)); return@flow
         } catch (e: BrainError) {

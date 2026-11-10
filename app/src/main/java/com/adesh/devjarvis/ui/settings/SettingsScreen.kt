@@ -113,6 +113,7 @@ fun SettingsScreen(
                 onChange = { v -> viewModel.edit { it.copy(groqApiKey = v) } },
             )
             OpenLinkButton("Get free Groq key", JarvisConfig.GROQ_KEY_URL)
+            Hint("Kai keys daal sakte ho (alag-alag accounts ki): ek hi box mein comma se alag likho, jaise key1, key2, key3. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
 
             Section("VOICE ENGINE")
             ChoiceRow(
