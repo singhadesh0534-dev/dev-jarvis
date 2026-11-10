@@ -215,6 +215,9 @@ fun SettingsScreen(
             ToggleRow("Floating mini-reactor", "Doosre apps ke upar chhota reactor jab JARVIS sun/bol raha ho (\"Display over other apps\" chahiye). Tap = kholo, long-press = rok do.", draft.bubbleEnabled) { v ->
                 viewModel.edit { it.copy(bubbleEnabled = v) }
             }
+            ToggleRow("Mic open/close chime", "Mic khulne aur band hone par chhoti si awaaz. OFF = sirf halka vibration.", draft.wakeChime) { v ->
+                viewModel.edit { it.copy(wakeChime = v) }
+            }
             ToggleRow("Sound effects", "Chime, success blip, error tone. (Haptic tick hamesha.)", draft.soundEffects) { v ->
                 viewModel.edit { it.copy(soundEffects = v) }
             }

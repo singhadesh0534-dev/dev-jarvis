@@ -38,11 +38,11 @@ class Earcons @Inject constructor(
     /** Listening start: rising two-note chime + tick. */
     fun wake() {
         tick()
-        if (enabled) play(wakeTone)
+        if (enabled && settings.current.wakeChime) play(wakeTone)
     }
 
     /** Conversation window closed: soft falling chime. */
-    fun sleep() { if (enabled) play(sleepTone) }
+    fun sleep() { if (enabled && settings.current.wakeChime) play(sleepTone) }
 
     /** A tool did its job: tiny high blip. */
     fun success() { if (enabled) play(successTone) }

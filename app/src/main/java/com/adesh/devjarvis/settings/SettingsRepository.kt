@@ -72,6 +72,8 @@ data class JarvisSettings(
     val customWakePhrases: String = "",
     /** Live voice on the media stream (full quality). Off = phone-call audio path (strongest echo cancelling). */
     val liveHdAudio: Boolean = true,
+    /** Chime when the mic opens / closes. Off by default: JARVIS greets by voice and a haptic tick is enough. */
+    val wakeChime: Boolean = false,
 ) {
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
@@ -160,6 +162,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putFloat(K_SPK_THRESHOLD, cleaned.speakerThreshold)
             .putString(K_WAKE_PHRASES, cleaned.customWakePhrases)
             .putBoolean(K_LIVE_HD, cleaned.liveHdAudio)
+            .putBoolean(K_WAKE_CHIME, cleaned.wakeChime)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -211,6 +214,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             speakerThreshold = prefs.getFloat(K_SPK_THRESHOLD, d.speakerThreshold),
             customWakePhrases = prefs.getString(K_WAKE_PHRASES, d.customWakePhrases).orEmpty(),
             liveHdAudio = prefs.getBoolean(K_LIVE_HD, d.liveHdAudio),
+            wakeChime = prefs.getBoolean(K_WAKE_CHIME, d.wakeChime),
         )
     }
 
@@ -256,6 +260,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SPK_THRESHOLD = "speaker_threshold"
         const val K_WAKE_PHRASES = "custom_wake_phrases"
         const val K_LIVE_HD = "live_hd_audio"
+        const val K_WAKE_CHIME = "wake_chime"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

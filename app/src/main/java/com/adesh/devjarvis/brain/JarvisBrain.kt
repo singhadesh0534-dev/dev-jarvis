@@ -1,5 +1,6 @@
 package com.adesh.devjarvis.brain
 
+import android.os.Build
 import com.adesh.devjarvis.core.DeviceStatus
 import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.core.JarvisConfig
@@ -103,6 +104,8 @@ class JarvisBrain @Inject constructor(
                 s.homeCity,
                 memories = memory.relevant(query, limit = 5).map { it.text },
                 notifications = notifications.topForContext(3),
+                phone = "${Build.MANUFACTURER} ${Build.MODEL}".trim() + ", Android ${Build.VERSION.RELEASE}" +
+                    (if (Build.MANUFACTURER.equals("infinix", ignoreCase = true)) " with the XOS skin (Phone Master, XOS launcher, Folax assistant)" else ""),
             )
         )
         if (forLive) {

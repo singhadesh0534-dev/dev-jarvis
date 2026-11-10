@@ -22,10 +22,12 @@ object ContextBlock {
         homeCity: String = "",
         memories: List<String> = emptyList(),
         notifications: List<String> = emptyList(),
+        phone: String = "",
         now: ZonedDateTime = ZonedDateTime.now(),
     ): String = buildString {
         appendLine("[Live context — use only if relevant, never read it out as a list]")
         appendLine("Time: ${now.format(dateTimeFormat)} (${now.zone.id})")
+        if (phone.isNotBlank()) appendLine("Sir's phone: $phone")
         if (device.batteryPercent >= 0) {
             appendLine("Battery: ${device.batteryPercent}%" + if (device.charging) ", charging" else ", not charging")
         }
