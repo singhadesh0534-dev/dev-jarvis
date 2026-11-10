@@ -38,7 +38,7 @@ object MemoryExtraction {
 
     private val sensitive = Regex("""(?i)\b(otp|password|passcode|pin|cvv|card number|account number|upi pin)\b|\d{6,}""")
 
-    fun parse(raw: String?): Result? {
+    fun parse(raw: String?, max: Int = 5): Result? {
         if (raw.isNullOrBlank()) return null
         // Models sometimes wrap JSON in ```json fences or add a sentence — take the outermost object.
         val start = raw.indexOf('{')
@@ -52,7 +52,7 @@ object MemoryExtraction {
             if (sensitive.containsMatchIn(text)) return@mapNotNull null // never store secrets or long numbers
             val cat = o["category"]?.jsonPrimitive?.contentOrNull?.lowercase()?.takeIf { it in CATEGORIES } ?: "other"
             text to cat
-        }.take(5)
+        }.take(max)
         val summary = root["summary"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty().take(200)
         return Result(facts, summary)
     }

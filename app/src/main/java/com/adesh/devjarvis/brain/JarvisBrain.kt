@@ -105,7 +105,8 @@ class JarvisBrain @Inject constructor(
             ContextBlock.build(
                 device.snapshot(),
                 s.homeCity,
-                memories = memory.relevant(query, limit = 5).map { it.text },
+                // Live keeps this prompt for the whole conversation, so it gets the wider picture; classic re-ranks each turn.
+                memories = memory.relevant(query, limit = if (forLive) 40 else 12).map { it.text },
                 notifications = notifications.topForContext(3),
                 phone = "${Build.MANUFACTURER} ${Build.MODEL}".trim() + ", Android ${Build.VERSION.RELEASE}" +
                     (if (Build.MANUFACTURER.equals("infinix", ignoreCase = true)) " with the XOS skin (Phone Master, XOS launcher, Folax assistant)" else ""),

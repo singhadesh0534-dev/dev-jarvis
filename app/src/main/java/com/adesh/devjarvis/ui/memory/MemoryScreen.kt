@@ -1,5 +1,8 @@
 package com.adesh.devjarvis.ui.memory
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -39,9 +42,11 @@ import androidx.lifecycle.viewModelScope
 import com.adesh.devjarvis.data.ConversationEntity
 import com.adesh.devjarvis.memory.Fact
 import com.adesh.devjarvis.memory.MemoryExtraction
+import com.adesh.devjarvis.memory.MemoryImporter
 import com.adesh.devjarvis.memory.MemoryRepository
 import com.adesh.devjarvis.ui.theme.Hud
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -51,7 +56,32 @@ import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
-class MemoryViewModel @Inject constructor(private val memory: MemoryRepository) : ViewModel() {
+class MemoryViewModel @Inject constructor(
+    private val memory: MemoryRepository,
+    private val importer: MemoryImporter,
+) : ViewModel() {
+    /** Import progress / result line; null = nothing to show. */
+    val importStatus = MutableStateFlow<String?>(null)
+    private var importing = false
+
+    fun importFrom(uri: Uri) {
+        if (importing) return
+        importing = true
+        importStatus.value = "File padh raha hoon…"
+        viewModelScope.launch {
+            val outcome = runCatching {
+                importer.importFile(uri) { done, total -> importStatus.value = "Yaadein nikaal raha hoon… $done / $total" }
+            }.getOrElse { MemoryImporter.Outcome.Failed("Import ruk gaya (${it.javaClass.simpleName}).") }
+            importStatus.value = when (outcome) {
+                is MemoryImporter.Outcome.Done ->
+                    "${outcome.added} nayi baatein yaad kar li." +
+                        (if (outcome.truncated) " File bahut badi thi — sirf shuru ka hissa padha. \"memories\" wali file chhoti aur behtar hai." else "")
+                is MemoryImporter.Outcome.Failed -> outcome.reason
+            }
+            importing = false
+        }
+    }
+
     val facts = memory.allFacts.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
     val summaries = memory.recentSummaries.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -71,11 +101,14 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<Fact?>(null) }
     var adding by remember { mutableStateOf(false) }
     var confirmWipe by remember { mutableStateOf(false) }
+    val importStatus by viewModel.importStatus.collectAsStateWithLifecycle()
+    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) viewModel.importFrom(uri) }
 
     Column(Modifier.fillMaxSize().background(Hud.Background).safeDrawingPadding().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Hud.Cyan) }
             Text("MEMORY", style = MaterialTheme.typography.headlineSmall, color = Hud.Cyan, modifier = Modifier.weight(1f))
+            TextButton(onClick = { picker.launch(arrayOf("*/*")) }) { Text("IMPORT", color = Hud.Cyan) }
             TextButton(onClick = { adding = true }) { Text("ADD", color = Hud.Cyan) }
             TextButton(onClick = { confirmWipe = true }) { Text("WIPE", color = Hud.Amber) }
         }
@@ -83,6 +116,12 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            item(key = "import_hint") {
+                Text(
+                    importStatus ?: "IMPORT: koi bhi .txt / .json / .zip file chuno (jaise Claude export ki memories-000.zip) — JARVIS usme se aapke baare mein pakki baatein yaad kar lega. OTP / password / bank wali cheezein kabhi save nahi hoti.",
+                    style = MaterialTheme.typography.bodySmall, color = if (importStatus != null) Hud.Cyan else Hud.Dim,
+                )
+            }
             if (facts.isEmpty()) {
                 item {
                     Text(

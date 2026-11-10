@@ -42,7 +42,8 @@ object ContextBlock {
             notifications.forEach { appendLine("- $it") }
         }
         if (memories.isNotEmpty()) {
-            appendLine("What you remember about Sir (use naturally, never announce it):")
+            appendLine("What you remember about Sir. Treat it as things you simply know: use the names, preferences and")
+            appendLine("projects without being asked, never say \"my memory says\", and never ask for something listed here:")
             memories.forEach { appendLine("- $it") }
         }
     }.trimEnd()
