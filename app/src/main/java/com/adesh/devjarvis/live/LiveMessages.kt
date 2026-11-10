@@ -96,6 +96,16 @@ object LiveMessages {
     }.toString()
 
     /** A typed/internal user turn inside the Live session (e.g. "greet Sir"). */
+    /** One camera / screen frame for the model to look at (JPEG). */
+    fun video(jpeg: ByteArray): String = buildJsonObject {
+        putJsonObject("realtimeInput") {
+            putJsonObject("video") {
+                put("data", Base64.getEncoder().encodeToString(jpeg))
+                put("mimeType", "image/jpeg")
+            }
+        }
+    }.toString()
+
     fun text(text: String): String = buildJsonObject {
         putJsonObject("realtimeInput") { put("text", text) }
     }.toString()

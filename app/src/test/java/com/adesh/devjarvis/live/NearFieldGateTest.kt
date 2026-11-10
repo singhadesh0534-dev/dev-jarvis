@@ -59,3 +59,13 @@ class NearFieldGateTest {
         assertTrue(NearFieldGate.forLevel(NearFieldGate.NORMAL)!!.apply { feed(0.01f, 40) }.feed(0.06f, 3))
     }
 }
+
+class LiveVideoMessageTest {
+    @Test fun videoFrameIsRealtimeJpeg() {
+        val msg = LiveMessages.video(byteArrayOf(1, 2, 3))
+        assertTrue(msg.contains("\"realtimeInput\""))
+        assertTrue(msg.contains("\"video\""))
+        assertTrue(msg.contains("\"mimeType\":\"image/jpeg\""))
+        assertTrue(msg.contains("\"data\":\"AQID\""))
+    }
+}

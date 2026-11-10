@@ -120,6 +120,7 @@ class JarvisSession @Inject constructor(
     private val memoryExtractor: MemoryExtractor,
     private val screenTools: ScreenTools,
     private val modes: ConversationMode,
+    private val eyes: com.adesh.devjarvis.vision.LiveEyes,
     @ApplicationContext context: Context,
 ) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
@@ -806,6 +807,7 @@ class JarvisSession @Inject constructor(
             var userSpoke = false
             liveConn = conn
             liveAudio = audio
+            eyes.sink = { jpeg -> conn.sendVideo(jpeg) }
             val startedAt = System.currentTimeMillis()
             var anyReply = false
             var closeKind: LiveMessages.CloseKind? = null
@@ -932,6 +934,8 @@ class JarvisSession @Inject constructor(
                 meters.cancel()
                 commitTurn()
                 audio.stop()
+                eyes.sink = null
+                eyes.stopAll()
                 conn.close()
                 liveConn = null
                 liveConfirm.clear()

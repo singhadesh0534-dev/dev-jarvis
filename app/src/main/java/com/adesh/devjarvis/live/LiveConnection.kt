@@ -103,6 +103,13 @@ class LiveConnection(
     }
 
     /** Sends (or queues until setup completes) a text turn. */
+    /** A frame is only worth sending live: dropped while the session is still being set up. */
+    fun sendVideo(jpeg: ByteArray) {
+        if (closed) return
+        synchronized(pending) { if (!ready) return }
+        socket?.send(LiveMessages.video(jpeg))
+    }
+
     fun sendText(text: String) {
         if (closed) return
         val msg = LiveMessages.text(text)

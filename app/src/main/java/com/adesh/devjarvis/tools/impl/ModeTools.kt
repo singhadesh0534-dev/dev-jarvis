@@ -1,6 +1,10 @@
 package com.adesh.devjarvis.tools.impl
 
+import android.os.Build
+import com.adesh.devjarvis.accessibility.JarvisAccessibilityService
 import com.adesh.devjarvis.core.ConversationMode
+import com.adesh.devjarvis.tools.ActivityLauncher
+import com.adesh.devjarvis.vision.LiveEyes
 import com.adesh.devjarvis.tools.JarvisTool
 import com.adesh.devjarvis.tools.SimpleTool
 import com.adesh.devjarvis.tools.ToolArgs
@@ -10,9 +14,65 @@ import com.adesh.devjarvis.tools.params
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** Conversation modes: interpreter. (Live vision / screen watch tools live in VisionTools.) */
+/** Conversation modes: interpreter, live camera, live screen watch. The last two start only on Sir's command. */
 @Singleton
-class ModeTools @Inject constructor(private val modes: ConversationMode) {
+class ModeTools @Inject constructor(
+    private val modes: ConversationMode,
+    private val eyes: LiveEyes,
+    private val launcher: ActivityLauncher,
+) {
+    private val liveCamera = object : SimpleTool(
+        "live_camera",
+        "Start or stop LIVE camera vision: you keep seeing through the phone camera (about one frame a second) and can talk about " +
+            "what you see. Start ONLY when Sir explicitly asks (\"camera se live dekho\", \"dekhte raho\"); never on your own. " +
+            "For a single question about one thing use `look` instead. Stop when Sir says band karo.",
+        params {
+            boolean("on", "true = start, false = stop", required = true)
+            string("camera", "back (default) | front", enum = listOf("back", "front"))
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            if (args.bool("on") == false) {
+                eyes.stopCamera()
+                return ToolResult.ok("live camera off")
+            }
+            if (!eyes.liveSessionOpen) return ToolResult.fail("live camera works only in Live voice mode — use the look tool for one photo instead")
+            if (!eyes.hasCameraPermission()) return ToolResult.fail("camera permission is off — Sir can allow it in JARVIS Setup")
+            val outcome = launcher.launch(eyes.startCamera(front = args.enum("camera", listOf("back", "front")) == "front"), "JARVIS live camera")
+            if (outcome == ActivityLauncher.Outcome.NOT_FOUND) {
+                eyes.stopCamera()
+                return ToolResult.fail("camera screen couldn't open")
+            }
+            return ToolResult.ok(
+                (if (outcome == ActivityLauncher.Outcome.NEEDS_TAP) "Sir must tap the JARVIS notification to open the camera. " else "") +
+                    "live camera ON: frames now arrive about once a second. Answer what Sir asks about what you see; don't narrate " +
+                    "everything unprompted. When he says stop / band karo, call this tool with on=false.",
+            )
+        }
+    }
+
+    private val screenWatch = object : SimpleTool(
+        "screen_watch",
+        "Start or stop LIVE screen watching: you keep seeing Sir's phone screen (a frame every few seconds) to guide or help him. " +
+            "Start ONLY when Sir explicitly asks (\"meri screen dekhte raho\", \"screen pe guide karo\"); never on your own. " +
+            "Password, payment and OTP screens are never sent. Stop when Sir says band karo.",
+        params { boolean("on", "true = start, false = stop", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            if (args.bool("on") == false) {
+                eyes.stopScreenWatch()
+                return ToolResult.ok("screen watch off")
+            }
+            if (!eyes.liveSessionOpen) return ToolResult.fail("screen watch works only in Live voice mode — use look_at_screen for one look instead")
+            if (!JarvisAccessibilityService.isConnected) return ToolResult.fail("needs JARVIS Accessibility turned on in Setup")
+            if (Build.VERSION.SDK_INT < 30) return ToolResult.fail("screen watch needs Android 11 or newer")
+            eyes.startScreenWatch()
+            return ToolResult.ok(
+                "screen watch ON: you now get Sir's screen every few seconds (private screens are skipped). Help with what he asks; " +
+                    "don't read everything aloud. When he says stop / band karo, call this tool with on=false.",
+            )
+        }
+    }
 
     private val interpreter = object : SimpleTool(
         "interpreter_mode",
@@ -37,5 +97,5 @@ class ModeTools @Inject constructor(private val modes: ConversationMode) {
         }
     }
 
-    val tools: List<JarvisTool> = listOf(interpreter)
+    val tools: List<JarvisTool> = listOf(interpreter, liveCamera, screenWatch)
 }

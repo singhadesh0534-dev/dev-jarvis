@@ -16,7 +16,7 @@ object Edition {
     val FULL_ONLY_TOOLS = setOf(
         "take_screenshot", "lock_screen", "close_current_app",
         "look_at_screen", "read_screen", "tap", "long_press", "type_text", "scroll", "swipe", "go_back", "go_home",
-        "do_task_on_screen",
+        "do_task_on_screen", "screen_watch",
         "read_notifications", "reply_to_notification",
     )
 

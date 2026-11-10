@@ -146,6 +146,15 @@
             android:taskAffinity="com.adesh.devjarvis.camera"
             android:theme="@style/Theme.Jarvis" />
 
+        <!-- Live camera vision: opens only when Sir asks, visible the whole time it is on. -->
+        <activity
+            android:name=".vision.LiveCameraActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTop"
+            android:taskAffinity="com.adesh.devjarvis.camera"
+            android:theme="@style/Theme.Jarvis" />
+
         <service
             android:name=".service.JarvisService"
             android:exported="false"
