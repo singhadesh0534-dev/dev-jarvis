@@ -1,6 +1,10 @@
 package com.adesh.devjarvis.wakeword
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -40,9 +44,22 @@ import javax.inject.Singleton
  */
 @Singleton
 class WakeWordEngine @Inject constructor(
+    @ApplicationContext context: Context,
     private val models: VoskModelManager,
     private val speakerModels: SpeakerModelManager,
 ) {
+    private val audioManager = context.getSystemService(AudioManager::class.java)
+
+    /** A video / song is coming out of the phone's own loudspeaker right now (so the mic hears it loudly). */
+    private fun phoneMediaOnSpeaker(): Boolean = runCatching {
+        val am = audioManager ?: return false
+        am.isMusicActive && am.getDevices(AudioManager.GET_DEVICES_OUTPUTS).none {
+            it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
+                it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP || it.type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+                it.type == AudioDeviceInfo.TYPE_USB_HEADSET
+        }
+    }.getOrDefault(false)
+
 
     enum class Mode { WAKE, BARGE_IN }
 
@@ -135,7 +152,8 @@ class WakeWordEngine @Inject constructor(
 
             var currentMode = mode
             // Attach the speaker model only when the lock is on and Sir is enrolled — then results carry an "spk" vector.
-            val useSpeaker = speakerLock && speakerProfile != null && speakerModels.isInstalled()
+            // Enrolled = the voiceprint is always computed: needed for the lock, and to tell Sir from a video's voice.
+            val useSpeaker = speakerProfile != null && speakerModels.isInstalled()
             val spk = if (useSpeaker) {
                 (spkModel ?: runCatching { SpeakerModel(speakerModels.modelDir.absolutePath) }.getOrNull()?.also { spkModel = it })
             } else null
@@ -196,7 +214,8 @@ class WakeWordEngine @Inject constructor(
 
                     val now = System.currentTimeMillis()
                     if (now < cooldownUntil) continue
-                    val lockOnThisTurn = spk != null && currentMode == Mode.WAKE
+                    val overMedia = currentMode == Mode.WAKE && phoneMediaOnSpeaker()
+                    val lockOnThisTurn = spk != null && currentMode == Mode.WAKE && (speakerLock || overMedia)
                     if (!isFinal) {
                         // Don't wait for Sir to go silent (that made JARVIS wake late, on the words after "Hello Dev").
                         // Once the phrase has held for ~300 ms, close the utterance ourselves: the forced final result
@@ -215,7 +234,12 @@ class WakeWordEngine @Inject constructor(
                     val loudness = if (currentMode == Mode.WAKE) {
                         WakePhraseMatcher.loudnessOverBackground(levels.toList(), ((heard.duration ?: 0.8f) * 10).toInt() + 3)
                     } else null
-                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity, loudness)
+                    // With Sir's voiceprint the speaker check below decides; without it, he must be louder than the video.
+                    val phrase = if (lockOnThisTurn && overMedia) {
+                        WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity, null)
+                    } else {
+                        WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity, loudness, overPhoneMedia = overMedia)
+                    }
                     if (phrase == null) {
                         if (isFinal && WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) != null) {
                             rejected.tryEmit("'${heard.text}' conf=${heard.weakest} dur=${heard.duration} lead=${heard.leadingUnknown} loud=$loudness")
@@ -231,7 +255,9 @@ class WakeWordEngine @Inject constructor(
                             _lastSpeaker.value = if (ok) "you ✓" else "not you"
                             if (!ok) { recognizer.reset(); continue } // someone else — ignore the wake
                         }
-                        // If we couldn't get a vector, fail open (wake anyway) so Sir is never locked out.
+                        // No vector: fail open (wake anyway) so Sir is never locked out — except over the phone's own
+                        // video / music, where an unverified "Jarvis" is most likely the video itself.
+                        if ((profile == null || candidate == null) && overMedia) { recognizer.reset(); continue }
                     }
                     recognizer.reset()
                     cooldownUntil = now + COOLDOWN_MS

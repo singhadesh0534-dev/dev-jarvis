@@ -875,8 +875,16 @@ class JarvisSession @Inject constructor(
             try {
                 conn.connect()
                 // Spoken acknowledgement in JARVIS's own Live voice, instead of silence after the chime.
-                conn.sendText("[Sir has just called you. Greet him in one short line (max 8 words) and wait for his command.]")
+                conn.sendText(LIVE_GREETING)
                 audio.start()
+                // No voice a few seconds after the call and Sir hasn't spoken either: ask once more.
+                launch {
+                    delay(4_500)
+                    if (!firstAudioLogged && !userSpoke && liveConn === conn) {
+                        SessionTrace.add("LIVE greeting retry")
+                        conn.sendText(LIVE_GREETING)
+                    }
+                }
                 armFollowUp()
                 for (ev in conn.events) {
                     if (ev is LiveConnection.Event.Closed) {
@@ -1084,5 +1092,8 @@ class JarvisSession @Inject constructor(
         const val CONFIRM_TIMEOUT_MS = 25_000L
         const val RING_LISTEN_MS = 8_000L
         const val CARD_VISIBLE_MS = 15_000L
+        const val LIVE_GREETING =
+            "[Sir has just called you by name. Answer him now, out loud, with one short warm line (at most 8 words) " +
+                "such as \"Ji Sir, bataiye\" and then wait for his command.]"
     }
 }

@@ -84,6 +84,8 @@ data class JarvisSettings(
     val announceCalls: Boolean = true,
     /** Live-mode noise filter: 0 off, 1 normal, 2 strong (only a clearly louder, near voice reaches JARVIS). */
     val noiseFilter: Int = 1,
+    /** JARVIS speaks at full volume on the phone speaker; Sir's media volume is put back afterwards. */
+    val fullVoiceVolume: Boolean = true,
 ) {
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
@@ -178,6 +180,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_SOS_CONTACTS, cleaned.emergencyContacts.trim())
             .putBoolean(K_ANNOUNCE_CALLS, cleaned.announceCalls)
             .putInt(K_NOISE_FILTER, cleaned.noiseFilter.coerceIn(0, 2))
+            .putBoolean(K_FULL_VOICE, cleaned.fullVoiceVolume)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -235,6 +238,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             emergencyContacts = prefs.getString(K_SOS_CONTACTS, d.emergencyContacts).orEmpty(),
             announceCalls = prefs.getBoolean(K_ANNOUNCE_CALLS, d.announceCalls),
             noiseFilter = prefs.getInt(K_NOISE_FILTER, d.noiseFilter),
+            fullVoiceVolume = prefs.getBoolean(K_FULL_VOICE, d.fullVoiceVolume),
         )
     }
 
@@ -286,6 +290,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SOS_CONTACTS = "emergency_contacts"
         const val K_ANNOUNCE_CALLS = "announce_calls"
         const val K_NOISE_FILTER = "noise_filter"
+        const val K_FULL_VOICE = "full_voice_volume"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

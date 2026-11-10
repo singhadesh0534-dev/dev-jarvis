@@ -92,13 +92,9 @@ class LiveConnection(
     fun sendAudio(pcm: ByteArray, length: Int) {
         if (closed) return
         val msg = LiveMessages.audio(pcm, length, JarvisConfig.LIVE_INPUT_RATE)
-        synchronized(pending) {
-            if (!ready) {
-                pending.addLast(msg)
-                while (pending.size > MAX_PENDING) pending.removeFirst()
-                return
-            }
-        }
+        // Audio from before the session is ready is stale (the tail of the wake word, room noise): drop it.
+        // Buffering it used to push the greeting request out of the queue, so "Hello Dev" got no answer.
+        synchronized(pending) { if (!ready) return }
         socket?.send(msg)
     }
 
@@ -141,7 +137,6 @@ class LiveConnection(
 
     companion object {
         /** ~3 s of 50 ms chunks spoken before the server was ready. */
-        private const val MAX_PENDING = 60
 
         fun setup(model: String, voice: String, system: String, tools: List<JsonObject>, patientVad: Boolean) =
             LiveMessages.setup(model, voice, system, tools, patientVad)

@@ -128,6 +128,11 @@ fun SettingsScreen(
                 "ON = saaf, poori quality (media volume). Speaker pe JARVIS bolte waqt mic band rehta hai (apni awaaz se khud ko nahi kaat-ta); beech mein rokna ho to reactor tap karo, ya earphones lagao.",
                 draft.liveHdAudio,
             ) { v -> viewModel.edit { it.copy(liveHdAudio = v) } }
+            ToggleRow(
+                "JARVIS ki awaaz hamesha full",
+                "Phone ke speaker pe JARVIS 100% volume pe bolta hai; baat khatam hote hi aapka media volume wapas wahi ho jaata hai. Earphones mein nahi badalta.",
+                draft.fullVoiceVolume,
+            ) { v -> viewModel.edit { it.copy(fullVoiceVolume = v) } }
             Text("Shor filter (Live)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
             ChoiceRow(
                 options = listOf("0" to "OFF", "1" to "NORMAL", "2" to "STRONG"),

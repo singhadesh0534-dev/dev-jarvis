@@ -115,3 +115,24 @@ class WakeFalseAlarmTest {
         assertTrue(WakePhraseMatcher.loudnessOverBackground(listOf(500f, 500f), 6) > 100f) // too little history: don't block
     }
 }
+
+class WakeOverPhoneMediaTest {
+    private val wake = JarvisConfig.WAKE_PHRASES
+    private val clean = WakePhraseMatcher.parse(
+        """{"result":[{"conf":1.0,"start":0.0,"end":0.55,"word":"jarvis"}],"text":"jarvis"}""", isFinal = true,
+    )!!
+
+    @Test fun videoSayingJarvisAtItsOwnLevelDoesNotWake() {
+        assertNull(WakePhraseMatcher.shouldTrigger(clean, wake, 0.6f, loudness = 1.0f, overPhoneMedia = true))
+        assertNull(WakePhraseMatcher.shouldTrigger(clean, wake, 0.6f, loudness = null, overPhoneMedia = true))
+        assertNull(WakePhraseMatcher.shouldTrigger(clean, wake, 1.0f, loudness = 1.1f, overPhoneMedia = true)) // even at max sensitivity
+    }
+
+    @Test fun sirSpeakingOverTheVideoWakes() {
+        assertEquals("jarvis", WakePhraseMatcher.shouldTrigger(clean, wake, 0.6f, loudness = 2.0f, overPhoneMedia = true))
+    }
+
+    @Test fun withoutMediaNothingChanges() {
+        assertEquals("jarvis", WakePhraseMatcher.shouldTrigger(clean, wake, 0.6f, loudness = 1.0f))
+    }
+}

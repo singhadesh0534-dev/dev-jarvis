@@ -91,8 +91,15 @@ object WakePhraseMatcher {
      * Below [PARTIAL_TRIGGER_SENSITIVITY] three extra checks stop JARVIS waking by himself: a sane length,
      * every word confident, and — when other speech or music was already going on — clearly louder than it.
      */
-    fun shouldTrigger(heard: Heard, phrases: List<String>, sensitivity: Float, loudness: Float? = null): String? {
+    fun shouldTrigger(
+        heard: Heard, phrases: List<String>, sensitivity: Float, loudness: Float? = null,
+        /** The phone itself is playing a video / song through its speaker: the phrase must stand out from it. */
+        overPhoneMedia: Boolean = false,
+    ): String? {
         val phrase = matchedPhrase(heard.text, phrases) ?: return null
+        if (overPhoneMedia) {
+            if (!heard.isFinal || loudness == null || loudness < BACKGROUND_RATIO) return null
+        }
         if (!heard.isFinal) return if (sensitivity >= PARTIAL_TRIGGER_SENSITIVITY) phrase else null
         if (sensitivity < PARTIAL_TRIGGER_SENSITIVITY) {
             heard.duration?.let { if (it < MIN_DURATION || it > MAX_DURATION) return null }
