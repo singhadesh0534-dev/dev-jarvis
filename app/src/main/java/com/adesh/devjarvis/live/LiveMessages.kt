@@ -39,6 +39,13 @@ object LiveMessages {
 
     private val json = Json { ignoreUnknownKeys = true }
 
+    /** ws:// -> http://, wss:// -> https:// (what OkHttp's HttpUrl accepts for a WebSocket request). */
+    fun httpUrlFor(wsUrl: String): String = when {
+        wsUrl.startsWith("wss://", ignoreCase = true) -> "https://" + wsUrl.substring(6)
+        wsUrl.startsWith("ws://", ignoreCase = true) -> "http://" + wsUrl.substring(5)
+        else -> wsUrl
+    }
+
     fun setup(model: String, voice: String, systemInstruction: String, functionDeclarations: List<JsonObject>): String =
         buildJsonObject {
             putJsonObject("setup") {

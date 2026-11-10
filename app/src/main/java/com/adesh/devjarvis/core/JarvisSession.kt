@@ -791,6 +791,13 @@ class JarvisSession @Inject constructor(
                         is LiveMessages.ServerEvent.ToolCancelled, LiveMessages.ServerEvent.SetupComplete -> Unit
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Any Live failure (bad URL, audio device, parsing) must fall back to classic, not kill the turn.
+                CrashReporter.record(appContext, "live", e)
+                closeKind = LiveMessages.CloseKind.OTHER
+                closeDetail = e.javaClass.simpleName
             } finally {
                 followUp?.cancel()
                 meters.cancel()

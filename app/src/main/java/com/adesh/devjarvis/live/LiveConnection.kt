@@ -43,7 +43,9 @@ class LiveConnection(
     private var socket: WebSocket? = null
 
     fun connect() {
-        val url = JarvisConfig.GEMINI_LIVE_URL.toHttpUrl().newBuilder().addQueryParameter("key", apiKey).build()
+        // HttpUrl only parses http/https ("wss://" throws IllegalArgumentException); OkHttp upgrades it to a WebSocket.
+        val url = LiveMessages.httpUrlFor(JarvisConfig.GEMINI_LIVE_URL).toHttpUrl().newBuilder()
+            .addQueryParameter("key", apiKey).build()
         socket = client.newWebSocket(Request.Builder().url(url).build(), object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 webSocket.send(setupJson)

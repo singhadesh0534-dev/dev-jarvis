@@ -63,6 +63,14 @@ class LiveMessagesTest {
         assertEquals("timer started", fr["response"]!!.jsonObject["result"]!!.jsonPrimitive.content)
     }
 
+    @Test fun liveUrlIsParseableByOkHttp() {
+        // Regression: "wss://" passed straight to HttpUrl threw IllegalArgumentException on every wake.
+        val u = LiveMessages.httpUrlFor(com.adesh.devjarvis.core.JarvisConfig.GEMINI_LIVE_URL)
+        assertTrue(u.startsWith("https://generativelanguage.googleapis.com/ws/"))
+        assertEquals("http://x/y", LiveMessages.httpUrlFor("ws://x/y"))
+        assertEquals("https://x/y", LiveMessages.httpUrlFor("https://x/y"))
+    }
+
     @Test fun classifiesCloseReasons() {
         assertEquals(LiveMessages.CloseKind.QUOTA, LiveMessages.classifyClose(1011, "You exceeded your current quota"))
         assertEquals(LiveMessages.CloseKind.AUTH, LiveMessages.classifyClose(1008, "API key not valid"))
