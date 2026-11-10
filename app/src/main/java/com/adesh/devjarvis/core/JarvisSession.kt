@@ -37,6 +37,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import com.adesh.devjarvis.calls.IncomingCall
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -344,10 +345,52 @@ class JarvisSession @Inject constructor(
 
     /** A phone call started or ended. During a call JARVIS goes fully silent and gives up the mic. */
     private fun onCallStateChanged() {
-        if (focus.inCall()) {
+        val askingAboutRing = ringJob?.isActive == true
+        if (askingAboutRing && !focus.ringing()) cancelIncomingCallPrompt() // answered or ended meanwhile
+        if (focus.inCall() && !askingAboutRing) {
             if (_ui.value.state != JarvisState.IDLE || _ui.value.inConversation || liveActive) stopEverything()
         }
         syncMic() // call started -> wake stops; call ended -> wake restarts
+    }
+
+    private var ringJob: Job? = null
+
+    /**
+     * The phone is ringing: say who it is, then listen once for "uthao / kaat do" and hand the answer back.
+     * The only time JARVIS speaks or listens around a call; once the call is answered he is silent again.
+     */
+    fun promptIncomingCall(caller: String, onReply: (IncomingCall.Reply) -> Unit) {
+        if (ringJob?.isActive == true) return
+        stopEverything()
+        ringJob = scope.launch {
+            try {
+                val line = IncomingCall.announcement(caller)
+                addLine(fromUser = false, text = line)
+                speakingText = line
+                speechOut.speak(line)
+                setState(JarvisState.SPEAKING)
+                speechOut.awaitIdle()
+                setState(JarvisState.LISTENING)
+                wake.stop()
+                wake.awaitStopped()
+                val heard = withTimeoutOrNull(RING_LISTEN_MS) { listenOnce() }
+                if (heard != null) addLine(fromUser = true, text = heard)
+                val reply = IncomingCall.parse(heard)
+                SessionTrace.add("RING reply=$reply")
+                onReply(reply)
+            } finally {
+                _ui.update { it.copy(partial = "", micLevel = 0f) }
+                setState(JarvisState.IDLE)
+            }
+        }
+    }
+
+    fun cancelIncomingCallPrompt() {
+        val job = ringJob ?: return
+        ringJob = null
+        if (!job.isActive) return
+        job.cancel()
+        speechOut.stop()
     }
 
     // ---------------------------------------------------------------- wake word
@@ -1015,5 +1058,6 @@ class JarvisSession @Inject constructor(
     private companion object {
         const val MAX_LINES = 100
         const val CONFIRM_TIMEOUT_MS = 25_000L
+        const val RING_LISTEN_MS = 8_000L
     }
 }

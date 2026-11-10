@@ -16,6 +16,7 @@ import javax.inject.Inject
 class JarvisNotificationListener : NotificationListenerService() {
 
     @Inject lateinit var store: NotificationStore
+    @Inject lateinit var calls: com.adesh.devjarvis.calls.CallMonitor
 
     override fun onListenerConnected() {
         store.listenerConnected = true
@@ -28,10 +29,16 @@ class JarvisNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) = handle(sbn, isNew = true)
 
-    override fun onNotificationRemoved(sbn: StatusBarNotification) = store.remove(sbn.key)
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        runCatching { calls.onRemoved(sbn.key) }
+        store.remove(sbn.key)
+    }
 
     private fun handle(sbn: StatusBarNotification, isNew: Boolean) {
-        if (sbn.packageName == packageName || sbn.isOngoing) return
+        if (sbn.packageName == packageName) return
+        // Incoming call: announce + voice answer. Only for a ring that starts now, never for an old notification.
+        if (isNew && runCatching { calls.onPosted(sbn) }.getOrDefault(false)) return
+        if (sbn.isOngoing || sbn.notification?.category == Notification.CATEGORY_CALL) return
         val n = sbn.notification ?: return
         if (n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
         val extras = n.extras ?: return

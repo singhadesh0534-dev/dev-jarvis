@@ -25,7 +25,7 @@ import javax.inject.Inject
 
 enum class StepId {
     MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK,
-    CALL_PHONE, CONTACTS, SMS, LOCATION, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
+    CALL_PHONE, ANSWER_CALLS, CONTACTS, SMS, LOCATION, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
 }
 
 /** How the step's main button works. */
@@ -171,6 +171,17 @@ class SetupViewModel @Inject constructor(
                 StepAction.RUNTIME_PERMISSION, "Allow calls",
                 granted = has(Manifest.permission.CALL_PHONE), optional = false,
                 permission = Manifest.permission.CALL_PHONE,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.ANSWER_CALLS, "Answer calls (optional)",
+                "Call aane par JARVIS naam batata hai; \"uthao\" ya \"kaat do\" bolne par call uthata / kaat-ta hai. " +
+                    "Ye permission backup hai — zyada-tar phones pe Notification access se hi ho jaata hai.",
+                listOf("Allow dabao."),
+                StepAction.RUNTIME_PERMISSION, "Allow",
+                granted = has(Manifest.permission.ANSWER_PHONE_CALLS), optional = true,
+                permission = Manifest.permission.ANSWER_PHONE_CALLS,
             )
         )
         add(

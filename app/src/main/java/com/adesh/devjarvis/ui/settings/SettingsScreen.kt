@@ -202,6 +202,11 @@ fun SettingsScreen(
                 Box(Modifier.weight(1f)) { TimeField("Quiet until", draft.quietEndMinute) { m -> viewModel.edit { it.copy(quietEndMinute = m) } } }
             }
             Hint("Quiet hours, DND, silent mode (bina headphones) ya call ke dauraan JARVIS khud se nahi bolta — sirf notification. Aapke apne reminders raat mein bhi bolte hain.")
+            ToggleRow(
+                "Incoming call batana",
+                "Kaun call kar raha hai bolta hai, phir \"uthao\" ya \"kaat do\" sunta hai. Full edition + Notification access. Silent/DND mein chup.",
+                draft.announceCalls,
+            ) { v -> viewModel.edit { it.copy(announceCalls = v) } }
             ToggleRow("Important notifications bolna", "Chune hue apps/logon ke message ka chhota summary. OTP/bank kabhi nahi.", draft.notificationAlerts) { v ->
                 viewModel.edit { it.copy(notificationAlerts = v) }
             }
