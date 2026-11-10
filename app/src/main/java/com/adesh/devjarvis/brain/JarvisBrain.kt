@@ -135,28 +135,35 @@ class JarvisBrain @Inject constructor(
             throw BrainError.RateLimited()
         }
         _active.value = Provider.GROQ
+        val small = systemPrompt(s, forLive = false, query = userText, compact = true)
         if (s.hasGroqKey && (!usage.isExhausted(Provider.GROQ) || !s.hasExtraBrain)) {
             try {
-                groqLoop(s, system, userText, runTool, extra = false)
+                groqLoop(s, small, userText, runTool, extra = false)
                 return@flow
             } catch (f: Fallback) {
                 if (!s.hasExtraBrain) throw f.cause as BrainError
             }
         }
         SessionTrace.add("BRAIN third brain in use")
-        groqLoop(s, system, userText, runTool, extra = true)
+        groqLoop(s, small, userText, runTool, extra = true)
     }
 
     /**
      * Full system instruction: personality + format/tool rules + live context, relevant memories,
      * top notifications (+ recent chat for Live).
      */
-    suspend fun systemPrompt(s: JarvisSettings = settings.current, forLive: Boolean, query: String = ""): String = buildString {
+    suspend fun systemPrompt(
+        s: JarvisSettings = settings.current, forLive: Boolean, query: String = "",
+        /** Backup brains have a small request budget: personality + format rules + context only. */
+        compact: Boolean = false,
+    ): String = buildString {
         append(s.systemPrompt.trim())
         append("\n\n")
         append(if (forLive) SystemPrompt.LIVE_RULES else SystemPrompt.SPEECH_FORMAT_RULES)
-        append("\n\n").append(SystemPrompt.CHARACTER)
-        append("\n\n").append(SystemPrompt.BEHAVIOR)
+        if (!compact) {
+            append("\n\n").append(SystemPrompt.CHARACTER)
+            append("\n\n").append(SystemPrompt.BEHAVIOR)
+        }
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(
@@ -164,7 +171,7 @@ class JarvisBrain @Inject constructor(
                 device.snapshot(),
                 s.homeCity,
                 // Live keeps this prompt for the whole conversation, so it gets the wider picture; classic re-ranks each turn.
-                memories = memory.relevant(query, limit = if (forLive) 40 else 12).map { it.text },
+                memories = memory.relevant(query, limit = if (forLive) 40 else if (compact) 5 else 12).map { it.text },
                 notifications = notifications.topForContext(3),
                 phone = "${Build.MANUFACTURER} ${Build.MODEL}".trim() + ", Android ${Build.VERSION.RELEASE}" +
                     (if (Build.MANUFACTURER.equals("infinix", ignoreCase = true)) " with the XOS skin (Phone Master, XOS launcher, Folax assistant)" else ""),
@@ -238,7 +245,7 @@ class JarvisBrain @Inject constructor(
         extra: Boolean,
     ) {
         val messages = mutableListOf(GroqMessages.text("system", system))
-        conversation.snapshot().forEach { messages += GroqMessages.text(if (it.role == Role.USER) "user" else "assistant", it.text) }
+        conversation.snapshot().takeLast(8).forEach { messages += GroqMessages.text(if (it.role == Role.USER) "user" else "assistant", it.text.take(600)) }
         messages += GroqMessages.text("user", userText)
         for (round in 0 until MAX_TOOL_ROUNDS) {
             val text = StringBuilder()

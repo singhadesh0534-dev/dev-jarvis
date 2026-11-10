@@ -49,7 +49,22 @@ class ToolRegistry @Inject constructor(
     }
 
     /** Same tools in OpenAI format for Groq. */
-    val groqTools: JsonArray = GroqMessages.toolsFromGemini(declarations)
+    val groqTools: JsonArray = GroqMessages.toolsFromGemini(
+        tools.filter { it.name in BACKUP_TOOLS }.map { it.declaration() },
+    )
+
+    private companion object {
+        /**
+         * The backup brains (Groq free tier and others) reject big requests ("HTTP 413 request too large"),
+         * so they get the everyday tools only. Gemini and Live get everything.
+         */
+        val BACKUP_TOOLS = setOf(
+            "open_app", "close_current_app", "set_alarm", "set_timer", "create_reminder", "toggle_flashlight", "set_volume", "set_brightness",
+            "set_toggle", "search_in_app", "open_settings", "play_music", "media_control", "device_status",
+            "make_call", "send_sms", "send_whatsapp", "weather", "calculate", "get_time", "web_answer",
+            "remember", "add_note", "read_notifications", "read_screen", "tap", "type_text", "scroll", "go_back", "go_home", "look",
+        )
+    }
 
     suspend fun execute(name: String, args: JsonObject, ctx: ToolContext): ToolResult {
         val tool = byName[name] ?: return ToolResult.fail("unknown tool $name")

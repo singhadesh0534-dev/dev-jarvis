@@ -36,8 +36,9 @@ class SafetyTools @Inject constructor(
 
     private val sos = object : SimpleTool(
         "emergency_sos",
-        "EMERGENCY only: text Sir's saved emergency contacts that he needs help, with his current location link. " +
-            "Use when Sir says SOS / emergency / \"madad bhejo\". The app asks him to confirm once.",
+        "Sends an \"I need help\" SMS with Sir's location to his emergency contacts. ONLY when Sir himself says the words SOS, " +
+            "\"emergency SMS\" or \"madad bhejo\" about a real danger to him. NEVER for anything else: not for an urgent call " +
+            "(that is make_call urgent=true), not when another tool failed, not when you are unsure what he said.",
         params { string("note", "Optional few words about what happened, in Sir's words") },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {

@@ -400,7 +400,24 @@ class JarvisSession @Inject constructor(
 
     // ---------------------------------------------------------------- wake word
 
+    /** Woke up and nobody spoke: each one in a row makes JARVIS deaf to the wake word a little longer (TV, a video, chatter). */
+    private var falseWakes = 0
+    private var wakeQuietUntil = 0L
+
+    private fun noteFalseWake() {
+        falseWakes = (falseWakes + 1).coerceAtMost(5)
+        wakeQuietUntil = System.currentTimeMillis() + falseWakes * 8_000L
+        SessionTrace.add("WAKE quiet for ${falseWakes * 8}s after $falseWakes empty wake(s)")
+    }
+
+    /** Same tool with the same arguments failing again and again in one conversation: stop the loop. */
+    private val toolFailures = HashMap<String, Int>()
+
     private fun onDetection(d: WakeWordEngine.Detection) {
+        if (d.mode == WakeWordEngine.Mode.WAKE && System.currentTimeMillis() < wakeQuietUntil) {
+            SessionTrace.add("WAKE ignored (quiet period)")
+            return
+        }
         val state = _ui.value.state
         SessionTrace.add("WAKE ${d.mode} phrase='${d.phrase}' state=$state")
         if (d.mode == WakeWordEngine.Mode.WAKE) lastWake = "phrase '${d.phrase}', engine heard '${wake.lastHeard.value}'"
@@ -484,6 +501,7 @@ class JarvisSession @Inject constructor(
     }
 
     private fun endConversation(chime: Boolean) {
+        toolFailures.clear()
         modes.reset()
         scheduleMemoryExtraction()
         val wasOpen = _ui.value.inConversation
@@ -539,6 +557,7 @@ class JarvisSession @Inject constructor(
                         // Follow-up window mein chup rahe to thoda aur suno; warna standby.
                         if (followUp && System.currentTimeMillis() < deadline) continue
                         if (!followUp) lastWake?.let { w ->
+                            noteFalseWake()
                             ProblemJournal.add("FALSE_WAKE?", "Woke on $w but heard no command afterwards (classic mode)")
                         }
                         lastWake = null
@@ -656,7 +675,17 @@ class JarvisSession @Inject constructor(
         val argText = args.entries.joinToString(", ") { (k, v) -> "$k=${v.toString().trim('"')}" }
         val lineId = nextId++
         upsertLine(lineId, "⚙ $name($argText)", system = true)
+        val failKey = "$name|$argText"
+        if ((toolFailures[failKey] ?: 0) >= 2) {
+            upsertLine(lineId, "✗ $name: same step already failed twice", system = true)
+            return ToolResult.fail(
+                "STOP. $name with these exact arguments has already failed twice in this conversation; trying it again will not work. " +
+                    "Do not open the app again or repeat the same steps. Use a different tool (for a search inside an app: search_in_app), " +
+                    "or tell Sir in one line exactly what you could not do.",
+            )
+        }
         val result = registry.execute(name, args, toolContext)
+        if (!result.ok && !result.awaitingConfirmation) toolFailures[failKey] = (toolFailures[failKey] ?: 0) + 1
         SessionTrace.add("TOOL $name ok=${result.ok} awaitingConfirm=${result.awaitingConfirmation}")
         if (!result.ok && !result.awaitingConfirmation) ProblemJournal.add("TOOL_FAILED", "$name($argText) -> ${result.message.take(160)}")
         if (result.awaitingConfirmation) {
@@ -899,6 +928,7 @@ class JarvisSession @Inject constructor(
                             followUp?.cancel()
                             liveConfirm.onUserSaid(e.text)
                             userSpoke = true
+                            falseWakes = 0
                             userSaid.append(e.text)
                             if (userLine < 0) userLine = nextId++
                             upsertLine(userLine, userSaid.toString().trim(), fromUser = true)
@@ -975,6 +1005,7 @@ class JarvisSession @Inject constructor(
                 usage.recordLiveSeconds(((System.currentTimeMillis() - startedAt) / 1000).toInt())
             }
             lastWake?.let { w ->
+                if (!userSpoke) noteFalseWake()
                 if (!userSpoke) ProblemJournal.add("FALSE_WAKE?", "Woke on $w but Sir said nothing in the whole conversation")
             }
             lastWake = null
@@ -1002,7 +1033,14 @@ class JarvisSession @Inject constructor(
                 SessionTrace.add("KEY live rotated, ready=${keys.live.readyCount(s.geminiApiKey)}")
                 if (!another) usage.markExhausted(Provider.LIVE)
             }
-            LiveMessages.CloseKind.AUTH, LiveMessages.CloseKind.MODEL, LiveMessages.CloseKind.OTHER ->
+            LiveMessages.CloseKind.AUTH -> {
+                // This key is wrong or revoked: rest it so the next wake uses another one.
+                val s = settings.current
+                if (!keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), 6 * 3_600_000L) && !anyReply) {
+                    liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
+                }
+            }
+            LiveMessages.CloseKind.MODEL, LiveMessages.CloseKind.OTHER ->
                 if (!anyReply) liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
             else -> Unit
         }
