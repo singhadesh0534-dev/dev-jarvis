@@ -170,6 +170,9 @@ class JarvisSession @Inject constructor(
     /** Don't retry Live before this time (after a non-quota failure). */
     private var liveRetryAt = 0L
     private val liveActive: Boolean get() = liveJob?.isActive == true
+    /** Set if the server refused our turn-taking config; then we connect without it. */
+    private var liveVadRejected = false
+    private var liveUsedPatientVad = false
 
     private val toolContext = object : ToolContext {
         override suspend fun confirm(question: String): Boolean = confirmByVoice(question)
@@ -183,9 +186,11 @@ class JarvisSession @Inject constructor(
                 wake.speakerLock = s.speakerLockEnabled
                 wake.speakerProfile = SpeakerVerification.decode(s.speakerProfile)
                 wake.speakerThreshold = s.speakerThreshold
+                wake.wakePhrases = s.customWakePhrases.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+                    .ifEmpty { JarvisConfig.WAKE_PHRASES }
                 _ui.update { it.copy(hasKey = s.hasGeminiKey || s.hasGroqKey) }
                 // Speaker-lock changes need the wake engine rebuilt (it picks the recognizer type at start).
-                val speakerKey = "${s.speakerLockEnabled}|${s.speakerProfile.length}|${s.speakerThreshold}"
+                val speakerKey = "${s.speakerLockEnabled}|${s.speakerProfile.length}|${s.speakerThreshold}|${s.customWakePhrases}"
                 if (speakerKey != prevSpeakerKey && prevSpeakerKey.isNotEmpty()) wake.stop()
                 prevSpeakerKey = speakerKey
                 syncMic()
@@ -692,7 +697,8 @@ class JarvisSession @Inject constructor(
             focus.ownCommunicationMode = true
             updateMode()
 
-            val conn = LiveConnection(http, s.geminiApiKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations))
+            val conn = LiveConnection(http, s.geminiApiKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
+            liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager) { bytes, n -> conn.sendAudio(bytes, n) }
             liveConn = conn
             liveAudio = audio
@@ -818,6 +824,12 @@ class JarvisSession @Inject constructor(
         liveJob = null
         updateMode()
         if (liveClosingByUs) return // closeLive() already handled the ending
+        if (!anyReply && liveUsedPatientVad && kind == LiveMessages.CloseKind.OTHER && _ui.value.inConversation) {
+            // Maybe this model doesn't accept the turn-taking config: try once more without it before giving up on Live.
+            liveVadRejected = true
+            startLive()
+            return
+        }
         when (kind) {
             LiveMessages.CloseKind.QUOTA -> usage.markExhausted(Provider.LIVE)
             LiveMessages.CloseKind.AUTH, LiveMessages.CloseKind.MODEL, LiveMessages.CloseKind.OTHER ->

@@ -123,7 +123,7 @@ class LiveConnection(
         /** ~3 s of 50 ms chunks spoken before the server was ready. */
         private const val MAX_PENDING = 60
 
-        fun setup(model: String, voice: String, system: String, tools: List<JsonObject>) =
-            LiveMessages.setup(model, voice, system, tools)
+        fun setup(model: String, voice: String, system: String, tools: List<JsonObject>, patientVad: Boolean) =
+            LiveMessages.setup(model, voice, system, tools, patientVad)
     }
 }

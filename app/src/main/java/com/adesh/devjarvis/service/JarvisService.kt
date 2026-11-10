@@ -9,6 +9,7 @@ import android.content.pm.ServiceInfo
 import android.os.BatteryManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
@@ -67,6 +68,8 @@ class JarvisService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var bubble: BubbleOverlay? = null
+    /** Keeps the CPU awake with the screen off — without it the wake-word thread is suspended in standby. */
+    private var wakeLock: PowerManager.WakeLock? = null
     private var foreground = false
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -101,6 +104,7 @@ class JarvisService : Service() {
         }
         if (intent?.action == ACTION_RESUME) settings.update { it.copy(alwaysOn = true) }
         NotificationManagerCompat.from(this).cancel(ServiceController.NOTIF_RESUME)
+        acquireWakeLock()
         session.setServiceActive(true)
         return START_STICKY
     }
@@ -157,7 +161,20 @@ class JarvisService : Service() {
         }
     }
 
+    private fun acquireWakeLock() {
+        if (wakeLock?.isHeld == true) return
+        runCatching {
+            val pm = getSystemService(PowerManager::class.java)
+            wakeLock = pm?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jarvis:wakeword")?.apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }
+    }
+
     override fun onDestroy() {
+        runCatching { wakeLock?.takeIf { it.isHeld }?.release() }
+        wakeLock = null
         bubble?.hide()
         runCatching { unregisterReceiver(batteryReceiver) }
         session.setServiceActive(false)

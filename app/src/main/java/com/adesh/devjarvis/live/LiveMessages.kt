@@ -46,9 +46,26 @@ object LiveMessages {
         else -> wsUrl
     }
 
-    fun setup(model: String, voice: String, systemInstruction: String, functionDeclarations: List<JsonObject>): String =
+    fun setup(
+        model: String,
+        voice: String,
+        systemInstruction: String,
+        functionDeclarations: List<JsonObject>,
+        patientVad: Boolean = false,
+    ): String =
         buildJsonObject {
             putJsonObject("setup") {
+                if (patientVad) {
+                    // Wait for a real pause before answering, and don't treat small noises as Sir speaking.
+                    putJsonObject("realtimeInputConfig") {
+                        putJsonObject("automaticActivityDetection") {
+                            put("startOfSpeechSensitivity", "START_SENSITIVITY_LOW")
+                            put("endOfSpeechSensitivity", "END_SENSITIVITY_LOW")
+                            put("prefixPaddingMs", 200)
+                            put("silenceDurationMs", 900)
+                        }
+                    }
+                }
                 put("model", if (model.startsWith("models/")) model else "models/$model")
                 putJsonObject("generationConfig") {
                     putJsonArray("responseModalities") { add(kotlinx.serialization.json.JsonPrimitive("AUDIO")) }

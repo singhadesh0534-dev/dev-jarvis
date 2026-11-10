@@ -59,7 +59,15 @@ class SettingsViewModel @Inject constructor(
 
     fun save() {
         // alwaysOn / setupDone are owned by the HUD switch and the setup wizard — don't overwrite them.
-        val ok = repo.save(_draft.value.copy(alwaysOn = repo.current.alwaysOn, setupDone = repo.current.setupDone))
+        val cur = repo.current
+        val ok = repo.save(
+            _draft.value.copy(
+                alwaysOn = cur.alwaysOn, setupDone = cur.setupDone,
+                // Owned by the voice-lock screen and the set_wake_word tool, not this form.
+                speakerLockEnabled = cur.speakerLockEnabled, speakerProfile = cur.speakerProfile,
+                speakerThreshold = cur.speakerThreshold, customWakePhrases = cur.customWakePhrases,
+            )
+        )
         _draft.value = repo.current
         runCatching { speech.applySettings() }
         runCatching { briefing.reschedule() }

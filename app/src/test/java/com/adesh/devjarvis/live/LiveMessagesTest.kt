@@ -71,6 +71,14 @@ class LiveMessagesTest {
         assertEquals("https://x/y", LiveMessages.httpUrlFor("https://x/y"))
     }
 
+    @Test fun patientVadIsOptional() {
+        val with = Json.parseToJsonElement(LiveMessages.setup("m", "v", "s", emptyList(), patientVad = true)).jsonObject["setup"]!!.jsonObject
+        val vad = with["realtimeInputConfig"]!!.jsonObject["automaticActivityDetection"]!!.jsonObject
+        assertEquals("END_SENSITIVITY_LOW", vad["endOfSpeechSensitivity"]!!.jsonPrimitive.content)
+        val without = Json.parseToJsonElement(LiveMessages.setup("m", "v", "s", emptyList())).jsonObject["setup"]!!.jsonObject
+        assertTrue(!without.containsKey("realtimeInputConfig"))
+    }
+
     @Test fun classifiesCloseReasons() {
         assertEquals(LiveMessages.CloseKind.QUOTA, LiveMessages.classifyClose(1011, "You exceeded your current quota"))
         assertEquals(LiveMessages.CloseKind.AUTH, LiveMessages.classifyClose(1008, "API key not valid"))

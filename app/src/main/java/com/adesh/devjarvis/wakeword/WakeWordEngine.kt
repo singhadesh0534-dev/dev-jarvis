@@ -65,6 +65,9 @@ class WakeWordEngine @Inject constructor(
 
     @Volatile var sensitivity: Float = JarvisConfig.WAKE_SENSITIVITY_DEFAULT
 
+    /** Wake phrases in use. Sir can replace them by voice ("ab se Hello Shiv pe jaagna"). */
+    @Volatile var wakePhrases: List<String> = JarvisConfig.WAKE_PHRASES
+
     // Speaker lock ("sirf meri awaaz") — set from settings. Only used for the WAKE phrase, never barge-in.
     @Volatile var speakerLock: Boolean = false
     @Volatile var speakerProfile: FloatArray? = null
@@ -143,6 +146,7 @@ class WakeWordEngine @Inject constructor(
             var silentChunks = 0
             var cooldownUntil = 0L
             val gate = EnergyGate()
+            var partialStreak = 0
 
             while (!stopRequested) {
                 if (mode != currentMode) {
@@ -180,8 +184,15 @@ class WakeWordEngine @Inject constructor(
                     if (now < cooldownUntil) continue
                     // With speaker lock we need the "spk" vector, which only comes on a final result.
                     val lockOnThisTurn = spk != null && currentMode == Mode.WAKE
-                    val heardForTrigger = if (lockOnThisTurn && !isFinal) continue else heard
-                    val phrase = WakePhraseMatcher.shouldTrigger(heardForTrigger, phrasesFor(currentMode), sensitivity) ?: continue
+                    if (lockOnThisTurn && !isFinal) continue
+                    // Don't wait for Sir to go silent: the phrase showing up in a few partials in a row is enough.
+                    // (Waiting for the final result made JARVIS wake late, on the words after "Hello Dev".)
+                    val stablePartial = !isFinal && currentMode == Mode.WAKE && WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) != null
+                    partialStreak = if (stablePartial) partialStreak + 1 else 0
+                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity)
+                        ?: (if (partialStreak >= STABLE_PARTIALS) WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) else null)
+                        ?: continue
+                    partialStreak = 0
 
                     if (lockOnThisTurn) {
                         val profile = speakerProfile
@@ -248,7 +259,7 @@ class WakeWordEngine @Inject constructor(
     }
 
     private fun phrasesFor(mode: Mode) =
-        if (mode == Mode.WAKE) JarvisConfig.WAKE_PHRASES else JarvisConfig.BARGE_IN_PHRASES
+        if (mode == Mode.WAKE) wakePhrases else JarvisConfig.BARGE_IN_PHRASES
 
     private fun grammarFor(mode: Mode) = WakePhraseMatcher.grammarJson(phrasesFor(mode))
 
@@ -261,6 +272,8 @@ class WakeWordEngine @Inject constructor(
         const val TAG = "JarvisWake"
         const val SAMPLE_RATE = 16_000
         const val COOLDOWN_MS = 1_500L
+        /** Consecutive partial results (≈100 ms each) containing the phrase before we wake. */
+        const val STABLE_PARTIALS = 3
         /** ~4 s of pure digital silence = the OS has muted our mic. */
         const val SILENCED_CHUNKS = 40
     }

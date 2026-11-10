@@ -94,6 +94,7 @@ class JarvisBrain @Inject constructor(
         append(s.systemPrompt.trim())
         append("\n\n")
         append(if (forLive) SystemPrompt.LIVE_RULES else SystemPrompt.SPEECH_FORMAT_RULES)
+        append("\n\n").append(SystemPrompt.BEHAVIOR)
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(

@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -79,8 +81,9 @@ class SpeechInput @Inject constructor(@ApplicationContext private val context: C
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
             // Thoda ruk ke sochne do, turant cut mat karo.
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1200L)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1000L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1800L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1600L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1500L)
         }
         // Android recognizer har baar start/stop pe "beep" bajata hai — continuous conversation mein
         // ye baar-baar sunai deta hai. Recognition ke dauraan system/notification beeps mute kar dete hain.
@@ -88,9 +91,10 @@ class SpeechInput @Inject constructor(@ApplicationContext private val context: C
         recognizer.startListening(intent)
 
         awaitClose {
-            unmute(muted)
             recognizer.cancel()
             recognizer.destroy()
+            // The recognizer also beeps when it stops: keep the streams muted a moment longer.
+            Handler(Looper.getMainLooper()).postDelayed({ unmute(muted) }, 350)
         }
     }.flowOn(Dispatchers.Main) // SpeechRecognizer must live on the main thread.
 

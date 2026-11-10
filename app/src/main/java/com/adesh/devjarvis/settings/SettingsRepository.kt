@@ -68,6 +68,8 @@ data class JarvisSettings(
     val speakerProfile: String = "",
     /** 0 (loose) .. 1 (strict). */
     val speakerThreshold: Float = com.adesh.devjarvis.wakeword.SpeakerVerification.DEFAULT_THRESHOLD,
+    /** Comma-separated wake phrases set by Sir. Blank = defaults ("hello dev", "jarvis"). */
+    val customWakePhrases: String = "",
 ) {
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
@@ -154,6 +156,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_SPK_LOCK, cleaned.speakerLockEnabled)
             .putString(K_SPK_PROFILE, cleaned.speakerProfile)
             .putFloat(K_SPK_THRESHOLD, cleaned.speakerThreshold)
+            .putString(K_WAKE_PHRASES, cleaned.customWakePhrases)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -203,6 +206,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             speakerLockEnabled = prefs.getBoolean(K_SPK_LOCK, d.speakerLockEnabled),
             speakerProfile = prefs.getString(K_SPK_PROFILE, d.speakerProfile).orEmpty(),
             speakerThreshold = prefs.getFloat(K_SPK_THRESHOLD, d.speakerThreshold),
+            customWakePhrases = prefs.getString(K_WAKE_PHRASES, d.customWakePhrases).orEmpty(),
         )
     }
 
@@ -246,6 +250,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SPK_LOCK = "speaker_lock"
         const val K_SPK_PROFILE = "speaker_profile"
         const val K_SPK_THRESHOLD = "speaker_threshold"
+        const val K_WAKE_PHRASES = "custom_wake_phrases"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

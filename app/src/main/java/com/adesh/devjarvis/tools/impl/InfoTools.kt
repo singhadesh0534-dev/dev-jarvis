@@ -89,5 +89,26 @@ class InfoTools @Inject constructor(
             ToolResult.ok(ZonedDateTime.now().format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy, h:mm a", Locale.ENGLISH)))
     }
 
-    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer)
+    private val setWakeWord = object : SimpleTool(
+        "set_wake_word",
+        "Change the phrase that wakes JARVIS (\"ab se 'hello shiv' pe jaagna\"). Pass phrase \"default\" to go back to Hello Dev / Jarvis.",
+        params { string("phrase", "New wake phrase, 1-3 simple English words, or \"default\"", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val phrase = args.requireString("phrase").lowercase().replace(Regex("[^a-z ]"), " ").trim().replace(Regex("\\s+"), " ")
+            if (phrase == "default" || phrase.isEmpty()) {
+                settings.update { it.copy(customWakePhrases = "") }
+                return ToolResult.ok("wake word back to default: Hello Dev / Jarvis")
+            }
+            if (phrase.split(' ').size > 3) return ToolResult.fail("wake phrase must be 1-3 words")
+            if (!ctx.confirm("Sir, ab se main sirf \"$phrase\" pe jaagun? Hello Dev kaam nahi karega.")) return ToolResult.ok("kept the old wake word")
+            settings.update { it.copy(customWakePhrases = phrase) }
+            return ToolResult.ok(
+                "wake word is now '$phrase'. Tell Sir: the offline engine only knows common English words, so if it " +
+                    "doesn't wake on this, he can tap the reactor and say 'wake word default karo'.",
+            )
+        }
+    }
+
+    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer, setWakeWord)
 }
