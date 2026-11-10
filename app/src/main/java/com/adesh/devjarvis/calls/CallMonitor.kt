@@ -103,7 +103,7 @@ class CallMonitor @Inject constructor(
         if (Build.VERSION.SDK_INT >= 31) {
             val key = if (answer) Notification.EXTRA_ANSWER_INTENT else Notification.EXTRA_DECLINE_INTENT
             @Suppress("DEPRECATION")
-            (n.extras?.getParcelable(key) as? PendingIntent)?.let { return it }
+            n.extras?.getParcelable<PendingIntent>(key)?.let { return it }
         }
         val actions = n.actions ?: return null
         val index = IncomingCall.pickAction(actions.map { it.title?.toString().orEmpty() }, answer) ?: return null

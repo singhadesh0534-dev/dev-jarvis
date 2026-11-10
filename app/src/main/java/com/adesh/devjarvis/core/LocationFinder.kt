@@ -56,7 +56,7 @@ class LocationFinder @Inject constructor(@ApplicationContext private val context
                 providers.forEach { provider ->
                     runCatching {
                         if (Build.VERSION.SDK_INT >= 30) {
-                            lm.getCurrentLocation(provider, cancel, context.mainExecutor) { loc: Location? ->
+                            lm.getCurrentLocation(provider, cancel, context.mainExecutor) { loc ->
                                 if (loc != null) result.complete(loc)
                             }
                         } else {
