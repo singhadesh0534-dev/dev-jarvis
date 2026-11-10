@@ -23,6 +23,7 @@ class SpokenConfirmation(private val validForMs: Long = 120_000, private val min
     private var modelSpoke = false
     private val heard = StringBuilder()
     private var tapped: Boolean? = null
+    private var silentRetries = 0
 
     val pendingQuestion: String? get() = question
 
@@ -33,7 +34,10 @@ class SpokenConfirmation(private val validForMs: Long = 120_000, private val min
                 when (ConfirmationParser.parse(heard.toString())) {
                     ConfirmationParser.Answer.YES -> true
                     ConfirmationParser.Answer.NO -> false
-                    ConfirmationParser.Answer.UNCLEAR -> null
+                    // JARVIS asked, time passed and he is calling the tool again, so he heard Sir agree — but the app's
+                    // own transcript of the answer is missing or in words it doesn't know. One more ask, then trust him;
+                    // otherwise Sir gets the same question again and again.
+                    ConfirmationParser.Answer.UNCLEAR -> if (silentRetries >= 1) true else null
                 }
             } else null
             if (answer != null) {
@@ -41,6 +45,7 @@ class SpokenConfirmation(private val validForMs: Long = 120_000, private val min
                 return Outcome.Answer(answer)
             }
             val saidSomething = heard.isNotBlank()
+            if (modelSpoke && now - askedAt >= minGapMs) silentRetries++
             heard.clear()
             return Outcome.Ask(q, again = saidSomething)
         }
@@ -49,6 +54,7 @@ class SpokenConfirmation(private val validForMs: Long = 120_000, private val min
         modelSpoke = false
         heard.clear()
         tapped = null
+        silentRetries = 0
         return Outcome.Ask(q, again = false)
     }
 
@@ -77,5 +83,6 @@ class SpokenConfirmation(private val validForMs: Long = 120_000, private val min
         modelSpoke = false
         heard.clear()
         tapped = null
+        silentRetries = 0
     }
 }

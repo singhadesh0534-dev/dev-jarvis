@@ -47,6 +47,15 @@ class ContactRepository @Inject constructor(@ApplicationContext private val cont
         return Lookup.Found(best, best.numbers.first())
     }
 
+    /** Nearest saved names when nothing matched well enough, so JARVIS can ask "inme se kaun?" instead of "nahi mila". */
+    suspend fun closest(query: String, limit: Int = 3): List<String> {
+        if (!hasPermission()) return emptyList()
+        return FuzzyMatcher.rank(query, load(), threshold = 0.55) { listOf(it.name) }.take(limit).map { it.item.name }
+    }
+
+    /** How many contacts with a phone number JARVIS can see (0 usually means the permission or the account sync is the problem). */
+    suspend fun count(): Int = if (hasPermission()) load().size else 0
+
     private suspend fun load(): List<Contact> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         if (cache.isNotEmpty() && now - cachedAt < CACHE_MS) return@withContext cache

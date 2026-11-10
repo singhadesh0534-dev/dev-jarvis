@@ -46,7 +46,17 @@ class CommunicationTools @Inject constructor(
             if (Edition.declares(context, Manifest.permission.READ_CONTACTS)) "contacts permission missing — Sir can allow it in JARVIS Setup, or say the number"
             else "this Lite edition can't read contacts — ask Sir for the number (the Full update adds contacts)"
         )
-        Lookup.NotFound -> ToolResult.fail("no contact matching '$who'")
+        Lookup.NotFound -> {
+            val near = contacts.closest(who)
+            ToolResult.fail(
+                when {
+                    near.isNotEmpty() -> "no contact saved exactly as '$who'. Closest saved names: ${near.joinToString("; ")}. " +
+                        "Ask Sir politely which of these he means (or under what name the number is saved), then call the tool again with that exact name."
+                    contacts.count() == 0 -> "JARVIS can't see any contacts on this phone (0 with a number) — Sir should check the Contacts permission in JARVIS Setup"
+                    else -> "no contact like '$who' among ${contacts.count()} contacts. Ask Sir politely under what name the number is saved, or for the number itself."
+                },
+            )
+        }
         is Lookup.Found -> ToolResult.fail("unexpected")
     }
 
@@ -54,16 +64,19 @@ class CommunicationTools @Inject constructor(
 
     private val makeCall = object : SimpleTool(
         "make_call",
-        "Phone call to a contact (name or nickname like Mummy, Bhai) or a number. The app asks Sir to confirm.",
+        "Phone call to a contact (name or nickname like Mummy, Bhai) or a number. The app asks Sir to confirm, " +
+            "unless urgent=true. Pass the name only (\"Papa\"), in whatever script you heard it.",
         params {
             string("contact", "Contact name/nickname as Sir said it")
             string("number", "Phone number, if Sir said digits")
+            boolean("urgent", "true ONLY when Sir himself says it is an emergency / urgent / \"turant\" / \"bina pooche\": the call is placed at once, no confirmation")
         },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val target = who(args) ?: return ToolResult.fail("who should I call?")
             val (name, number) = resolve(target) ?: return lookupFailure(target)
-            if (!ctx.confirm("Sir, $name ko call karun?")) return ToolResult.ok("Sir said no — call cancelled")
+            val urgent = args.bool("urgent") == true
+            if (!urgent && !ctx.confirm("Sir, $name ko call karun?")) return ToolResult.ok("Sir said no — call cancelled")
             val emergency = number.trimStart('+').let { it == "100" || it == "112" || it == "108" || it == "101" }
             val canCall = has(Manifest.permission.CALL_PHONE) && !emergency
             val intent = Intent(if (canCall) Intent.ACTION_CALL else Intent.ACTION_DIAL, Uri.parse("tel:${Uri.encode(number)}"))

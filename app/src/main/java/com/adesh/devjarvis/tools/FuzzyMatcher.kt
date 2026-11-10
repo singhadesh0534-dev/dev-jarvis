@@ -40,30 +40,52 @@ object FuzzyMatcher {
     private val nonWord = Regex("""[^\p{L}\p{M}\p{N} ]""")
     private val spaces = Regex("""\s+""")
 
-    fun normalize(s: String): String = spaces.replace(nonWord.replace(s.lowercase(), " "), " ").trim()
+    /** Words that are not part of a name: "mere papa ji ko" -> "papa". */
+    private val FILLER = setOf(
+        "ji", "jee", "g", "sahab", "saab", "sahib", "sir", "madam", "mam", "ko", "ka", "ki", "ke", "se",
+        "mera", "meri", "mere", "my", "apne", "apni", "apna", "the", "wala", "wali", "number", "contact",
+    )
+    private val FOLDED_GROUPS: List<Set<String>> by lazy { ALIAS_GROUPS.map { g -> g.map(Translit::fold).toSet() } }
+
+    /** Lowercase, Hindi script -> Roman, punctuation and emoji out. */
+    fun normalize(s: String): String = spaces.replace(nonWord.replace(Translit.toLatin(s).lowercase(), " "), " ").trim()
 
     private fun tokens(s: String) = normalize(s).split(' ').filter { it.isNotEmpty() }
 
-    private fun aliasesOf(word: String): Set<String> =
-        ALIAS_GROUPS.firstOrNull { word in it } ?: setOf(word)
+    /** [query] without filler words, unless that would leave nothing. */
+    fun stripFiller(query: String): String = tokens(query).filter { it !in FILLER }.joinToString(" ").ifEmpty { normalize(query) }
 
-    /** Similarity 0..1 between what Sir said and a contact/app name. */
+    private fun aliasesOf(word: String, groups: List<Set<String>>): Set<String> =
+        groups.firstOrNull { word in it } ?: setOf(word)
+
+    /**
+     * Similarity 0..1 between what Sir said and a contact/app name. Tried twice: as written, and by sound
+     * ("पापा" / "pappa" / "paapa" == "Papa"), so the script or spelling the recogniser chose doesn't matter.
+     */
     fun score(query: String, candidate: String): Double {
-        val q = normalize(query)
+        val q = stripFiller(query)
         val c = normalize(candidate)
+        val asWritten = scoreNormalized(q, c, ALIAS_GROUPS)
+        if (asWritten >= 0.97) return asWritten
+        val bySound = scoreNormalized(Translit.fold(q), Translit.fold(c), FOLDED_GROUPS) * 0.98
+        return max(asWritten, bySound)
+    }
+
+    private fun scoreNormalized(q: String, c: String, groups: List<Set<String>>): Double {
         if (q.isEmpty() || c.isEmpty()) return 0.0
         if (q == c) return 1.0
         // Whole-phrase alias ("google pay" == "gpay").
-        if (aliasesOf(q).contains(c) || aliasesOf(c).contains(q)) return 0.93
+        if (aliasesOf(q, groups).contains(c) || aliasesOf(c, groups).contains(q)) return 0.93
 
-        val qt = tokens(q)
-        val ct = tokens(c)
+        val qt = q.split(' ').filter { it.isNotEmpty() }
+        val ct = c.split(' ').filter { it.isNotEmpty() }
+        if (qt.isEmpty() || ct.isEmpty()) return 0.0
         if (qt.all { it in ct }) return if (qt.size == ct.size) 0.97 else 0.92
-        if (qt.all { w -> ct.any { it in aliasesOf(w) } }) return 0.88
+        if (qt.all { w -> ct.any { it in aliasesOf(w, groups) } }) return 0.88
         if (q.length >= 3 && (c.startsWith(q) || ct.any { it.startsWith(q) })) return 0.84
 
         // Typos: best Jaro-Winkler per query token, averaged.
-        val perToken = qt.map { w -> ct.maxOf { max(jaroWinkler(w, it), aliasesOf(w).maxOf { a -> jaroWinkler(a, it) }) } }
+        val perToken = qt.map { w -> ct.maxOf { max(jaroWinkler(w, it), aliasesOf(w, groups).maxOf { a -> jaroWinkler(a, it) }) } }
         val tokenScore = perToken.average()
         val whole = jaroWinkler(q, c)
         return 0.8 * max(tokenScore, whole)

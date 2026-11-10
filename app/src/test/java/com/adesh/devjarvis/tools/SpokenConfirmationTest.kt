@@ -57,3 +57,31 @@ class SpokenConfirmationTest {
         assertEquals(Outcome.Ask("Sir, SMS bhej doon?", false), c.request("Sir, SMS bhej doon?", 60_000))
     }
 }
+
+class SpokenConfirmationLoopTest {
+    private val q = "Sir, Papa ko call karun?"
+
+    @Test fun missingTranscriptDoesNotLoopForEver() {
+        val c = SpokenConfirmation()
+        c.request(q, 0); c.onModelSpoke()
+        // Sir answered, JARVIS heard it, but the app got no transcript of the answer.
+        assertEquals(SpokenConfirmation.Outcome.Ask(q, false), c.request(q, 4_000))
+        assertEquals(SpokenConfirmation.Outcome.Answer(true), c.request(q, 9_000)) // second try: trust JARVIS
+    }
+
+    @Test fun aClearNoStillWinsOnTheSecondTry() {
+        val c = SpokenConfirmation()
+        c.request(q, 0); c.onModelSpoke()
+        c.request(q, 4_000)
+        c.onUserSaid("nahi rehne do")
+        assertEquals(SpokenConfirmation.Outcome.Answer(false), c.request(q, 9_000))
+    }
+
+    @Test fun tooFastRepeatsNeverCountAsAgreement() {
+        val c = SpokenConfirmation()
+        c.request(q, 0); c.onModelSpoke()
+        assertEquals(SpokenConfirmation.Outcome.Ask(q, false), c.request(q, 300))
+        assertEquals(SpokenConfirmation.Outcome.Ask(q, false), c.request(q, 600))
+        assertEquals(SpokenConfirmation.Outcome.Ask(q, false), c.request(q, 900))
+    }
+}

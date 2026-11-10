@@ -57,3 +57,39 @@ class FuzzyMatcherTest {
         assertEquals(0.0, FuzzyMatcher.jaroWinkler("abc", "xyz"), 1e-9)
     }
 }
+
+class HindiNameMatchTest {
+    private data class C(val name: String)
+    private val contacts = listOf(C("Papa"), C("Mummy Ji"), C("Rahul Sharma"), C("पूजा दीदी"), C("Chacha Ji Kanpur"), C("Amit Kumar"))
+    private fun best(q: String) = FuzzyMatcher.rank(q, contacts) { listOf(it.name) }.firstOrNull()?.item?.name
+
+    @Test fun transliteration() {
+        assertEquals("paapaa", Translit.toLatin("पापा"))
+        assertEquals("raam", Translit.toLatin("राम"))
+        assertEquals("mammee jee", Translit.toLatin("मम्मी जी"))
+        assertEquals("Papa", Translit.toLatin("Papa"))
+        assertEquals("papa", Translit.fold("पापा"))
+        assertEquals(Translit.fold("pappa"), Translit.fold("Paapa"))
+    }
+
+    @Test fun hindiScriptQueryFindsEnglishContact() {
+        assertEquals("Papa", best("पापा"))
+        assertEquals("Mummy Ji", best("मम्मी"))
+        assertEquals("Rahul Sharma", best("राहुल शर्मा"))
+    }
+
+    @Test fun englishQueryFindsHindiScriptContact() = assertEquals("पूजा दीदी", best("pooja didi"))
+
+    @Test fun fillerWordsAreIgnored() {
+        assertEquals("Papa", best("mere papa ji ko"))
+        assertEquals("Papa", best("Papa ji"))
+        assertEquals("Mummy Ji", best("apni mummy"))
+        assertEquals("Chacha Ji Kanpur", best("chacha ji"))
+    }
+
+    @Test fun spellingVariants() {
+        assertEquals("Papa", best("pappa"))
+        assertEquals("Papa", best("paapa"))
+        assertEquals("Amit Kumar", best("ameet kumaar"))
+    }
+}
