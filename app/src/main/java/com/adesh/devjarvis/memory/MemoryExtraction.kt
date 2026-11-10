@@ -17,6 +17,8 @@ object MemoryExtraction {
         appendLine("You maintain the long-term memory of a personal voice assistant whose user is called Sir.")
         appendLine("From the conversation, extract only DURABLE facts worth remembering for weeks:")
         appendLine("people and relationships (names, nicknames, how they're saved in contacts), preferences, routines, ongoing projects.")
+        appendLine("Also extract LESSONS: whenever Sir corrected the assistant or was unhappy (\"aise nahi\", \"galat\", \"maine ye nahi bola\"),")
+        appendLine("write what to do differently next time as a fact starting with \"Lesson:\", e.g. \"Lesson: when Sir says 'gaana chalao' he means YouTube Music, not Spotify.\"")
         appendLine("Ignore one-off requests (\"set a timer\"), small talk, and anything about OTPs, passwords, PINs, banking or card numbers.")
         appendLine("Write each fact as one short third-person sentence, e.g. \"Sir's mother is saved as 'Mummy Ji' in contacts.\"")
         appendLine("Do not repeat facts already known. Return at most 5 facts; an empty list is fine.")

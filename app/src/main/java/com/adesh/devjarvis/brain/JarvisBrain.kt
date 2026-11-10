@@ -68,13 +68,14 @@ class JarvisBrain @Inject constructor(
      */
     private fun geminiTurn(
         s: JarvisSettings, model: String, system: String, contents: JsonArray, tools: JsonArray?, jsonMode: Boolean = false,
+        thinking: String = JarvisConfig.GEMINI_THINKING_LEVEL,
     ): Flow<GeminiStreamParser.Chunk> = flow {
         var tries = 0
         while (true) {
             val key = keys.gemini.current(s.geminiApiKey)
             var started = false
             try {
-                gemini.streamTurn(key, model, system, contents, tools, jsonMode).collect { started = true; emit(it) }
+                gemini.streamTurn(key, model, system, contents, tools, jsonMode, thinking).collect { started = true; emit(it) }
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
@@ -180,12 +181,14 @@ class JarvisBrain @Inject constructor(
         val contents = (conversation.snapshot().map { GeminiContents.text(it.role, it.text) } +
             GeminiContents.text(Role.USER, userText)).toMutableList()
         var spokeAnything = false
+        val effort = Effort.forQuery(userText)
         for (round in 0 until MAX_TOOL_ROUNDS) {
             val rawParts = mutableListOf<JsonObject>()
             val calls = mutableListOf<GeminiStreamParser.FunctionCall>()
             usage.recordGeminiRequest()
             try {
-                geminiTurn(s, s.geminiModel, system, JsonArray(contents), registry.geminiTools)
+                // First round decides how hard to think from Sir's words; tool follow-ups are routine.
+                geminiTurn(s, s.geminiModel, system, JsonArray(contents), registry.geminiTools, thinking = if (round == 0) effort else Effort.FAST)
                     .collect { chunk ->
                         rawParts += chunk.rawParts
                         calls += chunk.calls

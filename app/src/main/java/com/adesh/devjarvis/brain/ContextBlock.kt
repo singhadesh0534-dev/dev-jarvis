@@ -45,6 +45,7 @@ object ContextBlock {
             appendLine("What you remember about Sir. Treat it as things you simply know: use the names, preferences and")
             appendLine("projects without being asked, never say \"my memory says\", and never ask for something listed here:")
             memories.forEach { appendLine("- $it") }
+            if (memories.any { it.startsWith("Lesson:") }) appendLine("Lines starting with \"Lesson:\" are mistakes you made before: do not repeat them.")
         }
     }.trimEnd()
 }

@@ -30,6 +30,8 @@ data class LifeData(
     val expenses: List<Expense> = emptyList(),
     val places: List<Place> = emptyList(),
     val placeReminders: List<PlaceReminder> = emptyList(),
+    /** Habit name -> times it was done (epoch millis). */
+    val habits: Map<String, List<Long>> = emptyMap(),
 )
 
 object LifeCodec {
@@ -42,6 +44,7 @@ object LifeCodec {
         put("expenses", buildJsonArray {
             d.expenses.forEach { add(buildJsonObject { put("t", it.time); put("amount", it.amount); put("cat", it.category); put("note", it.note) }) }
         })
+        put("habits", buildJsonObject { d.habits.forEach { (k, v) -> put(k, JsonArray(v.map { JsonPrimitive(it) })) } })
         put("places", buildJsonArray { d.places.forEach { add(buildJsonObject { put("name", it.name); put("lat", it.lat); put("lon", it.lon) }) } })
         put("placeReminders", buildJsonArray {
             d.placeReminders.forEach { add(buildJsonObject { put("id", it.id); put("place", it.place); put("text", it.text); put("armed", it.armed) }) }
@@ -60,6 +63,7 @@ object LifeCodec {
             notes = arr("notes").map { Note(it.l("t"), it.s("text")) },
             lists = obj("lists")?.mapValues { e -> (e.value as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull } }.orEmpty(),
             expenses = arr("expenses").map { Expense(it.l("t"), it.d("amount"), it.s("cat"), it.s("note")) },
+            habits = obj("habits")?.mapValues { e -> (e.value as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.longOrNull } }.orEmpty(),
             places = arr("places").map { Place(it.s("name"), it.d("lat"), it.d("lon")) },
             placeReminders = arr("placeReminders").map { PlaceReminder(it.l("id"), it.s("place"), it.s("text"), it["armed"]?.jsonPrimitive?.contentOrNull != "false") },
         )

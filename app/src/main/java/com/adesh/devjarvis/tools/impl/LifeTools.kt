@@ -72,6 +72,35 @@ class LifeTools @Inject constructor(
         }
     }
 
+    private val logHabit = object : SimpleTool(
+        "log_habit", "Record that Sir did a habit just now (water, gym, study, meditation, medicine...).",
+        params { string("habit", "Habit name, one or two words", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val name = LifeMath.key(args.requireString("habit"))
+            if (name.isEmpty()) return ToolResult.fail("which habit?")
+            val now = System.currentTimeMillis()
+            val d = store.update { it.copy(habits = it.habits + (name to (it.habits[name].orEmpty() + now).takeLast(400))) }
+            val today = d.habits[name].orEmpty().count { it >= LifeMath.periodStart("today", now) }
+            val week = d.habits[name].orEmpty().count { it >= LifeMath.periodStart("week", now) }
+            return ToolResult.ok("$name logged: $today today, $week in the last 7 days")
+        }
+    }
+
+    private val habitSummary = object : SimpleTool(
+        "habit_summary", "How often Sir did his habits today and in the last 7 days.",
+        params { string("habit", "One habit, or leave out for all") },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val now = System.currentTimeMillis()
+            val only = args.string("habit")?.let { LifeMath.key(it) }
+            val rows = store.get().habits.filterKeys { only == null || it == only }.map { (k, v) ->
+                "$k: ${v.count { it >= LifeMath.periodStart("today", now) }} today, ${v.count { it >= LifeMath.periodStart("week", now) }} this week"
+            }
+            return ToolResult.ok(if (rows.isEmpty()) "no habits logged yet" else rows.joinToString("; "))
+        }
+    }
+
     private val listPlaceReminders = object : SimpleTool("list_place_reminders", "List saved places and the reminders waiting for them.") {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val d = store.get()
@@ -257,6 +286,6 @@ class LifeTools @Inject constructor(
 
     val tools: List<JarvisTool> = listOf(
         saveRoutine, deleteRoutine, listRoutines, addNote, getNotes, deleteNote, listAdd, listGet, listRemove, addExpense, expenseSummary,
-        savePlace, remindAtPlace, listPlaceReminders, deletePlaceReminder,
+        savePlace, remindAtPlace, listPlaceReminders, deletePlaceReminder, logHabit, habitSummary,
     )
 }

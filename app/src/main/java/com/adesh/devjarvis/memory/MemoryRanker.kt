@@ -33,7 +33,8 @@ object MemoryRanker {
         val days = (now - fact.lastUsed).coerceAtLeast(0) / 86_400_000.0
         val recency = exp(-days / 30.0) * 0.5 // 0.5 today -> ~0.18 after a month
         val categoryBoost = if (fact.category == "person" || fact.category == "preference") 0.15 else 0.0
-        return keyword * 1.0 + recency + categoryBoost
+        val lesson = if (fact.text.startsWith("Lesson:")) 1.2 else 0.0 // past mistakes are always worth keeping in view
+        return keyword * 1.0 + recency + categoryBoost + lesson
     }
 
     /** Top [limit]. With a query, facts need at least one keyword hit unless we have room to spare. */

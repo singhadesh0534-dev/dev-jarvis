@@ -56,10 +56,12 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
         contents: JsonArray,
         tools: JsonArray?,
         jsonMode: Boolean = false,
+        /** Gemini 3.x thinking level for this request; blank = don't send the field. */
+        thinkingLevel: String = JarvisConfig.GEMINI_THINKING_LEVEL,
     ): Flow<GeminiStreamParser.Chunk> = channelFlow {
         if (apiKey.isBlank()) throw BrainError.MissingKey()
 
-        var useThinking = JarvisConfig.GEMINI_THINKING_LEVEL.isNotBlank()
+        var useThinking = thinkingLevel.isNotBlank()
         val call = AtomicReference<Call?>(null)
         val reader = launch(Dispatchers.IO) {
             while (true) {
@@ -67,7 +69,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
                     .url("${JarvisConfig.GEMINI_BASE_URL}/models/$model:streamGenerateContent?alt=sse")
                     // Key header mein — URL mein nahi, taaki kisi log mein na dikhe.
                     .header("x-goog-api-key", apiKey)
-                    .post(buildBody(systemInstruction, contents, tools, useThinking, jsonMode).toString().toRequestBody(JSON))
+                    .post(buildBody(systemInstruction, contents, tools, if (useThinking) thinkingLevel else "", jsonMode).toString().toRequestBody(JSON))
                     .build()
                 val current = http.newCall(request).also { call.set(it) }
                 val response = try {
@@ -104,7 +106,7 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
         awaitClose { call.get()?.cancel(); reader.cancel() }
     }
 
-    private fun buildBody(systemInstruction: String, contents: JsonArray, tools: JsonArray?, thinking: Boolean, jsonMode: Boolean): JsonObject =
+    private fun buildBody(systemInstruction: String, contents: JsonArray, tools: JsonArray?, thinking: String, jsonMode: Boolean): JsonObject =
         buildJsonObject {
             putJsonObject("system_instruction") {
                 putJsonArray("parts") { addJsonObject { put("text", systemInstruction) } }
@@ -115,8 +117,8 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
                 put("temperature", JarvisConfig.GEMINI_TEMPERATURE)
                 put("maxOutputTokens", JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS)
                 if (jsonMode) put("responseMimeType", "application/json")
-                if (thinking) {
-                    putJsonObject("thinkingConfig") { put("thinkingLevel", JarvisConfig.GEMINI_THINKING_LEVEL) }
+                if (thinking.isNotBlank()) {
+                    putJsonObject("thinkingConfig") { put("thinkingLevel", thinking) }
                 }
             }
         }

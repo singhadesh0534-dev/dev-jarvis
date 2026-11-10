@@ -14,6 +14,8 @@ object BriefingTemplate {
         val batteryPercent: Int,
         val charging: Boolean,
         val facts: List<String>,
+        /** Two or three headlines, already one line each; null = none. */
+        val news: String? = null,
     )
 
     fun greeting(hour: Int) = when (hour) {
@@ -85,5 +87,6 @@ object BriefingTemplate {
         appendLine("Reminders today: ${i.reminders.ifEmpty { listOf("none") }.joinToString("; ")}")
         appendLine("Battery: ${i.batteryPercent}%${if (i.charging) " charging" else ""}")
         if (i.facts.isNotEmpty()) appendLine("Facts about Sir: ${i.facts.joinToString("; ")}")
+        if (!i.news.isNullOrBlank()) appendLine("Top news to mention in one sentence (only what is written here): ${i.news}")
     }
 }

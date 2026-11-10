@@ -90,6 +90,7 @@ class BriefingComposer @Inject constructor(
             batteryPercent = d.batteryPercent,
             charging = d.charging,
             facts = memory.relevant("", limit = 3).map { it.text },
+            news = runCatching { brain.webAnswer("Aaj ki India ki 3 sabse badi khabrein, har ek ek chhoti line mein") }.getOrNull()?.take(400),
         )
         val llm = brain.complete(s.systemPrompt, BriefingTemplate.llmPrompt(inputs), json = false)
             ?.let { SpeechSanitizer.clean(it) }
