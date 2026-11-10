@@ -14,7 +14,9 @@ import com.adesh.devjarvis.memory.MemoryExtractor
 import com.adesh.devjarvis.settings.JarvisSettings
 import com.adesh.devjarvis.screen.ScreenTools
 import com.adesh.devjarvis.settings.SettingsRepository
+import com.adesh.devjarvis.tools.ConfirmationNeeded
 import com.adesh.devjarvis.tools.ConfirmationParser
+import com.adesh.devjarvis.tools.SpokenConfirmation
 import com.adesh.devjarvis.tools.ToolContext
 import com.adesh.devjarvis.tools.ToolRegistry
 import com.adesh.devjarvis.tools.ToolResult
@@ -171,11 +173,13 @@ class JarvisSession @Inject constructor(
     private var liveRetryAt = 0L
     private val liveActive: Boolean get() = liveJob?.isActive == true
     /** Set if the server refused our turn-taking config; then we connect without it. */
+    private val liveConfirm = SpokenConfirmation()
     private var liveVadRejected = false
     private var liveUsedPatientVad = false
 
     private val toolContext = object : ToolContext {
-        override suspend fun confirm(question: String): Boolean = confirmByVoice(question)
+        override suspend fun confirm(question: String): Boolean =
+            if (liveActive) confirmInLive(question) else confirmByVoice(question)
     }
 
     init {
@@ -291,8 +295,29 @@ class JarvisSession @Inject constructor(
 
     /** YES / NO buttons on the HUD while a confirmation is pending. */
     fun answerConfirmation(yes: Boolean) {
+        if (liveConfirm.onTap(yes)) {
+            _ui.update { it.copy(pendingConfirmation = null) }
+            liveConn?.sendText(
+                if (yes) "[Sir tapped YES on the screen. Call the tool again now with the same arguments.]"
+                else "[Sir tapped NO on the screen. Do not call the tool; tell him it is cancelled.]"
+            )
+            return
+        }
         confirmAnswer?.complete(yes)
     }
+
+    /** Live mode: JARVIS asks in his own Live voice; the app reads Sir's answer from the transcript. */
+    private fun confirmInLive(question: String): Boolean =
+        when (val o = liveConfirm.request(question, System.currentTimeMillis())) {
+            is SpokenConfirmation.Outcome.Answer -> {
+                _ui.update { it.copy(pendingConfirmation = null) }
+                o.yes
+            }
+            is SpokenConfirmation.Outcome.Ask -> {
+                _ui.update { it.copy(pendingConfirmation = question) }
+                throw ConfirmationNeeded(o.question, o.again)
+            }
+        }
 
     /** Proactive line that should only be shown, not spoken (quiet hours, DND…). */
     fun note(text: String) = addLine(fromUser = false, text = text, system = true)
@@ -558,6 +583,10 @@ class JarvisSession @Inject constructor(
         val lineId = nextId++
         upsertLine(lineId, "⚙ $name($argText)", system = true)
         val result = registry.execute(name, args, toolContext)
+        if (result.awaitingConfirmation) {
+            upsertLine(lineId, "? $name: Sir ki haan/naa ka intezaar", system = true)
+            return result
+        }
         if (result.ok) earcons.success() else earcons.error()
         if (result.endsConversation) endAfterReply = true
         upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: ${result.message}", system = true)
@@ -760,6 +789,7 @@ class JarvisSession @Inject constructor(
                     when (val e = (ev as LiveConnection.Event.Server).event) {
                         is LiveMessages.ServerEvent.InputText -> {
                             followUp?.cancel()
+                            liveConfirm.onUserSaid(e.text)
                             userSaid.append(e.text)
                             if (userLine < 0) userLine = nextId++
                             upsertLine(userLine, userSaid.toString().trim(), fromUser = true)
@@ -773,6 +803,7 @@ class JarvisSession @Inject constructor(
                         }
                         is LiveMessages.ServerEvent.OutputText -> {
                             anyReply = true
+                            liveConfirm.onModelSpoke()
                             jarvisSaid.append(e.text)
                             speakingText = jarvisSaid.toString()
                             if (jarvisLine < 0) jarvisLine = nextId++
@@ -813,6 +844,8 @@ class JarvisSession @Inject constructor(
                 audio.stop()
                 conn.close()
                 liveConn = null
+                liveConfirm.clear()
+                _ui.update { it.copy(pendingConfirmation = null) }
                 liveAudio = null
                 liveOutLevel.value = 0f
                 focus.ownCommunicationMode = false

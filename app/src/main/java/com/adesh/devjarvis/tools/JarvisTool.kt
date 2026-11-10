@@ -28,6 +28,8 @@ data class ToolResult(
     val message: String,
     /** E.g. a phone call started: don't open the follow-up mic afterwards. */
     val endsConversation: Boolean = false,
+    /** Not a failure: the tool is waiting for Sir's spoken yes/no and will be called again. */
+    val awaitingConfirmation: Boolean = false,
 ) {
     companion object {
         fun ok(message: String, endsConversation: Boolean = false) = ToolResult(true, message, endsConversation)

@@ -51,6 +51,14 @@ class ToolRegistry @Inject constructor(
             tool.execute(ToolArgs(args), ctx)
         } catch (e: CancellationException) {
             throw e
+        } catch (e: ConfirmationNeeded) {
+            ToolResult(
+                ok = false,
+                awaitingConfirmation = true,
+                message = (if (e.again) "Sir's answer was not a clear yes or no. " else "NOT DONE YET - confirmation needed. ") +
+                    "Ask Sir exactly this, in your own voice: \"${e.question}\" Then wait for his answer. " +
+                    "If he agrees, call this same tool again with the same arguments. If he refuses, do not call it and say it is cancelled.",
+            )
         } catch (e: ToolArgError) {
             ToolResult.fail("bad arguments: ${e.message}")
         } catch (e: SecurityException) {

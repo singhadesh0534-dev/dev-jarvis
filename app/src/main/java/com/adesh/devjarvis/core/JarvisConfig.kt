@@ -67,6 +67,8 @@ object JarvisConfig {
     val PREFERRED_VOICE_PREFIXES = listOf(
         "en-gb-x-rjs", "en-gb-x-gbd", "en-gb-x-gbb",
         "en-in-x-ene", "en-in-x-end",
+        // More male voices, so a missing UK/India voice never falls back to a female one.
+        "en-us-x-iom", "en-us-x-iol", "en-au-x-aub", "en-au-x-aud",
     )
 
     // ---- Wake word (offline, Vosk) ----

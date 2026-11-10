@@ -8,11 +8,13 @@ object ConfirmationParser {
     private val no = listOf(
         "nahi", "nahin", "nai", "no", "nope", "mat", "cancel", "ruko", "rehne do", "rahne do",
         "stop", "wait", "don't", "dont", "do not", "never", "abhi nahi", "mat karo",
+        "नहीं", "नही", "मत", "रहने दो", "रुको", "कैंसिल", "ना",
     )
     private val yes = listOf(
         "haan", "haa", "ha", "han", "haanji", "haan ji", "ji haan", "yes", "yeah", "yep", "yup", "ok", "okay",
         "kar do", "karo", "kardo", "bhej do", "bhejo", "laga do", "sure", "bilkul", "theek hai", "thik hai",
         "chalo", "go ahead", "confirm", "do it", "please", "zaroor", "of course", "call karo", "send",
+        "हाँ", "हां", "हा", "जी", "ठीक है", "कर दो", "करो", "भेज दो", "बिल्कुल", "ज़रूर", "जरूर", "यस", "ओके",
     )
     private val nonWord = Regex("""[^\p{L}\p{M}\p{N}' ]""")
     private val spaces = Regex("""\s+""")
