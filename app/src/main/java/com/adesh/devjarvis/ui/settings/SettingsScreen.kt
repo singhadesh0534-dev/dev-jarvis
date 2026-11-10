@@ -226,6 +226,11 @@ fun SettingsScreen(
             }
             Hint("Quiet hours, DND, silent mode (bina headphones) ya call ke dauraan JARVIS khud se nahi bolta — sirf notification. Aapke apne reminders raat mein bhi bolte hain.")
             ToggleRow(
+                "Turant commands (bina AI)",
+                "Torch, volume, Wi-Fi / Bluetooth, timer, gaana roko, app kholo, home / back / lock — Classic mode mein usi pal, bina internet aur bina quota ke. Live mode mein awaaz seedhi Gemini ko jaati hai, wahan ye lagu nahi.",
+                draft.instantCommands,
+            ) { v -> viewModel.edit { it.copy(instantCommands = v) } }
+            ToggleRow(
                 "Aadat se sujhaav",
                 "Jo kaam aap aksar isi waqt karwate hain (app kholna, gaana, Wi-Fi), JARVIS ek baar pooch leta hai. Din mein zyada se zyada 3.",
                 draft.suggestHabits,

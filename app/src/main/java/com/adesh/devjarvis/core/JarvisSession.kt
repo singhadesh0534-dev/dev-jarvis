@@ -633,6 +633,26 @@ class JarvisSession @Inject constructor(
             var lineId = firstLineId
             var lineStart = 0
             try {
+                // Simple commands (torch, volume, timer, open an app...) are done on the spot: no internet, no quota, no wait.
+                val quick = if (settings.current.instantCommands) QuickCommands.match(userText) else null
+                if (quick != null) {
+                    val result = runTool(quick.tool, JsonObject(quick.args.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }))
+                    SessionTrace.add("QUICK ${quick.tool} ok=${result.ok}")
+                    if (result.ok || !device.isOnline()) {
+                        val detail = result.message.lineSequence().firstOrNull().orEmpty().take(180)
+                        val line = if (result.ok) quick.say ?: "Sir, $detail" else "Sir, ye abhi nahi ho paya: $detail"
+                        full.append(line)
+                        upsertLine(lineId, line)
+                        speakPiece(line)
+                        brain.remember(userText, line)
+                        lastJarvisSaid = line
+                        speechOut.awaitIdle()
+                        afterReply(userText)
+                        return@launch
+                    }
+                    // It did not work and the brain is reachable: let it handle the request properly.
+                    lineId = nextId++
+                }
                 brain.reply(userText, ::runTool).collect { ev ->
                     when (ev) {
                         is BrainEvent.Text -> {

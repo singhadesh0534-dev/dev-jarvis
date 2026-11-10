@@ -94,6 +94,8 @@ data class JarvisSettings(
     val suggestHabits: Boolean = true,
     /** Write a short diary entry every night. */
     val diaryEnabled: Boolean = true,
+    /** Torch, volume, timer, open app... done at once without the AI (works offline, costs no quota). */
+    val instantCommands: Boolean = true,
 ) {
     val hasExtraBrain: Boolean get() = extraApiKey.isNotBlank() && extraModel.isNotBlank() && extraBaseUrl.startsWith("https://")
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
@@ -195,6 +197,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_EXTRA_MODEL, cleaned.extraModel.trim())
             .putBoolean(K_SUGGEST, cleaned.suggestHabits)
             .putBoolean(K_DIARY, cleaned.diaryEnabled)
+            .putBoolean(K_INSTANT, cleaned.instantCommands)
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -258,6 +261,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             extraModel = prefs.getString(K_EXTRA_MODEL, d.extraModel).orEmpty(),
             suggestHabits = prefs.getBoolean(K_SUGGEST, d.suggestHabits),
             diaryEnabled = prefs.getBoolean(K_DIARY, d.diaryEnabled),
+            instantCommands = prefs.getBoolean(K_INSTANT, d.instantCommands),
         )
     }
 
@@ -315,6 +319,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_EXTRA_MODEL = "extra_model"
         const val K_SUGGEST = "suggest_habits"
         const val K_DIARY = "diary_enabled"
+        const val K_INSTANT = "instant_commands"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"
