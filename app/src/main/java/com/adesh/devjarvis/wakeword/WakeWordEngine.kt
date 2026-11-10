@@ -175,24 +175,36 @@ class WakeWordEngine @Inject constructor(
                     EnergyGate.Result.Skip -> continue
                 }
                 for (chunk in chunks) {
-                    val isFinal = recognizer.acceptWaveForm(chunk, chunk.size)
-                    val raw = if (isFinal) recognizer.result else recognizer.partialResult
-                    val heard = WakePhraseMatcher.parse(raw, isFinal) ?: continue
-                    if (isFinal) _lastHeard.value = heard.text
+                    var isFinal = recognizer.acceptWaveForm(chunk, chunk.size)
+                    var raw = if (isFinal) recognizer.result else recognizer.partialResult
+                    var heard = WakePhraseMatcher.parse(raw, isFinal)
+                    if (heard == null) {
+                        partialStreak = 0
+                        continue
+                    }
+                    if (isFinal) {
+                        _lastHeard.value = heard.text
+                        partialStreak = 0
+                    }
 
                     val now = System.currentTimeMillis()
                     if (now < cooldownUntil) continue
-                    // With speaker lock we need the "spk" vector, which only comes on a final result.
                     val lockOnThisTurn = spk != null && currentMode == Mode.WAKE
-                    if (lockOnThisTurn && !isFinal) continue
-                    // Don't wait for Sir to go silent: the phrase showing up in a few partials in a row is enough.
-                    // (Waiting for the final result made JARVIS wake late, on the words after "Hello Dev".)
-                    val stablePartial = !isFinal && currentMode == Mode.WAKE && WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) != null
-                    partialStreak = if (stablePartial) partialStreak + 1 else 0
-                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity)
-                        ?: (if (partialStreak >= STABLE_PARTIALS) WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) else null)
-                        ?: continue
-                    partialStreak = 0
+                    if (!isFinal) {
+                        // Don't wait for Sir to go silent (that made JARVIS wake late, on the words after "Hello Dev").
+                        // Once the phrase has held for ~300 ms, close the utterance ourselves: the forced final result
+                        // carries word confidences (and the voiceprint), so noise still can't wake him.
+                        val stable = currentMode == Mode.WAKE && WakePhraseMatcher.matchedPhrase(heard.text, phrasesFor(currentMode)) != null
+                        partialStreak = if (stable) partialStreak + 1 else 0
+                        if (partialStreak < STABLE_PARTIALS) continue
+                        partialStreak = 0
+                        raw = recognizer.finalResult
+                        heard = WakePhraseMatcher.parse(raw, true)
+                        if (heard == null) continue
+                        isFinal = true
+                        _lastHeard.value = heard.text
+                    }
+                    val phrase = WakePhraseMatcher.shouldTrigger(heard, phrasesFor(currentMode), sensitivity) ?: continue
 
                     if (lockOnThisTurn) {
                         val profile = speakerProfile

@@ -102,6 +102,19 @@ class LiveConnection(
         socket?.send(msg)
     }
 
+    /** Sends (or queues until setup completes) a text turn. */
+    fun sendText(text: String) {
+        if (closed) return
+        val msg = LiveMessages.text(text)
+        synchronized(pending) {
+            if (!ready) {
+                pending.addLast(msg)
+                return
+            }
+        }
+        socket?.send(msg)
+    }
+
     fun sendToolResponse(json: String) {
         if (!closed) socket?.send(json)
     }

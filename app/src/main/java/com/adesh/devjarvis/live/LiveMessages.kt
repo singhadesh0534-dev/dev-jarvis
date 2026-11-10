@@ -95,6 +95,11 @@ object LiveMessages {
         }
     }.toString()
 
+    /** A typed/internal user turn inside the Live session (e.g. "greet Sir"). */
+    fun text(text: String): String = buildJsonObject {
+        putJsonObject("realtimeInput") { put("text", text) }
+    }.toString()
+
     fun toolResponse(results: List<Pair<Call, ToolResult>>): String = buildJsonObject {
         putJsonObject("toolResponse") {
             putJsonArray("functionResponses") {

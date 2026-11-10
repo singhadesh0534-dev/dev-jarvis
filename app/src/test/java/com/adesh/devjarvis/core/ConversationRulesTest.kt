@@ -15,6 +15,14 @@ class ConversationRulesTest {
     }
 
     @Test
+    fun notTalkingToYouEndsConversation() {
+        assertTrue(ConversationRules.isEnder("Arre maine tumko nahi bola"))
+        assertTrue(ConversationRules.isEnder("I wasn't talking to you, Jarvis"))
+        assertTrue(ConversationRules.isNotForJarvis("तुमसे नहीं बोल रहा"))
+        assertFalse(ConversationRules.isNotForJarvis("tumko bola tha torch on karo"))
+    }
+
+    @Test
     fun normalQuestionsKeepConversationOpen() {
         assertFalse(ConversationRules.isEnder("bas ek kaam aur karo"))
         assertFalse(ConversationRules.isEnder("thank you ke baad kya bolte hain"))

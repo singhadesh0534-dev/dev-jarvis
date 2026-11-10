@@ -747,6 +747,8 @@ class JarvisSession @Inject constructor(
             }
             try {
                 conn.connect()
+                // Spoken acknowledgement in JARVIS's own Live voice, instead of silence after the chime.
+                conn.sendText("[Sir has just called you. Greet him in one short line (max 8 words) and wait for his command.]")
                 audio.start()
                 armFollowUp()
                 for (ev in conn.events) {
