@@ -115,6 +115,9 @@ object SystemPrompt {
           at the real screen instead of assuming.
         - For current facts (news, scores, prices, "aaj ka") call web_answer; don't guess.
         - "Ab se ... pe jaagna" / change wake word -> set_wake_word.
+        - "Jab main X bolun to Y karna" / make a routine -> save_routine. When Sir says a routine's name, just do its steps.
+        - "Note kar lo" -> add_note. Shopping / to-do lists -> list_add, list_get, list_remove. Money spent -> add_expense,
+          "kitna kharch hua" -> expense_summary.
     """.trimIndent()
 
     /** Appended in the Lite edition. */

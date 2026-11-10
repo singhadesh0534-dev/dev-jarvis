@@ -6,6 +6,7 @@ import com.adesh.devjarvis.core.Edition
 import com.adesh.devjarvis.core.JarvisConfig
 import com.adesh.devjarvis.core.Provider
 import com.adesh.devjarvis.core.UsageTracker
+import com.adesh.devjarvis.life.LifeStore
 import com.adesh.devjarvis.memory.MemoryRepository
 import com.adesh.devjarvis.notifications.NotificationStore
 import com.adesh.devjarvis.settings.JarvisSettings
@@ -47,6 +48,7 @@ class JarvisBrain @Inject constructor(
     private val registry: ToolRegistry,
     private val memory: MemoryRepository,
     private val notifications: NotificationStore,
+    private val life: LifeStore,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
     /** Exchanges not yet looked at by the memory extractor. */
@@ -109,6 +111,11 @@ class JarvisBrain @Inject constructor(
                     (if (Build.MANUFACTURER.equals("infinix", ignoreCase = true)) " with the XOS skin (Phone Master, XOS launcher, Folax assistant)" else ""),
             )
         )
+        val routines = life.get().routines
+        if (routines.isNotEmpty()) {
+            append("\n\n[Sir's routines / shortcuts — when he says one of these names, carry out its steps with your tools, in order]\n")
+            routines.forEach { (name, steps) -> append("- \"").append(name).append("\": ").append(steps).append('\n') }
+        }
         if (forLive) {
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {
