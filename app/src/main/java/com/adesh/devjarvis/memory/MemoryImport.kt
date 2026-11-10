@@ -63,6 +63,22 @@ object MemoryImport {
         return result.take(max)
     }
 
+    /** Small enough to be notes or a memories file (not a whole chat history): safe to store line by line without AI. */
+    const val PLAIN_LIMIT_CHARS = 20_000
+    const val PLAIN_MAX_FACTS = 40
+    private val codeLike = Regex("""[{}<>;=\[\]]|^\W*$""")
+
+    /**
+     * No AI available: keep the lines that read like statements, as they are. Bullets and numbering are stripped;
+     * questions, code, very short or very long lines and anything that looks secret are skipped.
+     */
+    fun plainFacts(text: String, max: Int = PLAIN_MAX_FACTS): List<String> =
+        text.split(Regex("""\n+|(?<=[.!।])\s+"""))
+            .map { it.trim().trimStart('-', '*', '•', '#', '>', ' ').replace(Regex("""^\d+[.)]\s*"""), "").trim() }
+            .filter { it.length in 15..220 && !it.endsWith("?") && !codeLike.containsMatchIn(it) && !MemoryExtraction.looksSecret(it) }
+            .distinctBy { it.lowercase() }
+            .take(max)
+
     fun systemPrompt(existing: List<String>): String = buildString {
         appendLine("You are filling the long-term memory of a personal voice assistant whose user is called Sir.")
         appendLine("Below is text exported from Sir's earlier chats or notes with another assistant. Everything the human")

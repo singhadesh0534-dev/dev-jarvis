@@ -64,17 +64,25 @@ class MemoryViewModel @Inject constructor(
     val importStatus = MutableStateFlow<String?>(null)
     private var importing = false
 
-    fun importFrom(uri: Uri) {
+    fun importFrom(uri: Uri) = runImport { progress -> importer.importFile(uri, progress) }
+
+    /** Text pasted by Sir (notes, or another assistant's "what I know about you" answer). */
+    fun importPasted(text: String) {
+        if (text.isNotBlank()) runImport { progress -> importer.importText(text, progress) }
+    }
+
+    private fun runImport(work: suspend ((Int, Int) -> Unit) -> MemoryImporter.Outcome) {
         if (importing) return
         importing = true
-        importStatus.value = "File padh raha hoon…"
+        importStatus.value = "Padh raha hoon…"
         viewModelScope.launch {
             val outcome = runCatching {
-                importer.importFile(uri) { done, total -> importStatus.value = "Yaadein nikaal raha hoon… $done / $total" }
+                work { done, total -> importStatus.value = "Yaadein nikaal raha hoon… $done / $total" }
             }.getOrElse { MemoryImporter.Outcome.Failed("Import ruk gaya (${it.javaClass.simpleName}).") }
             importStatus.value = when (outcome) {
                 is MemoryImporter.Outcome.Done ->
                     "${outcome.added} nayi baatein yaad kar li." +
+                        (if (outcome.withoutAi) " AI nahi mila, isliye lines jaisi thi waisi save ki — galat wali neeche se hata dijiye." else "") +
                         (if (outcome.truncated) " File bahut badi thi — sirf shuru ka hissa padha. \"memories\" wali file chhoti aur behtar hai." else "")
                 is MemoryImporter.Outcome.Failed -> outcome.reason
             }
@@ -101,6 +109,7 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<Fact?>(null) }
     var adding by remember { mutableStateOf(false) }
     var confirmWipe by remember { mutableStateOf(false) }
+    var pasting by remember { mutableStateOf(false) }
     val importStatus by viewModel.importStatus.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) viewModel.importFrom(uri) }
 
@@ -109,6 +118,7 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
             IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Hud.Cyan) }
             Text("MEMORY", style = MaterialTheme.typography.headlineSmall, color = Hud.Cyan, modifier = Modifier.weight(1f))
             TextButton(onClick = { picker.launch(arrayOf("*/*")) }) { Text("IMPORT", color = Hud.Cyan) }
+            TextButton(onClick = { pasting = true }) { Text("PASTE", color = Hud.Cyan) }
             TextButton(onClick = { adding = true }) { Text("ADD", color = Hud.Cyan) }
             TextButton(onClick = { confirmWipe = true }) { Text("WIPE", color = Hud.Amber) }
         }
@@ -118,7 +128,7 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
         ) {
             item(key = "import_hint") {
                 Text(
-                    importStatus ?: "IMPORT: koi bhi .txt / .json / .zip file chuno (jaise Claude export ki memories-000.zip) — JARVIS usme se aapke baare mein pakki baatein yaad kar lega. OTP / password / bank wali cheezein kabhi save nahi hoti.",
+                    importStatus ?: "IMPORT: koi .txt / .json / .zip file chuno (jaise Claude export ki memories-000.zip). PASTE: text seedha chipkao — jaise Claude / ChatGPT se poochho \"mere baare mein jo bhi jaante ho sab list karo\" aur uska jawab yahan daal do. OTP / password / bank wali cheezein kabhi save nahi hoti.",
                     style = MaterialTheme.typography.bodySmall, color = if (importStatus != null) Hud.Cyan else Hud.Dim,
                 )
             }
@@ -146,6 +156,9 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
 
     editing?.let { f ->
         TextDialog("EDIT MEMORY", f.text, onDismiss = { editing = null }) { text -> viewModel.update(f, text); editing = null }
+    }
+    if (pasting) {
+        TextDialog("PASTE MEMORY TEXT", "", onDismiss = { pasting = false }) { text -> viewModel.importPasted(text); pasting = false }
     }
     if (adding) {
         TextDialog("NEW MEMORY", "", onDismiss = { adding = false }) { text -> viewModel.add(text, "other"); adding = false }

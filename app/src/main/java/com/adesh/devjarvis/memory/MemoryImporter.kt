@@ -3,6 +3,7 @@ package com.adesh.devjarvis.memory
 import android.content.Context
 import android.net.Uri
 import com.adesh.devjarvis.brain.JarvisBrain
+import com.adesh.devjarvis.core.SessionTrace
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -23,19 +24,26 @@ class MemoryImporter @Inject constructor(
     private val memory: MemoryRepository,
 ) {
     sealed interface Outcome {
-        data class Done(val added: Int, val truncated: Boolean) : Outcome
+        data class Done(val added: Int, val truncated: Boolean, val withoutAi: Boolean = false) : Outcome
         data class Failed(val reason: String) : Outcome
     }
 
     suspend fun importFile(uri: Uri, onProgress: (done: Int, total: Int) -> Unit): Outcome {
-        val text = withContext(Dispatchers.IO) { runCatching { read(uri) }.getOrNull() }
-            ?: return Outcome.Failed("File padh nahi paya.")
+        val read = withContext(Dispatchers.IO) { runCatching { read(uri) } }
+        val text = read.getOrNull()
+        SessionTrace.add("IMPORT file chars=${text?.length} error=${read.exceptionOrNull()?.javaClass?.simpleName}")
+        if (text == null) {
+            return Outcome.Failed("File padh nahi paya (${read.exceptionOrNull()?.javaClass?.simpleName ?: "khaali"}). Niche PASTE se text chipka ke try kijiye.")
+        }
         return importText(text, onProgress)
     }
 
     suspend fun importText(raw: String, onProgress: (done: Int, total: Int) -> Unit): Outcome {
         val flat = MemoryImport.flatten(raw)
-        if (flat.length < 20) return Outcome.Failed("File mein padhne layak text nahi mila.")
+        if (flat.length < 20) {
+            SessionTrace.add("IMPORT nothing readable raw=${raw.length}")
+            return Outcome.Failed("Isme padhne layak text nahi mila (${raw.length} characters). Zip ke andar .json / .txt honi chahiye — ya PASTE se text chipkaiye.")
+        }
         val all = MemoryImport.chunks(flat, max = Int.MAX_VALUE)
         val parts = all.take(MemoryImport.MAX_CHUNKS)
         var added = 0
@@ -53,7 +61,16 @@ class MemoryImporter @Inject constructor(
             if (i < parts.lastIndex) delay(4_000) // free-tier requests per minute
         }
         onProgress(parts.size, parts.size)
-        if (answered == 0) return Outcome.Failed("AI se jawab nahi mila — internet / API key / aaj ka free quota check kijiye.")
+        SessionTrace.add("IMPORT flat=${flat.length} chunks=${parts.size}/${all.size} answered=$answered added=$added")
+        if (answered == 0) {
+            // No AI (offline, no key, quota over): notes-sized text is still worth keeping line by line.
+            if (flat.length > MemoryImport.PLAIN_LIMIT_CHARS) {
+                return Outcome.Failed("AI se jawab nahi mila — internet / API key / aaj ka free quota check kijiye, phir dobara IMPORT.")
+            }
+            val before = memory.all().size
+            MemoryImport.plainFacts(flat).forEach { memory.add(it, "other") }
+            return Outcome.Done(memory.all().size - before, truncated = false, withoutAi = true)
+        }
         return Outcome.Done(added, truncated = all.size > parts.size)
     }
 

@@ -129,6 +129,9 @@ object SystemPrompt {
         - "Jab main X bolun to Y karna" / make a routine -> save_routine. When Sir says a routine's name, just do its steps.
         - "Note kar lo" -> add_note. Shopping / to-do lists -> list_add, list_get, list_remove. Money spent -> add_expense,
           "kitna kharch hua" -> expense_summary.
+        - Skills: for research, long multi-step commands, working inside an app, phone problems, writing messages,
+          content / YouTube work, teaching, sums, code, planning, choosing between options, fact-checking, or when Sir
+          sounds low, call use_skill first and follow what it returns. Not for simple one-step commands or small talk.
         - Calls: pass just the name ("Papa", not "mere papa ji ko"). If Sir says it is an emergency / urgent / "turant" /
           "bina pooche call karo", call make_call with urgent=true and do not ask anything. Otherwise the app asks once;
           never ask the same confirmation a second time yourself.

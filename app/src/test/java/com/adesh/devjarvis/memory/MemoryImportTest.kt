@@ -42,3 +42,26 @@ class MemoryImportTest {
         assertEquals(12, MemoryExtraction.parse(raw, max = MemoryImport.MAX_FACTS_PER_CHUNK)!!.facts.size)
     }
 }
+
+class PlainFactsTest {
+    @Test fun keepsStatementsDropsQuestionsCodeAndSecrets() {
+        val text = """
+            - Sir runs a YouTube channel about tech.
+            2) Sir lives in Lucknow with his parents.
+            What is my name?
+            val x = listOf(1, 2)
+            ok
+            Sir's bank password is hunter2 for the account.
+            Sir runs a YouTube channel about tech.
+        """.trimIndent()
+        assertEquals(
+            listOf("Sir runs a YouTube channel about tech.", "Sir lives in Lucknow with his parents."),
+            MemoryImport.plainFacts(text),
+        )
+    }
+
+    @Test fun splitsSentencesAndCaps() {
+        assertEquals(2, MemoryImport.plainFacts("Sir likes strong ginger chai. Sir wakes up at six every day.").size)
+        assertEquals(3, MemoryImport.plainFacts((1..10).joinToString("\n") { "Sir likes thing number $it very much" }, max = 3).size)
+    }
+}

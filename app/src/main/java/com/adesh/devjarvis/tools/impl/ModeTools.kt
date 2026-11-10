@@ -2,6 +2,7 @@ package com.adesh.devjarvis.tools.impl
 
 import android.os.Build
 import com.adesh.devjarvis.accessibility.JarvisAccessibilityService
+import com.adesh.devjarvis.brain.Skills
 import com.adesh.devjarvis.core.ConversationMode
 import com.adesh.devjarvis.tools.ActivityLauncher
 import com.adesh.devjarvis.vision.LiveEyes
@@ -97,5 +98,18 @@ class ModeTools @Inject constructor(
         }
     }
 
-    val tools: List<JarvisTool> = listOf(interpreter, liveCamera, screenWatch)
+    private val useSkill = object : SimpleTool(
+        "use_skill",
+        "Get the exact working method for a kind of request BEFORE you answer or act on it. Call it whenever the request fits one " +
+            "of these, even if you think you know how: " + Skills.index(),
+        params { string("skill", "Skill id", required = true, enum = Skills.ALL.map { it.id }) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val skill = Skills.find(args.requireString("skill"))
+                ?: return ToolResult.fail("no such skill; available: ${Skills.ALL.joinToString { it.id }}")
+            return ToolResult.ok(Skills.playbook(skill))
+        }
+    }
+
+    val tools: List<JarvisTool> = listOf(interpreter, liveCamera, screenWatch, useSkill)
 }
