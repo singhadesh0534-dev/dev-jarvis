@@ -18,8 +18,9 @@ object JarvisConfig {
      * Agar model ye field reject kare to client automatically bina iske retry karta hai.
      * Blank string = field bhejo hi mat.
      */
-    const val GEMINI_THINKING_LEVEL = "minimal"
-    const val GEMINI_TEMPERATURE = 0.8
+    const val GEMINI_THINKING_LEVEL = "low"
+    /** Lower = steadier, more accurate tool use; still enough room for wit. */
+    const val GEMINI_TEMPERATURE = 0.6
     const val GEMINI_MAX_OUTPUT_TOKENS = 1024
 
     /**

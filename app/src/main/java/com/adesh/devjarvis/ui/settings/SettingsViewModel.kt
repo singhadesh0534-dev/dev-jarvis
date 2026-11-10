@@ -6,6 +6,7 @@ import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SystemPrompt
 import com.adesh.devjarvis.core.CrashReporter
 import com.adesh.devjarvis.core.JarvisConfig
+import com.adesh.devjarvis.core.ProblemJournal
 import com.adesh.devjarvis.core.SessionTrace
 import com.adesh.devjarvis.proactive.BriefingScheduler
 import com.adesh.devjarvis.settings.JarvisSettings
@@ -35,11 +36,13 @@ class SettingsViewModel @Inject constructor(
         CrashReporter.lastCrash(context),
         CrashReporter.recoveredLog(context),
         SessionTrace.dump().takeIf { it.isNotBlank() }?.let { "FLIGHT RECORDER (latest events)\n$it" },
+        ProblemJournal.dump(60).takeIf { it.isNotBlank() }?.let { "PROBLEMS JARVIS NOTICED BY HIMSELF\n$it" },
     ).joinToString("\n\n").ifBlank { null }
 
     fun clearDiagnostics() {
         CrashReporter.clear(context)
         SessionTrace.clear()
+        ProblemJournal.clear()
     }
 
 

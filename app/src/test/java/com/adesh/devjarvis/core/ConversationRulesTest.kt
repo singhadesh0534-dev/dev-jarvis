@@ -23,6 +23,15 @@ class ConversationRulesTest {
     }
 
     @Test
+    fun spotsComplaints() {
+        assertTrue(ConversationRules.isComplaint("ye galat hai"))
+        assertTrue(ConversationRules.isComplaint("Maine ye nahi bola tha"))
+        assertTrue(ConversationRules.isComplaint("that's wrong Jarvis"))
+        assertFalse(ConversationRules.isComplaint("Mummy ko call karo"))
+        assertFalse(ConversationRules.isComplaint("kal ka mausam batao"))
+    }
+
+    @Test
     fun normalQuestionsKeepConversationOpen() {
         assertFalse(ConversationRules.isEnder("bas ek kaam aur karo"))
         assertFalse(ConversationRules.isEnder("thank you ke baad kya bolte hain"))

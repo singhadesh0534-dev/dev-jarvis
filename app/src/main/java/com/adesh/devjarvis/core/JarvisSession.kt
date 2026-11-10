@@ -126,6 +126,7 @@ class JarvisSession @Inject constructor(
     /** A bug inside a conversation must not kill always-on JARVIS: log it, reset, carry on. */
     private val recover = CoroutineExceptionHandler { _, e ->
         CrashReporter.record(appContext, "session", e)
+        ProblemJournal.add("GLITCH", "session reset after ${e.javaClass.simpleName}: ${e.message?.take(120)}")
         runCatching {
             liveConn?.close()
             speechOut.stop()
@@ -174,6 +175,9 @@ class JarvisSession @Inject constructor(
     private val liveActive: Boolean get() = liveJob?.isActive == true
     /** Set if the server refused our turn-taking config; then we connect without it. */
     private val liveConfirm = SpokenConfirmation()
+    /** Set when the wake word (not a tap) opened the conversation; used to spot false wake-ups. */
+    private var lastWake: String? = null
+    private var lastJarvisSaid = ""
     private var liveVadRejected = false
     private var liveUsedPatientVad = false
 
@@ -350,6 +354,7 @@ class JarvisSession @Inject constructor(
     private fun onDetection(d: WakeWordEngine.Detection) {
         val state = _ui.value.state
         SessionTrace.add("WAKE ${d.mode} phrase='${d.phrase}' state=$state")
+        if (d.mode == WakeWordEngine.Mode.WAKE) lastWake = "phrase '${d.phrase}', engine heard '${wake.lastHeard.value}'"
         when (d.mode) {
             WakeWordEngine.Mode.WAKE -> if (state == JarvisState.IDLE) {
                 earcons.wake()
@@ -366,7 +371,7 @@ class JarvisSession @Inject constructor(
     }
 
     private fun onWakeProblem(problem: WakeWordEngine.Problem?) {
-        if (problem != null) SessionTrace.add("WAKE ENGINE problem: $problem")
+        if (problem != null) ProblemJournal.add("WAKE_ENGINE", "$problem")
         when (problem) {
             WakeWordEngine.Problem.MIC_SILENCED -> if (serviceActive) {
                 if (focus.inCall()) {
@@ -483,6 +488,10 @@ class JarvisSession @Inject constructor(
                     ListenOutcome.NOTHING -> {
                         // Follow-up window mein chup rahe to thoda aur suno; warna standby.
                         if (followUp && System.currentTimeMillis() < deadline) continue
+                        if (!followUp) lastWake?.let { w ->
+                            ProblemJournal.add("FALSE_WAKE?", "Woke on $w but heard no command afterwards (classic mode)")
+                        }
+                        lastWake = null
                         endConversation(chime = followUp)
                         return@launch
                     }
@@ -505,6 +514,7 @@ class JarvisSession @Inject constructor(
 
     private fun onListenFailed(reason: SpeechInput.Reason) {
         SessionTrace.add("CLASSIC listen failed: $reason")
+        if (reason != SpeechInput.Reason.NOTHING_HEARD) ProblemJournal.add("LISTEN_FAILED", "classic recognizer: $reason")
         when (reason) {
             SpeechInput.Reason.NOTHING_HEARD -> endConversation(chime = false)
             SpeechInput.Reason.NETWORK -> say("Sir, network gayab hai, abhi offline hoon.")
@@ -516,7 +526,16 @@ class JarvisSession @Inject constructor(
         }
     }
 
+    /** Sir correcting JARVIS is the best bug report there is: keep what was said. */
+    private fun noteComplaint(userText: String) {
+        if (userText.isNotBlank() && ConversationRules.isComplaint(userText)) {
+            ProblemJournal.add("SIR_UNHAPPY", "Sir: '${userText.take(160)}' | JARVIS had just said: '${lastJarvisSaid.take(220)}' | mode=${_ui.value.mode}")
+        }
+    }
+
     private fun ask(userText: String) {
+        noteComplaint(userText)
+        lastWake = null
         interrupt()
         addLine(fromUser = true, text = userText)
         val firstLineId = nextId++
@@ -548,6 +567,7 @@ class JarvisSession @Inject constructor(
                 }
                 chunker.flush()?.let(::speakPiece)
                 brain.remember(userText, full.toString())
+                if (full.isNotBlank()) lastJarvisSaid = full.toString()
                 if (full.isBlank()) say("Sir, is baar mere paas koi jawab nahi aaya. Ek baar phir poochiye.")
                 speechOut.awaitIdle()
                 afterReply(userText)
@@ -588,6 +608,7 @@ class JarvisSession @Inject constructor(
         upsertLine(lineId, "⚙ $name($argText)", system = true)
         val result = registry.execute(name, args, toolContext)
         SessionTrace.add("TOOL $name ok=${result.ok} awaitingConfirm=${result.awaitingConfirmation}")
+        if (!result.ok && !result.awaitingConfirmation) ProblemJournal.add("TOOL_FAILED", "$name($argText) -> ${result.message.take(160)}")
         if (result.awaitingConfirmation) {
             upsertLine(lineId, "? $name: Sir ki haan/naa ka intezaar", system = true)
             return result
@@ -736,6 +757,7 @@ class JarvisSession @Inject constructor(
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio) { bytes, n -> conn.sendAudio(bytes, n) }
             SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} patientVad=${!liveVadRejected}")
             var firstAudioLogged = false
+            var userSpoke = false
             liveConn = conn
             liveAudio = audio
             val startedAt = System.currentTimeMillis()
@@ -752,6 +774,8 @@ class JarvisSession @Inject constructor(
             fun commitTurn() {
                 val u = userSaid.toString().trim()
                 val j = jarvisSaid.toString().trim()
+                noteComplaint(u)
+                if (j.isNotEmpty()) lastJarvisSaid = j
                 if (u.isNotEmpty() || j.isNotEmpty()) brain.remember(u.ifEmpty { "…" }, j.ifEmpty { "…" })
                 if (u.isNotEmpty() && ConversationRules.isEnder(u)) endAfterTurn = true
                 userSaid.clear(); jarvisSaid.clear()
@@ -797,6 +821,7 @@ class JarvisSession @Inject constructor(
                         is LiveMessages.ServerEvent.InputText -> {
                             followUp?.cancel()
                             liveConfirm.onUserSaid(e.text)
+                            userSpoke = true
                             userSaid.append(e.text)
                             if (userLine < 0) userLine = nextId++
                             upsertLine(userLine, userSaid.toString().trim(), fromUser = true)
@@ -805,7 +830,9 @@ class JarvisSession @Inject constructor(
                         is LiveMessages.ServerEvent.Audio -> {
                             if (!firstAudioLogged) {
                                 firstAudioLogged = true
-                                SessionTrace.add("LIVE first audio after ${System.currentTimeMillis() - startedAt} ms")
+                                val ms = System.currentTimeMillis() - startedAt
+                                SessionTrace.add("LIVE first audio after $ms ms")
+                                if (ms > 5_000) ProblemJournal.add("SLOW", "Live took $ms ms to start speaking (network ${device.network()})")
                             }
                             anyReply = true
                             followUp?.cancel()
@@ -822,6 +849,9 @@ class JarvisSession @Inject constructor(
                         }
                         LiveMessages.ServerEvent.Interrupted -> {
                             SessionTrace.add("LIVE interrupted (server heard speech over JARVIS)")
+                            if (userSaid.isBlank()) {
+                                ProblemJournal.add("SELF_INTERRUPT?", "JARVIS was cut off but no words from Sir were transcribed (hd=${s.liveHdAudio}) — he may be hearing himself or background noise")
+                            }
                             // Sir spoke over JARVIS: stop the speaker right now.
                             audio.flushPlayback()
                             commitTurn()
@@ -865,6 +895,11 @@ class JarvisSession @Inject constructor(
                 focus.ownCommunicationMode = false
                 usage.recordLiveSeconds(((System.currentTimeMillis() - startedAt) / 1000).toInt())
             }
+            lastWake?.let { w ->
+                if (!userSpoke) ProblemJournal.add("FALSE_WAKE?", "Woke on $w but Sir said nothing in the whole conversation")
+            }
+            lastWake = null
+            if (!anyReply && !liveClosingByUs) ProblemJournal.add("LIVE_FAILED", "kind=$closeKind detail='$closeDetail' model=${s.liveModel}")
             onLiveEnded(closeKind, closeDetail, anyReply)
         }
     }
@@ -914,7 +949,8 @@ class JarvisSession @Inject constructor(
         }
     }
 
-    private fun errorLine(e: BrainError): String = SessionTrace.add("BRAIN error ${e.javaClass.simpleName}: ${e.message?.take(120)}").let { errorText(e) }
+    private fun errorLine(e: BrainError): String =
+        ProblemJournal.add("BRAIN_ERROR", "${e.javaClass.simpleName}: ${e.message?.take(160)}").let { errorText(e) }
 
     private fun errorText(e: BrainError): String = when (e) {
         is BrainError.MissingKey -> "Sir, mera dimaag abhi plug-in nahi hua. Settings mein Gemini API key daal dijiye."
