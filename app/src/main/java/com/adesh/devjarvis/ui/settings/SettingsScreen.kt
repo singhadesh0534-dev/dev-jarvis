@@ -212,6 +212,10 @@ fun SettingsScreen(
                 viewModel.edit { it.copy(lowBatteryAlert = v) }
             }
 
+            Section("EMERGENCY SOS")
+            HudField("Emergency contacts (comma)", draft.emergencyContacts, { v -> viewModel.edit { it.copy(emergencyContacts = v) } })
+            Hint("Jaise: Mummy, Papa, 9876543210 (max 5). \"Jarvis, SOS\" bolne par ek baar confirm karke in sabko aapki location ke saath SMS jaata hai. Full edition + SMS aur Location permission chahiye. SMS ka charge aapke SIM plan ke hisaab se.")
+
             Section("MEMORY")
             Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
             OutlinedButton(onClick = onOpenMemory) { Text("Open memory", color = Hud.Cyan) }

@@ -24,6 +24,7 @@ object Edition {
     val TOOL_NEEDS_PERMISSION = mapOf(
         "set_brightness" to "android.permission.WRITE_SETTINGS",
         "uninstall_app" to "android.permission.REQUEST_DELETE_PACKAGES",
+        "emergency_sos" to "android.permission.SEND_SMS",
     )
 
     /** Is [permission] in this build's manifest? (Lite removes several; requesting those would just fail.) */

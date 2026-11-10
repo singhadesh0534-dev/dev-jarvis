@@ -4,6 +4,10 @@
   that declare Accessibility or Notification-listener services (fraud protection, India and other regions).
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Emergency SOS location link. Foreground only, asked on demand; no background location. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
     <application>
         <service
             android:name=".accessibility.JarvisAccessibilityService"

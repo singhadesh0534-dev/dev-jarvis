@@ -25,7 +25,7 @@ import javax.inject.Inject
 
 enum class StepId {
     MIC, NOTIFICATIONS, WAKE_MODEL, BATTERY, XOS_AUTOSTART, XOS_RECENTS_LOCK,
-    CALL_PHONE, CONTACTS, SMS, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
+    CALL_PHONE, CONTACTS, SMS, LOCATION, ACCESSIBILITY, NOTIFICATION_ACCESS, CAMERA, CALENDAR, WRITE_SETTINGS, OVERLAY, ASSISTANT,
 }
 
 /** How the step's main button works. */
@@ -191,6 +191,17 @@ class SetupViewModel @Inject constructor(
                 StepAction.RUNTIME_PERMISSION, "Allow SMS",
                 granted = has(Manifest.permission.SEND_SMS), optional = false,
                 permission = Manifest.permission.SEND_SMS,
+            )
+        )
+        add(
+            SetupStep(
+                StepId.LOCATION, "Location (optional)",
+                "Sirf Emergency SOS ke liye: \"Jarvis, SOS\" bolne par aapke chune hue logon ko location ka link SMS hota hai. " +
+                    "Background mein location track nahi hoti.",
+                listOf("Allow dabao, \"Precise\" aur \"While using the app\" chuno.", "Settings > Emergency SOS mein contacts likhna mat bhoolna."),
+                StepAction.RUNTIME_PERMISSION, "Allow location",
+                granted = has(Manifest.permission.ACCESS_FINE_LOCATION) || has(Manifest.permission.ACCESS_COARSE_LOCATION), optional = true,
+                permission = Manifest.permission.ACCESS_FINE_LOCATION,
             )
         )
         add(

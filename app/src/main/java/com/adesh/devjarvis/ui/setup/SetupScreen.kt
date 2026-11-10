@@ -64,6 +64,12 @@ fun SetupScreen(viewModel: SetupViewModel, onDone: () -> Unit) {
         viewModel.refresh()
     }
 
+    // Precise location must be requested together with approximate (Android 12+).
+    val locationLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (result.values.none { it }) denied[android.Manifest.permission.ACCESS_FINE_LOCATION] = true
+        viewModel.refresh()
+    }
+
     val step = steps.getOrNull(index.coerceIn(0, steps.lastIndex)) ?: return
     val isLast = index >= steps.lastIndex
 
@@ -74,7 +80,9 @@ fun SetupScreen(viewModel: SetupViewModel, onDone: () -> Unit) {
                 val activity = context as? Activity
                 val canAsk = denied[perm] != true ||
                     (activity != null && ActivityCompat.shouldShowRequestPermissionRationale(activity, perm))
-                if (canAsk) permissionLauncher.launch(perm)
+                if (canAsk && perm == android.Manifest.permission.ACCESS_FINE_LOCATION) {
+                    locationLauncher.launch(arrayOf(perm, android.Manifest.permission.ACCESS_COARSE_LOCATION))
+                } else if (canAsk) permissionLauncher.launch(perm)
                 else SetupIntents.launchFirst(context, listOf(SetupIntents.appDetails(context)))
             }
             StepAction.DOWNLOAD -> viewModel.downloadModel()

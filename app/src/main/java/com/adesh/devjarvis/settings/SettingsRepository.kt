@@ -78,6 +78,8 @@ data class JarvisSettings(
     val nightSummaryEnabled: Boolean = true,
     /** Minutes after midnight. 9:30 PM default. */
     val nightSummaryMinute: Int = 21 * 60 + 30,
+    /** Comma-separated names or numbers that get the emergency SOS text. */
+    val emergencyContacts: String = "",
 ) {
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
@@ -169,6 +171,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_WAKE_CHIME, cleaned.wakeChime)
             .putBoolean(K_NIGHT_ON, cleaned.nightSummaryEnabled)
             .putInt(K_NIGHT_MIN, cleaned.nightSummaryMinute.coerceIn(0, 1439))
+            .putString(K_SOS_CONTACTS, cleaned.emergencyContacts.trim())
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -223,6 +226,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             wakeChime = prefs.getBoolean(K_WAKE_CHIME, d.wakeChime),
             nightSummaryEnabled = prefs.getBoolean(K_NIGHT_ON, d.nightSummaryEnabled),
             nightSummaryMinute = prefs.getInt(K_NIGHT_MIN, d.nightSummaryMinute),
+            emergencyContacts = prefs.getString(K_SOS_CONTACTS, d.emergencyContacts).orEmpty(),
         )
     }
 
@@ -271,6 +275,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_WAKE_CHIME = "wake_chime"
         const val K_NIGHT_ON = "night_summary_on"
         const val K_NIGHT_MIN = "night_summary_minute"
+        const val K_SOS_CONTACTS = "emergency_contacts"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"
