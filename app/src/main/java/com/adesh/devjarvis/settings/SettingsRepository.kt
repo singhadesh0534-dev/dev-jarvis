@@ -74,6 +74,10 @@ data class JarvisSettings(
     val liveHdAudio: Boolean = true,
     /** Chime when the mic opens / closes. Off by default: JARVIS greets by voice and a haptic tick is enough. */
     val wakeChime: Boolean = false,
+    /** Raat ka summary: kal ka plan, aaj ka kharcha, battery. */
+    val nightSummaryEnabled: Boolean = true,
+    /** Minutes after midnight. 9:30 PM default. */
+    val nightSummaryMinute: Int = 21 * 60 + 30,
 ) {
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
@@ -163,6 +167,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_WAKE_PHRASES, cleaned.customWakePhrases)
             .putBoolean(K_LIVE_HD, cleaned.liveHdAudio)
             .putBoolean(K_WAKE_CHIME, cleaned.wakeChime)
+            .putBoolean(K_NIGHT_ON, cleaned.nightSummaryEnabled)
+            .putInt(K_NIGHT_MIN, cleaned.nightSummaryMinute.coerceIn(0, 1439))
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -215,6 +221,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             customWakePhrases = prefs.getString(K_WAKE_PHRASES, d.customWakePhrases).orEmpty(),
             liveHdAudio = prefs.getBoolean(K_LIVE_HD, d.liveHdAudio),
             wakeChime = prefs.getBoolean(K_WAKE_CHIME, d.wakeChime),
+            nightSummaryEnabled = prefs.getBoolean(K_NIGHT_ON, d.nightSummaryEnabled),
+            nightSummaryMinute = prefs.getInt(K_NIGHT_MIN, d.nightSummaryMinute),
         )
     }
 
@@ -261,6 +269,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_WAKE_PHRASES = "custom_wake_phrases"
         const val K_LIVE_HD = "live_hd_audio"
         const val K_WAKE_CHIME = "wake_chime"
+        const val K_NIGHT_ON = "night_summary_on"
+        const val K_NIGHT_MIN = "night_summary_minute"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

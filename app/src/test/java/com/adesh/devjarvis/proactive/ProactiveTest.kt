@@ -55,4 +55,18 @@ class ProactiveTest {
         assertTrue(empty.startsWith("Good evening"))
         assertTrue("khaali" in empty)
     }
+
+    @Test fun nightSummaryFallbackText() {
+        val t = BriefingTemplate.nightFallback(
+            BriefingTemplate.NightInputs("Tuesday, 10 November", listOf("9:00 AM Dentist"), listOf("8:00 AM Dawai"), "total 450 rupees (food 450) over 1 entry", 30, false),
+        )
+        assertTrue("450 rupees" in t)
+        assertTrue("Dentist" in t)
+        assertTrue("Dawai" in t)
+        assertTrue("Battery 30%" in t)
+        val empty = BriefingTemplate.nightFallback(BriefingTemplate.NightInputs("x", emptyList(), emptyList(), null, 90, true))
+        assertTrue("khaali" in empty)
+        assertTrue("Battery" !in empty)
+        assertTrue("none recorded" in BriefingTemplate.nightPrompt(BriefingTemplate.NightInputs("x", emptyList(), emptyList(), null, 90, true)))
+    }
 }

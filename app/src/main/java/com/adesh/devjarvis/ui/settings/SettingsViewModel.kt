@@ -101,4 +101,9 @@ class SettingsViewModel @Inject constructor(
         save()
         briefing.runNow()
     }
+
+    fun playNightSummaryNow() {
+        save()
+        briefing.runNow(night = true)
+    }
 }

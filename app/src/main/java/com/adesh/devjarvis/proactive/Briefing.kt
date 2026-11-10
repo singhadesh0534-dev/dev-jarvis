@@ -15,6 +15,8 @@ import androidx.work.WorkerParameters
 import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SpeechSanitizer
 import com.adesh.devjarvis.core.DeviceStatus
+import com.adesh.devjarvis.life.LifeMath
+import com.adesh.devjarvis.life.LifeStore
 import com.adesh.devjarvis.memory.MemoryRepository
 import com.adesh.devjarvis.reminders.ReminderScheduler
 import com.adesh.devjarvis.settings.SettingsRepository
@@ -43,7 +45,34 @@ class BriefingComposer @Inject constructor(
     private val reminders: ReminderScheduler,
     private val device: DeviceStatus,
     private val memory: MemoryRepository,
+    private val life: LifeStore,
 ) {
+    /** Raat ka summary: aaj ka kharcha + kal ka plan. */
+    suspend fun composeNight(): String {
+        val s = settings.current
+        val zone = ZoneId.systemDefault()
+        val now = System.currentTimeMillis()
+        val tomorrow = LocalDate.now().plusDays(1)
+        val from = tomorrow.atStartOfDay(zone).toInstant().toEpochMilli()
+        val to = tomorrow.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val fmt = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
+        val d = device.snapshot()
+        val todayStart = LifeMath.periodStart("today", now, zone)
+        val spent = life.get().expenses.filter { it.time in todayStart..now }
+        val inputs = BriefingTemplate.NightInputs(
+            dateText = LocalDateTime.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)),
+            tomorrowEvents = runCatching { calendar.events(from, to) }.getOrDefault(emptyList()),
+            tomorrowReminders = reminders.between(from, to).map { java.time.Instant.ofEpochMilli(it.atMillis).atZone(zone).format(fmt) + " " + it.text },
+            expensesToday = if (spent.isEmpty()) null else LifeMath.expenseSummary(spent, todayStart, now),
+            batteryPercent = d.batteryPercent,
+            charging = d.charging,
+        )
+        val llm = brain.complete(s.systemPrompt, BriefingTemplate.nightPrompt(inputs), json = false)
+            ?.let { SpeechSanitizer.clean(it) }
+            ?.takeIf { it.length in 20..900 }
+        return llm ?: BriefingTemplate.nightFallback(inputs)
+    }
+
     suspend fun compose(): String {
         val s = settings.current
         val now = LocalDateTime.now()
@@ -77,43 +106,57 @@ class BriefingScheduler @Inject constructor(
 ) {
     private val alarms = context.getSystemService(AlarmManager::class.java)
 
-    private fun intent() = PendingIntent.getBroadcast(
-        context, 9001, Intent(context, BriefingReceiver::class.java),
+    private fun intent(night: Boolean) = PendingIntent.getBroadcast(
+        context, if (night) 9003 else 9001,
+        Intent(context, BriefingReceiver::class.java).putExtra(EXTRA_NIGHT, night),
         PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
     )
 
-    /** (Re)arm for the next occurrence, or cancel if briefing is off. */
+    /** (Re)arm morning briefing and night summary for their next occurrence, or cancel the ones that are off. */
     fun reschedule() {
-        val am = alarms ?: return
         val s = settings.current
-        if (!s.briefingEnabled) {
-            am.cancel(intent())
+        arm(night = false, enabled = s.briefingEnabled, minute = s.briefingMinute)
+        arm(night = true, enabled = s.nightSummaryEnabled, minute = s.nightSummaryMinute)
+    }
+
+    private fun arm(night: Boolean, enabled: Boolean, minute: Int) {
+        val am = alarms ?: return
+        if (!enabled) {
+            am.cancel(intent(night))
             return
         }
         val now = LocalDateTime.now()
-        var at = now.toLocalDate().atTime(s.briefingMinute / 60, s.briefingMinute % 60)
+        var at = now.toLocalDate().atTime(minute / 60, minute % 60)
         if (!at.isAfter(now)) at = at.plusDays(1)
         val millis = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, intent())
-        } else {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, intent())
+        runCatching {
+            if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, intent(night))
+            } else {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, millis, intent(night))
+            }
         }
     }
 
     /** Compose + speak in the background now (also used by Settings "Play briefing now"). */
-    fun runNow() {
+    fun runNow(night: Boolean = false) {
         val req = OneTimeWorkRequestBuilder<BriefingWorker>()
+            .setInputData(androidx.work.Data.Builder().putBoolean(EXTRA_NIGHT, night).build())
             .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork("jarvis_briefing", ExistingWorkPolicy.REPLACE, req)
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(if (night) "jarvis_night_summary" else "jarvis_briefing", ExistingWorkPolicy.REPLACE, req)
+    }
+
+    companion object {
+        const val EXTRA_NIGHT = "night"
     }
 }
 
 class BriefingReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val deps = EntryPointAccessors.fromApplication(context.applicationContext, BriefingWorker.Deps::class.java)
-        deps.scheduler().runNow()
+        deps.scheduler().runNow(night = intent.getBooleanExtra(BriefingScheduler.EXTRA_NIGHT, false))
         deps.scheduler().reschedule() // tomorrow
     }
 }
@@ -129,8 +172,9 @@ class BriefingWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
     override suspend fun doWork(): Result {
         val deps = EntryPointAccessors.fromApplication(applicationContext, Deps::class.java)
-        val text = deps.composer().compose()
-        deps.speaker().offer(ProactivePolicy.Kind.BRIEFING, text, notifyTitle = "Morning briefing")
+        val night = inputData.getBoolean(BriefingScheduler.EXTRA_NIGHT, false)
+        val text = if (night) deps.composer().composeNight() else deps.composer().compose()
+        deps.speaker().offer(ProactivePolicy.Kind.BRIEFING, text, notifyTitle = if (night) "Night summary" else "Morning briefing")
         return Result.success()
     }
 

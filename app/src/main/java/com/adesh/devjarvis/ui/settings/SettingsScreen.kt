@@ -192,6 +192,11 @@ fun SettingsScreen(
             }
             TimeField("Briefing time", draft.briefingMinute) { m -> viewModel.edit { it.copy(briefingMinute = m) } }
             OutlinedButton(onClick = viewModel::playBriefingNow) { Text("Play briefing now", color = Hud.Cyan) }
+            ToggleRow("Night summary", "Raat ko: aaj ka kharcha, kal ke events/reminders, battery.", draft.nightSummaryEnabled) { v ->
+                viewModel.edit { it.copy(nightSummaryEnabled = v) }
+            }
+            TimeField("Night summary time", draft.nightSummaryMinute) { m -> viewModel.edit { it.copy(nightSummaryMinute = m) } }
+            OutlinedButton(onClick = viewModel::playNightSummaryNow) { Text("Play night summary now", color = Hud.Cyan) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Box(Modifier.weight(1f)) { TimeField("Quiet from", draft.quietStartMinute) { m -> viewModel.edit { it.copy(quietStartMinute = m) } } }
                 Box(Modifier.weight(1f)) { TimeField("Quiet until", draft.quietEndMinute) { m -> viewModel.edit { it.copy(quietEndMinute = m) } } }
