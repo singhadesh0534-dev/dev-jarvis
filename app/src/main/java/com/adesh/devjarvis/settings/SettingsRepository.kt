@@ -86,7 +86,12 @@ data class JarvisSettings(
     val noiseFilter: Int = 1,
     /** JARVIS speaks at full volume on the phone speaker; Sir's media volume is put back afterwards. */
     val fullVoiceVolume: Boolean = true,
+    // ---- Third brain: any OpenAI-compatible service, used when Gemini and Groq are both out.
+    val extraApiKey: String = "",
+    val extraBaseUrl: String = JarvisConfig.EXTRA_BASE_URL,
+    val extraModel: String = "",
 ) {
+    val hasExtraBrain: Boolean get() = extraApiKey.isNotBlank() && extraModel.isNotBlank() && extraBaseUrl.startsWith("https://")
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
 
@@ -181,6 +186,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_ANNOUNCE_CALLS, cleaned.announceCalls)
             .putInt(K_NOISE_FILTER, cleaned.noiseFilter.coerceIn(0, 2))
             .putBoolean(K_FULL_VOICE, cleaned.fullVoiceVolume)
+            .putString(K_EXTRA_KEY, cleaned.extraApiKey.trim())
+            .putString(K_EXTRA_URL, cleaned.extraBaseUrl.trim().ifBlank { JarvisConfig.EXTRA_BASE_URL })
+            .putString(K_EXTRA_MODEL, cleaned.extraModel.trim())
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
             // background thread — that's what made "save" silently do nothing on some devices.
             .commit()
@@ -239,6 +247,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             announceCalls = prefs.getBoolean(K_ANNOUNCE_CALLS, d.announceCalls),
             noiseFilter = prefs.getInt(K_NOISE_FILTER, d.noiseFilter),
             fullVoiceVolume = prefs.getBoolean(K_FULL_VOICE, d.fullVoiceVolume),
+            extraApiKey = prefs.getString(K_EXTRA_KEY, d.extraApiKey).orEmpty(),
+            extraBaseUrl = prefs.getString(K_EXTRA_URL, d.extraBaseUrl).orEmpty().ifBlank { d.extraBaseUrl },
+            extraModel = prefs.getString(K_EXTRA_MODEL, d.extraModel).orEmpty(),
         )
     }
 
@@ -291,6 +302,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_ANNOUNCE_CALLS = "announce_calls"
         const val K_NOISE_FILTER = "noise_filter"
         const val K_FULL_VOICE = "full_voice_volume"
+        const val K_EXTRA_KEY = "extra_api_key"
+        const val K_EXTRA_URL = "extra_base_url"
+        const val K_EXTRA_MODEL = "extra_model"
         const val K_GEMINI = "gemini_api_key"
         const val K_GROQ = "groq_api_key"
         const val K_MODEL = "gemini_model"

@@ -112,4 +112,9 @@ object JarvisConfig {
     // ---- Links shown in Settings ----
     const val GEMINI_KEY_URL = "https://aistudio.google.com/apikey"
     const val GROQ_KEY_URL = "https://console.groq.com/keys"
+    /** Third brain: default service + where to make its free key. Any OpenAI-compatible URL works. */
+    const val EXTRA_BASE_URL = "https://openrouter.ai/api/v1"
+    const val OPENROUTER_KEY_URL = "https://openrouter.ai/keys"
+    const val OPENROUTER_MODELS_URL = "https://openrouter.ai/models?max_price=0"
+    const val CEREBRAS_KEY_URL = "https://cloud.cerebras.ai"
 }

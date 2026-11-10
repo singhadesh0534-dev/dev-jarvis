@@ -113,6 +113,17 @@ fun SettingsScreen(
                 onChange = { v -> viewModel.edit { it.copy(groqApiKey = v) } },
             )
             OpenLinkButton("Get free Groq key", JarvisConfig.GROQ_KEY_URL)
+            SecretField(
+                label = "Third brain key (optional)",
+                value = draft.extraApiKey,
+                onChange = { v -> viewModel.edit { it.copy(extraApiKey = v) } },
+            )
+            OpenLinkButton("Get free OpenRouter key", JarvisConfig.OPENROUTER_KEY_URL)
+            OpenLinkButton("See free OpenRouter models", JarvisConfig.OPENROUTER_MODELS_URL)
+            OpenLinkButton("Or: free Cerebras key", JarvisConfig.CEREBRAS_KEY_URL)
+            HudField("Third brain model", draft.extraModel, { v -> viewModel.edit { it.copy(extraModel = v) } })
+            HudField("Third brain URL", draft.extraBaseUrl, { v -> viewModel.edit { it.copy(extraBaseUrl = v) } })
+            Hint("Teesra dimaag tab chalta hai jab Gemini aur Groq dono ki limit khatam ho. Model ka naam us site se copy karke yahan daalo (OpenRouter pe free models ke naam ke aage \":free\" hota hai). Cerebras ke liye URL: https://api.cerebras.ai/v1. Model khaali = band.")
             Hint("Kai keys daal sakte ho (alag-alag accounts ki): ek hi box mein comma se alag likho, jaise key1, key2, key3. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
 
             Section("VOICE ENGINE")

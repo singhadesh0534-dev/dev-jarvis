@@ -42,6 +42,7 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
         messages: JsonArray,
         tools: JsonArray?,
         jsonMode: Boolean = false,
+        baseUrl: String = JarvisConfig.GROQ_BASE_URL,
     ): Flow<GroqStreamParser.Delta> = channelFlow {
         if (apiKey.isBlank()) throw BrainError.MissingKey()
         val body = buildJsonObject {
@@ -57,7 +58,7 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
             }
         }
         val request = Request.Builder()
-            .url("${JarvisConfig.GROQ_BASE_URL}/chat/completions")
+            .url("${baseUrl.trimEnd('/')}/chat/completions")
             .header("Authorization", "Bearer $apiKey")
             .post(body.toString().toRequestBody(JSON))
             .build()

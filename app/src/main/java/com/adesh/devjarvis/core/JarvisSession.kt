@@ -202,7 +202,7 @@ class JarvisSession @Inject constructor(
                 wake.speakerThreshold = s.speakerThreshold
                 wake.wakePhrases = s.customWakePhrases.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
                     .ifEmpty { JarvisConfig.WAKE_PHRASES }
-                _ui.update { it.copy(hasKey = s.hasGeminiKey || s.hasGroqKey) }
+                _ui.update { it.copy(hasKey = s.hasGeminiKey || s.hasGroqKey || s.hasExtraBrain) }
                 // Speaker-lock changes need the wake engine rebuilt (it picks the recognizer type at start).
                 val speakerKey = "${s.speakerLockEnabled}|${s.speakerProfile.length}|${s.speakerThreshold}|${s.customWakePhrases}"
                 if (speakerKey != prevSpeakerKey && prevSpeakerKey.isNotEmpty()) wake.stop()

@@ -86,19 +86,22 @@ class JarvisBrain @Inject constructor(
     }
 
     private fun groqTurn(
-        s: JarvisSettings, model: String, messages: JsonArray, tools: JsonArray?, jsonMode: Boolean = false,
+        s: JarvisSettings, model: String, messages: JsonArray, tools: JsonArray?, jsonMode: Boolean = false, extra: Boolean = false,
     ): Flow<GroqStreamParser.Delta> = flow {
         var tries = 0
+        val raw = if (extra) s.extraApiKey else s.groqApiKey
+        val pool = if (extra) keys.extra else keys.groq
+        val baseUrl = if (extra) s.extraBaseUrl else JarvisConfig.GROQ_BASE_URL
         while (true) {
-            val key = keys.groq.current(s.groqApiKey)
+            val key = pool.current(raw)
             var started = false
             try {
-                groq.streamChat(key, model, messages, tools, jsonMode).collect { started = true; emit(it) }
+                groq.streamChat(key, model, messages, tools, jsonMode, baseUrl).collect { started = true; emit(it) }
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
-                if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !keys.groq.rest(s.groqApiKey, key, restFor(e))) throw e
-                SessionTrace.add("KEY groq rotated (${e.javaClass.simpleName}), ready=${keys.groq.readyCount(s.groqApiKey)}")
+                if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !pool.rest(raw, key, restFor(e))) throw e
+                SessionTrace.add("KEY ${if (extra) "third" else "groq"} rotated (${e.javaClass.simpleName}), ready=${pool.readyCount(raw)}")
             }
         }
     }
@@ -115,7 +118,7 @@ class JarvisBrain @Inject constructor(
         runTool: suspend (name: String, args: JsonObject) -> ToolResult,
     ): Flow<BrainEvent> = flow {
         val s = settings.current
-        if (!s.hasGeminiKey && !s.hasGroqKey) throw BrainError.MissingKey()
+        if (!s.hasGeminiKey && !s.hasGroqKey && !s.hasExtraBrain) throw BrainError.MissingKey()
         if (!device.isOnline()) throw BrainError.NoNetwork()
         val system = systemPrompt(s, forLive = false, query = userText)
 
@@ -126,13 +129,22 @@ class JarvisBrain @Inject constructor(
                 geminiLoop(s, system, userText, runTool)
                 return@flow
             } catch (f: Fallback) {
-                if (!s.hasGroqKey) throw f.cause as BrainError
+                if (!s.hasGroqKey && !s.hasExtraBrain) throw f.cause as BrainError
             }
-        } else if (!s.hasGroqKey) {
+        } else if (!s.hasGroqKey && !s.hasExtraBrain) {
             throw BrainError.RateLimited()
         }
         _active.value = Provider.GROQ
-        groqLoop(s, system, userText, runTool)
+        if (s.hasGroqKey && (!usage.isExhausted(Provider.GROQ) || !s.hasExtraBrain)) {
+            try {
+                groqLoop(s, system, userText, runTool, extra = false)
+                return@flow
+            } catch (f: Fallback) {
+                if (!s.hasExtraBrain) throw f.cause as BrainError
+            }
+        }
+        SessionTrace.add("BRAIN third brain in use")
+        groqLoop(s, system, userText, runTool, extra = true)
     }
 
     /**
@@ -223,6 +235,7 @@ class JarvisBrain @Inject constructor(
         system: String,
         userText: String,
         runTool: suspend (String, JsonObject) -> ToolResult,
+        extra: Boolean,
     ) {
         val messages = mutableListOf(GroqMessages.text("system", system))
         conversation.snapshot().forEach { messages += GroqMessages.text(if (it.role == Role.USER) "user" else "assistant", it.text) }
@@ -230,17 +243,19 @@ class JarvisBrain @Inject constructor(
         for (round in 0 until MAX_TOOL_ROUNDS) {
             val text = StringBuilder()
             val assembler = GroqStreamParser.ToolCallAssembler()
-            usage.recordGroqRequest()
+            if (!extra) usage.recordGroqRequest()
             try {
-                groqTurn(s, s.groqModel, JsonArray(messages), registry.groqTools).collect { d ->
+                groqTurn(s, if (extra) s.extraModel else s.groqModel, JsonArray(messages), registry.groqTools, extra = extra).collect { d ->
                     d.toolFragments.forEach(assembler::add)
                     if (d.text.isNotEmpty()) {
                         text.append(d.text)
                         emit(BrainEvent.Text(d.text))
                     }
                 }
-            } catch (e: BrainError.RateLimited) {
-                usage.markExhausted(Provider.GROQ, cooldownFor(e))
+            } catch (e: BrainError) {
+                if (e is BrainError.RateLimited && !extra) usage.markExhausted(Provider.GROQ, cooldownFor(e))
+                // Nothing said or done yet: the next brain may take this turn.
+                if (!extra && round == 0 && text.isEmpty() && assembler.calls().isEmpty()) throw Fallback(e)
                 throw e
             }
             val calls = assembler.calls()

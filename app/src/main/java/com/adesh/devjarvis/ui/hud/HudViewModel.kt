@@ -2,6 +2,8 @@ package com.adesh.devjarvis.ui.hud
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.launch
+import androidx.lifecycle.viewModelScope
 import com.adesh.devjarvis.core.HudUiState
 import com.adesh.devjarvis.core.JarvisSession
 import com.adesh.devjarvis.service.ServiceController
@@ -21,6 +23,7 @@ class HudViewModel @Inject constructor(
     private val settings: SettingsRepository,
     private val models: VoskModelManager,
     updater: AppUpdater,
+    private val documents: com.adesh.devjarvis.vision.DocumentReader,
 ) : ViewModel() {
     val update: StateFlow<AppUpdater.State> = updater.state
 
@@ -33,6 +36,15 @@ class HudViewModel @Inject constructor(
     fun onTextSubmitted(text: String) = session.onTextSubmitted(text)
     fun answerConfirmation(yes: Boolean) = session.answerConfirmation(yes)
     fun dismissCard() = session.dismissCard()
+
+    /** A photo or PDF picked on the HUD: look at it and tell Sir what it is. */
+    fun onFilePicked(uri: android.net.Uri) {
+        session.note("File dekh raha hoon, Sir…")
+        viewModelScope.launch {
+            val answer = runCatching { documents.explain(uri) }.getOrNull()
+            session.announce(answer ?: "Sir, ye file padh nahi paya — ya to khul nahi rahi, ya vision abhi jawab nahi de raha. Ek minute mein dobara try kijiye.")
+        }
+    }
 
     /** Always-on switch on the HUD. Mic permission is checked by the screen first. */
     fun setAlwaysOn(on: Boolean) {

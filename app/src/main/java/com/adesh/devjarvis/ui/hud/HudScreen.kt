@@ -42,6 +42,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -156,7 +157,7 @@ fun HudScreen(
             ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
             ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
             Transcript(ui, Modifier.weight(1f))
-            InputRow(onSend = viewModel::onTextSubmitted)
+            InputRow(onSend = viewModel::onTextSubmitted, onFile = viewModel::onFilePicked)
         }
     }
 }
@@ -341,8 +342,11 @@ private fun Transcript(ui: HudUiState, modifier: Modifier) {
 }
 
 @Composable
-private fun InputRow(onSend: (String) -> Unit) {
+private fun InputRow(onSend: (String) -> Unit, onFile: (android.net.Uri) -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) onFile(uri) }
     val send = {
         if (text.isNotBlank()) {
             onSend(text)
@@ -368,7 +372,10 @@ private fun InputRow(onSend: (String) -> Unit) {
             ),
             modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(8.dp))
+        // Photo / PDF: JARVIS looks at it and explains.
+        TextButton(onClick = { picker.launch(arrayOf("image/*", "application/pdf")) }) {
+            Text("FILE", style = MaterialTheme.typography.labelMedium, color = Hud.Cyan)
+        }
         IconButton(onClick = send) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Hud.Cyan)
         }
