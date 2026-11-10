@@ -8,6 +8,7 @@ import com.adesh.devjarvis.notifications.NotificationTools
 import com.adesh.devjarvis.screen.ScreenTools
 import com.adesh.devjarvis.tools.impl.CommunicationTools
 import com.adesh.devjarvis.tools.impl.LifeTools
+import com.adesh.devjarvis.tools.impl.ModeTools
 import com.adesh.devjarvis.tools.impl.InfoTools
 import com.adesh.devjarvis.tools.impl.PhoneTools
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,8 +32,9 @@ class ToolRegistry @Inject constructor(
     notifications: NotificationTools,
     screen: ScreenTools,
     life: LifeTools,
+    modes: ModeTools,
 ) {
-    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools + life.tools)
+    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools + life.tools + modes.tools)
         .filter { Edition.isFull || it.name !in Edition.FULL_ONLY_TOOLS }
         .filter { t -> Edition.TOOL_NEEDS_PERMISSION[t.name]?.let { Edition.declares(context, it) } ?: true }
     private val byName = tools.associateBy { it.name }

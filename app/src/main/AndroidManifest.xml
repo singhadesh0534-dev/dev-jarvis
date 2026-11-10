@@ -106,7 +106,37 @@
                 <action android:name="android.intent.action.VOICE_COMMAND" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Earbud / car-kit button while the phone is locked. -->
+            <intent-filter>
+                <action android:name="android.speech.action.VOICE_SEARCH_HANDS_FREE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
+
+        <!-- One tap from the notification shade. -->
+        <service
+            android:name=".widget.JarvisTileService"
+            android:exported="true"
+            android:icon="@drawable/ic_stat_jarvis"
+            android:label="@string/widget_label"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+
+        <!-- Home-screen mini reactor. -->
+        <receiver
+            android:name=".widget.JarvisWidget"
+            android:exported="true"
+            android:label="@string/widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_info" />
+        </receiver>
 
         <activity
             android:name=".vision.CameraCaptureActivity"

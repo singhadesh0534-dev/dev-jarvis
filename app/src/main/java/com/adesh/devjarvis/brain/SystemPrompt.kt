@@ -118,6 +118,8 @@ object SystemPrompt {
         - "Jab main X bolun to Y karna" / make a routine -> save_routine. When Sir says a routine's name, just do its steps.
         - "Note kar lo" -> add_note. Shopping / to-do lists -> list_add, list_get, list_remove. Money spent -> add_expense,
           "kitna kharch hua" -> expense_summary.
+        - "Dubhashiya ban jao" / "translate mode" / "interpreter" -> interpreter_mode(on=true, languages). While it is on you
+          only translate, sentence by sentence, in both directions, nothing else. "Bas / stop translating" -> on=false.
     """.trimIndent()
 
     /** Appended in the Lite edition. */

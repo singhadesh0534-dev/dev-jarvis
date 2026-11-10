@@ -1,7 +1,9 @@
 package com.adesh.devjarvis
 
 import android.content.Intent
+import android.os.Build
 import android.os.Bundle
+import com.adesh.devjarvis.widget.QuickAccess
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -36,7 +38,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         val home = if (settings.current.setupDone) ROUTE_HUD else ROUTE_SETUP_FIRST
         // Boot animation on a normal cold start only — not when launched by the assistant gesture.
-        val isAssist = intent?.action == Intent.ACTION_ASSIST || intent?.action == Intent.ACTION_VOICE_COMMAND
+        val isAssist = intent?.action in TALK_ACTIONS
         val start = if (savedInstanceState == null && !isAssist && settings.current.bootAnimation) ROUTE_BOOT else home
         setContent {
             JarvisTheme {
@@ -105,12 +107,22 @@ class MainActivity : ComponentActivity() {
     /** Home long-press / assistant button: seedha sunna shuru. */
     private fun handleAssist(intent: Intent?) {
         val action = intent?.action ?: return
-        if (action == Intent.ACTION_ASSIST || action == Intent.ACTION_VOICE_COMMAND) {
+        if (action in TALK_ACTIONS) {
+            // Earbud / car button, home long-press, tile or widget: work over the lock screen too.
+            if (Build.VERSION.SDK_INT >= 27) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+            }
             if (ServiceController.hasMicPermission(this)) session.onAssistLaunch()
         }
     }
 
     private companion object {
+        /** Home long-press, earbud / car button (also when locked), quick tile and widget. */
+        val TALK_ACTIONS = setOf(
+            Intent.ACTION_ASSIST, Intent.ACTION_VOICE_COMMAND,
+            "android.speech.action.VOICE_SEARCH_HANDS_FREE", QuickAccess.ACTION_TALK,
+        )
         const val ROUTE_BOOT = "boot"
         const val ROUTE_HUD = "hud"
         const val ROUTE_SETTINGS = "settings"

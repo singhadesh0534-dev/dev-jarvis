@@ -118,6 +118,7 @@ class JarvisSession @Inject constructor(
     private val http: OkHttpClient,
     private val memoryExtractor: MemoryExtractor,
     private val screenTools: ScreenTools,
+    private val modes: ConversationMode,
     @ApplicationContext context: Context,
 ) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
@@ -435,6 +436,7 @@ class JarvisSession @Inject constructor(
     }
 
     private fun endConversation(chime: Boolean) {
+        modes.reset()
         scheduleMemoryExtraction()
         val wasOpen = _ui.value.inConversation
         focus.release()
@@ -454,7 +456,7 @@ class JarvisSession @Inject constructor(
             // Mic wake engine se wapas lo, phir recognizer ko do.
             wake.stop()
             wake.awaitStopped()
-            val deadline = System.currentTimeMillis() + JarvisConfig.FOLLOW_UP_WINDOW_MS
+            val deadline = System.currentTimeMillis() + modes.followUpMs(JarvisConfig.FOLLOW_UP_WINDOW_MS)
             var retriedBusy = false
             while (true) {
                 var outcome = ListenOutcome.NOTHING
@@ -793,7 +795,7 @@ class JarvisSession @Inject constructor(
                         return@launch
                     }
                     setState(JarvisState.LISTENING)
-                    delay(JarvisConfig.FOLLOW_UP_WINDOW_MS)
+                    delay(modes.followUpMs(JarvisConfig.FOLLOW_UP_WINDOW_MS))
                     closeLive(chime = true)
                 }
             }
