@@ -32,6 +32,7 @@ class HudViewModel @Inject constructor(
     fun onMicPermissionDenied() = session.onMicPermissionDenied()
     fun onTextSubmitted(text: String) = session.onTextSubmitted(text)
     fun answerConfirmation(yes: Boolean) = session.answerConfirmation(yes)
+    fun dismissCard() = session.dismissCard()
 
     /** Always-on switch on the HUD. Mic permission is checked by the screen first. */
     fun setAlwaysOn(on: Boolean) {

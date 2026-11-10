@@ -84,6 +84,8 @@ data class HudUiState(
     val pendingConfirmation: String? = null,
     /** Voice pipeline in use. Phase 4 adds "LIVE" (Gemini Live) and "FALLBACK" (Groq). */
     val mode: String = "STREAM",
+    /** Latest tool result shown as a card on the HUD; clears itself after a few seconds. */
+    val card: HudCard? = null,
 )
 
 /** One-off things the background service must act on. */
@@ -664,7 +666,24 @@ class JarvisSession @Inject constructor(
         if (result.endsConversation) endAfterReply = true
         upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: ${result.message}", system = true)
         activityLog.add(name, argText, result.ok, result.message)
+        HudCards.forTool(lineId, name, result.ok, result.message)?.let(::showCard)
         return result
+    }
+
+    private var cardJob: Job? = null
+
+    private fun showCard(card: HudCard) {
+        cardJob?.cancel()
+        _ui.update { it.copy(card = card) }
+        cardJob = scope.launch {
+            delay(CARD_VISIBLE_MS)
+            _ui.update { if (it.card?.id == card.id) it.copy(card = null) else it }
+        }
+    }
+
+    fun dismissCard() {
+        cardJob?.cancel()
+        _ui.update { it.copy(card = null) }
     }
 
     /** Ask out loud, then wait for "haan / nahi" by voice or a YES / NO tap. No answer = no. */
@@ -1064,5 +1083,6 @@ class JarvisSession @Inject constructor(
         const val MAX_LINES = 100
         const val CONFIRM_TIMEOUT_MS = 25_000L
         const val RING_LISTEN_MS = 8_000L
+        const val CARD_VISIBLE_MS = 15_000L
     }
 }

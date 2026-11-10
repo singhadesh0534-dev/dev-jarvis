@@ -62,6 +62,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.adesh.devjarvis.core.HudCard
 import com.adesh.devjarvis.core.HudUiState
 import com.adesh.devjarvis.core.JarvisState
 import com.adesh.devjarvis.core.NetworkKind
@@ -153,6 +154,7 @@ fun HudScreen(
             )
 
             ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
+            ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
             Transcript(ui, Modifier.weight(1f))
             InputRow(onSend = viewModel::onTextSubmitted)
         }
@@ -236,6 +238,24 @@ private fun AlwaysOnRow(ui: HudUiState, onToggle: (Boolean) -> Unit) {
                 ),
             )
         }
+    }
+}
+
+/** Latest tool result (weather, reminder, expense...). Tap to dismiss; it also clears itself. */
+@Composable
+private fun ResultCard(card: HudCard, onDismiss: () -> Unit) {
+    val accent = if (card.ok) Hud.Cyan else Hud.Amber
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .border(1.dp, accent, RoundedCornerShape(6.dp))
+            .background(Hud.Panel, RoundedCornerShape(6.dp))
+            .clickable(onClick = onDismiss)
+            .padding(12.dp),
+    ) {
+        Text(if (card.ok) card.title else "${card.title} · FAILED", style = MaterialTheme.typography.labelSmall, color = accent)
+        Text(card.body, style = MaterialTheme.typography.bodyMedium, color = Hud.White)
     }
 }
 
