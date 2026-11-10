@@ -64,6 +64,9 @@ class ScreenModelTest {
         assertEquals(AgentAction.Done("sent"), AgentProtocol.parse("""```json
 {"action":"done","note":"sent"}
 ```"""))
+        assertEquals(AgentAction.Swipe("left"), AgentProtocol.parse("""{"action":"swipe","direction":"LEFT"}"""))
+        assertNull(AgentProtocol.parse("""{"action":"swipe","direction":"diagonal"}"""))
+        assertEquals(AgentAction.LongPress(7), AgentProtocol.parse("""{"action":"long_press","id":7}"""))
         assertNull(AgentProtocol.parse("""{"action":"tap"}"""))
         assertNull(AgentProtocol.parse("""{"action":"fly"}"""))
         assertNull(AgentProtocol.parse("no json"))

@@ -116,6 +116,35 @@ class JarvisAccessibilityService : AccessibilityService() {
         return swipe(x, from, x, to)
     }
 
+    /** Swipe across the middle of the screen. "left" = finger moves right-to-left (next page / next reel). */
+    suspend fun swipe(direction: String): Boolean {
+        val dm = resources.displayMetrics
+        val w = dm.widthPixels.toFloat()
+        val h = dm.heightPixels.toFloat()
+        return when (direction) {
+            "left" -> swipe(w * 0.85f, h * 0.5f, w * 0.15f, h * 0.5f)
+            "right" -> swipe(w * 0.15f, h * 0.5f, w * 0.85f, h * 0.5f)
+            "up" -> swipe(w * 0.5f, h * 0.75f, w * 0.5f, h * 0.25f)
+            "down" -> swipe(w * 0.5f, h * 0.25f, w * 0.5f, h * 0.75f)
+            else -> false
+        }
+    }
+
+    /** Long-press element [id] from the last snapshot (opens selection / context menus). */
+    suspend fun longPress(id: Int): Boolean {
+        val node = lastNodes[id] ?: return false
+        var n: AccessibilityNodeInfo? = node
+        var hops = 0
+        while (n != null && hops < 4) {
+            if (n.isLongClickable && n.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK)) return true
+            n = n.parent
+            hops++
+        }
+        val r = Rect().also { node.getBoundsInScreen(it) }
+        if (r.width() <= 0) return false
+        return gesture(GestureDescription.StrokeDescription(Path().apply { moveTo(r.exactCenterX(), r.exactCenterY()) }, 0, 750))
+    }
+
     private suspend fun tapAt(x: Float, y: Float): Boolean =
         gesture(GestureDescription.StrokeDescription(Path().apply { moveTo(x, y) }, 0, 60))
 

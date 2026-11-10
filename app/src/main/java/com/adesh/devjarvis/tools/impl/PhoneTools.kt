@@ -71,6 +71,37 @@ class PhoneTools @Inject constructor(
         }
     }
 
+    private val uninstallApp = object : SimpleTool(
+        "uninstall_app", "Uninstall an installed app. The app asks Sir to confirm, then Android shows its own Uninstall dialog.",
+        params { string("name", "App name as Sir said it", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val q = args.requireString("name")
+            val app = apps.find(q) ?: return ToolResult.fail("no installed app matching '$q'")
+            if (!ctx.confirm("Sir, ${app.label} uninstall kar doon? Iska data bhi chala jayega.")) return ToolResult.ok("kept ${app.label} — Sir said no")
+            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:${app.packageName}"))
+            return launcher.result(
+                launcher.launch(intent, "Uninstall ${app.label}"),
+                "Android's uninstall dialog for ${app.label} is open — Sir (or tap 'OK' via the screen tools) confirms it there",
+                "Uninstall ${app.label}",
+            )
+        }
+    }
+
+    private val installApp = object : SimpleTool(
+        "install_app", "Open the Play Store on an app so it can be installed (then tap Install there, e.g. with the tap tool).",
+        params { string("name", "App to install", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val q = args.requireString("name")
+            var outcome = launcher.launch(Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=${Uri.encode(q)}&c=apps")), "Install $q")
+            if (outcome == ActivityLauncher.Outcome.NOT_FOUND) {
+                outcome = launcher.launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/search?q=${Uri.encode(q)}&c=apps")), "Install $q")
+            }
+            return launcher.result(outcome, "Play Store opened on '$q' — pick the app and tap Install (free apps only; never buy anything)", "Install $q")
+        }
+    }
+
     private val closeApp = object : SimpleTool(
         "close_current_app", "Leave the current app and go to the home screen (Android doesn't allow force-closing other apps).",
     ) {
@@ -352,7 +383,7 @@ class PhoneTools @Inject constructor(
     }
 
     val tools: List<JarvisTool> = listOf(
-        openApp, closeApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setVolume,
+        openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setVolume,
         setBrightness, openSettings, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
     )
 }

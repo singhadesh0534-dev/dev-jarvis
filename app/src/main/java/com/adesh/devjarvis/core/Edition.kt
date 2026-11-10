@@ -15,12 +15,16 @@ object Edition {
     /** Tools that need the Accessibility or Notification-listener service — hidden from the brain in Lite. */
     val FULL_ONLY_TOOLS = setOf(
         "take_screenshot", "lock_screen", "close_current_app",
-        "look_at_screen", "read_screen", "tap", "type_text", "scroll", "go_back", "go_home", "do_task_on_screen",
+        "look_at_screen", "read_screen", "tap", "long_press", "type_text", "scroll", "swipe", "go_back", "go_home",
+        "do_task_on_screen",
         "read_notifications", "reply_to_notification",
     )
 
     /** Tools that only make sense when a permission is in the manifest (Lite drops some). */
-    val TOOL_NEEDS_PERMISSION = mapOf("set_brightness" to "android.permission.WRITE_SETTINGS")
+    val TOOL_NEEDS_PERMISSION = mapOf(
+        "set_brightness" to "android.permission.WRITE_SETTINGS",
+        "uninstall_app" to "android.permission.REQUEST_DELETE_PACKAGES",
+    )
 
     /** Is [permission] in this build's manifest? (Lite removes several; requesting those would just fail.) */
     fun declares(context: Context, permission: String): Boolean = runCatching {

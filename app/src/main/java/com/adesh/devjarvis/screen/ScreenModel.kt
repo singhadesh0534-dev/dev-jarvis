@@ -99,6 +99,8 @@ sealed interface AgentAction {
     data class Tap(val id: Int) : AgentAction
     data class Type(val id: Int?, val text: String) : AgentAction
     data class Scroll(val down: Boolean) : AgentAction
+    data class Swipe(val direction: String) : AgentAction
+    data class LongPress(val id: Int) : AgentAction
     data object Back : AgentAction
     data object Home : AgentAction
     data class OpenApp(val name: String) : AgentAction
@@ -108,16 +110,22 @@ sealed interface AgentAction {
 }
 
 object AgentProtocol {
-    const val MAX_STEPS = 15
+    const val MAX_STEPS = 25
+    val SWIPE_DIRECTIONS = listOf("left", "right", "up", "down")
 
     fun systemPrompt(): String = """
         You operate Sir's Android phone through accessibility to finish ONE goal. Each turn you get the goal,
         the steps already taken, and the current screen as numbered elements.
         Reply with JSON only, one action per turn:
-        {"action":"tap","id":12} | {"action":"type","id":5,"text":"..."} | {"action":"scroll","direction":"down"|"up"} |
+        {"action":"tap","id":12} | {"action":"long_press","id":12} | {"action":"type","id":5,"text":"..."} |
+        {"action":"scroll","direction":"down"|"up"} | {"action":"swipe","direction":"left"|"right"|"up"|"down"} |
         {"action":"back"} | {"action":"home"} | {"action":"open_app","app":"WhatsApp"} | {"action":"wait"} |
         {"action":"done","note":"what was achieved, one short sentence for Sir"} | {"action":"fail","note":"why"}
         Rules:
+        - Think before each step: what does the goal need, what is on this screen, which single action moves closest to
+          it. After an action, check on the next screen that it worked; if it didn't, try a different way.
+        - To select items (photos, messages, files) long_press the first one, then tap the others, then the toolbar action.
+        - Not everything is visible: scroll or swipe to find it, and use an app's search box when it has one.
         - Use only ids that exist on the current screen. Prefer the most direct path; open_app is faster than hunting for icons.
         - Never type passwords, PINs, OTPs, card or bank details. Never pay, buy, order, recharge or transfer money.
           If the screen asks for any of that, reply fail.
@@ -146,6 +154,8 @@ object AgentProtocol {
             "tap", "click" -> int("id")?.let { AgentAction.Tap(it) }
             "type" -> str("text")?.let { AgentAction.Type(int("id"), it) }
             "scroll" -> AgentAction.Scroll(down = str("direction")?.lowercase() != "up")
+            "swipe" -> str("direction")?.lowercase()?.takeIf { it in SWIPE_DIRECTIONS }?.let { AgentAction.Swipe(it) }
+            "long_press", "longpress", "hold" -> int("id")?.let { AgentAction.LongPress(it) }
             "back" -> AgentAction.Back
             "home" -> AgentAction.Home
             "open_app" -> str("app")?.takeIf { it.isNotEmpty() }?.let { AgentAction.OpenApp(it) }
@@ -160,6 +170,8 @@ object AgentProtocol {
         is AgentAction.Tap -> "tap '${screen?.elements?.firstOrNull { it.id == a.id }?.label ?: "#${a.id}"}'"
         is AgentAction.Type -> "type '${a.text.take(40)}'"
         is AgentAction.Scroll -> if (a.down) "scroll down" else "scroll up"
+        is AgentAction.Swipe -> "swipe ${a.direction}"
+        is AgentAction.LongPress -> "long-press '${screen?.elements?.firstOrNull { it.id == a.id }?.label ?: "#${a.id}"}'"
         AgentAction.Back -> "back"
         AgentAction.Home -> "home"
         is AgentAction.OpenApp -> "open ${a.name}"

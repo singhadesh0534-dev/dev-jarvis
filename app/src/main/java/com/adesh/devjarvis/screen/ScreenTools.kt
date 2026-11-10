@@ -165,6 +165,32 @@ class ScreenTools @Inject constructor(
         }
     }
 
+    private val swipe = object : SimpleTool(
+        "swipe", "Swipe the current screen: left = next (next reel / page / photo), right = previous, up / down = move the page.",
+        params { string("direction", "left | right | up | down", required = true, enum = AgentProtocol.SWIPE_DIRECTIONS) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val svc = service() ?: return needsAccessibility()
+            currentScreen(svc)
+            val dir = args.enum("direction", AgentProtocol.SWIPE_DIRECTIONS) ?: return ToolResult.fail("direction must be left, right, up or down")
+            return if (svc.swipe(dir)) ToolResult.ok("swiped $dir") else ToolResult.fail("swipe didn't work")
+        }
+    }
+
+    private val longPress = object : SimpleTool(
+        "long_press", "Long-press an item on the current screen by its visible label (to select it or open its menu).",
+        params { string("text", "Visible label of the item", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val svc = service() ?: return needsAccessibility()
+            val snap = currentScreen(svc) ?: return ToolResult.fail("can't read this screen")
+            (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let { return ToolResult.fail("stopped: ${it.reason}") }
+            val label = args.requireString("text")
+            val el = AgentProtocol.findByLabel(snap, label) ?: return ToolResult.fail("no '$label' on screen")
+            return if (svc.longPress(el.id)) ToolResult.ok("long-pressed '${el.label}'") else ToolResult.fail("long-press didn't work")
+        }
+    }
+
     private val goBack = object : SimpleTool("go_back", "Press Back.") {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult =
             if (JarvisAccessibilityService.global(AccessibilityService.GLOBAL_ACTION_BACK)) ToolResult.ok("went back") else needsAccessibility()
@@ -179,7 +205,8 @@ class ScreenTools @Inject constructor(
 
     private val doTask = object : SimpleTool(
         "do_task_on_screen",
-        "Do a multi-step job inside other apps by reading the screen and tapping/typing (max 15 steps). " +
+        "Do a multi-step job inside other apps by reading the screen and tapping/typing/swiping (max 25 steps): " +
+            "e.g. send a message in an app, search something, change a setting, select and delete or hide photos. " +
             "Stops on password/payment screens; asks Sir before the final send/post. Only on Sir's explicit request.",
         params { string("goal", "Clear goal, e.g. \"WhatsApp pe Rahul ko 'kal milte hain' bhejo\"", required = true) },
     ) {
@@ -218,6 +245,8 @@ class ScreenTools @Inject constructor(
                     }
                     is AgentAction.Type -> svc.type(action.id, action.text)
                     is AgentAction.Scroll -> svc.scroll(action.down)
+                    is AgentAction.Swipe -> svc.swipe(action.direction)
+                    is AgentAction.LongPress -> svc.longPress(action.id)
                     AgentAction.Back -> svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
                     AgentAction.Home -> svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
                     is AgentAction.OpenApp -> {
@@ -234,5 +263,5 @@ class ScreenTools @Inject constructor(
         }
     }
 
-    val tools: List<JarvisTool> = listOf(look, lookAtScreen, readScreen, tap, typeText, scroll, goBack, goHome, doTask)
+    val tools: List<JarvisTool> = listOf(look, lookAtScreen, readScreen, tap, longPress, typeText, scroll, swipe, goBack, goHome, doTask)
 }
