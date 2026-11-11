@@ -7,14 +7,14 @@ package com.adesh.devjarvis.core
 class KeyPool(private val now: () -> Long = System::currentTimeMillis) {
     private val blockedUntil = HashMap<String, Long>()
 
-    fun parse(raw: String): List<String> {
-        val parts = raw.split(',', ';', ' ', '\n', '\t', '|', '/')
-            .map { it.trim().trim('"', '\'', '`', '[', ']', '(', ')', '.').substringAfterLast(':').substringAfterLast('=').trim() }
-            .filter { it.isNotEmpty() }
-        // Pasted lists often carry labels ("key1", "1."): when real, long keys are present, short bits are not keys.
-        val real = parts.filter { it.length >= 16 }
-        return real.ifEmpty { parts }.distinct()
-    }
+    /**
+     * Keys are kept whole: split only on what can never be inside a key (comma, semicolon, spaces, line breaks).
+     * Never on '/', '=', ':', '.', '-' or '_' — real keys contain those. Quotes / brackets around a key are dropped.
+     */
+    fun parse(raw: String): List<String> = raw.split(',', ';', ' ', '\n', '\r', '\t')
+        .map { it.trim().trim('"', '\'', '`', '[', ']', '(', ')', '<', '>') }
+        .filter { it.isNotEmpty() }
+        .distinct()
 
     /** First key that is not resting; if all are resting, the one that comes back soonest. Blank if none. */
     @Synchronized

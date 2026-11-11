@@ -35,14 +35,21 @@ class KeyPoolTest {
 
 class KeyPasteTest {
     private val pool = KeyPool()
-    private val a = "AIzaSyA1234567890abcdefghij"
-    private val b = "gsk_abcdefghijklmnopqrstuvwx"
 
-    @Test fun quotesLabelsAndOddSeparatorsAreCleaned() {
-        assertEquals(listOf(a, b), pool.parse("\"$a\" | '$b'"))
-        assertEquals(listOf(a, b), pool.parse("key1: $a, key2=$b."))
-        assertEquals(listOf(a, b), pool.parse("1. $a\n2. $b"))
+    @Test fun keysWithSlashesEqualsColonsAndDotsStayWhole() {
+        val a = "AQ.Ab8RNexample/part+two=="
+        val b = "AIzaSyExample_key-with:colon"
+        assertEquals(listOf(a, b), pool.parse("$a, $b"))
+        assertEquals(listOf(a, b), pool.parse("$a\n$b"))
     }
 
-    @Test fun aSingleShortValueIsKeptAsItIs() = assertEquals(listOf("only"), pool.parse("only"))
+    @Test fun copyPasteNoiseIsRemoved() {
+        assertEquals(listOf("AIzaSyAbc123def456"), pool.parse("  \"AIzaSyAbc123def456\"  "))
+        assertEquals(listOf("gsk_abc", "gsk_def"), pool.parse("[gsk_abc]; (gsk_def)"))
+    }
+
+    @Test fun boxesJoinedByTheAppComeBackTheSame() {
+        val keys = listOf("AQ.one/two=", "AIzaThree", "gsk_four")
+        assertEquals(keys, pool.parse(keys.joinToString(", ")))
+    }
 }

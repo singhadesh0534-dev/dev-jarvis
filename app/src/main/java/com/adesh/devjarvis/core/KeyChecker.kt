@@ -14,14 +14,28 @@ import javax.inject.Singleton
 @Singleton
 class KeyChecker @Inject constructor(private val http: OkHttpClient) {
 
-    private fun code(url: String, header: String, value: String): Int = runCatching {
-        http.newCall(Request.Builder().url(url).header(header, value).build()).execute().use { it.code }
-    }.getOrDefault(0)
+    /** HTTP code and the service's short reason (e.g. API_KEY_INVALID). The key itself is never part of it. */
+    private fun code(url: String, header: String, value: String): Pair<Int, String> = runCatching {
+        http.newCall(Request.Builder().url(url).header(header, value).build()).execute().use { r ->
+            val body = if (r.isSuccessful) "" else r.body?.string().orEmpty().take(2_000)
+            val reason = Regex("\"reason\"\\s*:\\s*\"([A-Z_]+)\"").find(body)?.groupValues?.get(1)
+                ?: Regex("\"status\"\\s*:\\s*\"([A-Z_]+)\"").find(body)?.groupValues?.get(1)
+                ?: ""
+            r.code to reason
+        }
+    }.getOrDefault(0 to "")
 
-    private fun line(name: String, codes: List<Int>): String {
-        if (codes.isEmpty()) return "$name: koi key nahi"
-        val bad = codes.withIndex().filter { it.value !in 200..299 && it.value != 429 }.map { "#${it.index + 1}" + if (it.value == 0) " (network)" else " (${it.value})" }
-        val good = codes.count { it in 200..299 || it == 429 }
+    private fun line(name: String, results: List<Pair<Int, String>>): String {
+        if (results.isEmpty()) return "$name: koi key nahi"
+        val ok = { c: Int -> c in 200..299 || c == 429 }
+        val bad = results.withIndex().filter { !ok(it.value.first) }.map { (i, r) ->
+            "#${i + 1}" + when {
+                r.first == 0 -> " (network)"
+                r.second.isNotEmpty() -> " (${r.first} ${r.second})"
+                else -> " (${r.first})"
+            }
+        }
+        val good = results.count { ok(it.first) }
         return "$name: $good sahi" + if (bad.isEmpty()) "" else ", galat: ${bad.joinToString(", ")}"
     }
 

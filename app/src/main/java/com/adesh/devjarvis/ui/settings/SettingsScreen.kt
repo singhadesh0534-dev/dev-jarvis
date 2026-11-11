@@ -119,7 +119,7 @@ fun SettingsScreen(
             KeySlots("ElevenLabs key", draft.elevenApiKey, count = 3) { v -> viewModel.edit { it.copy(elevenApiKey = v) } }
             OpenLinkButton("Get free ElevenLabs key", JarvisConfig.ELEVEN_KEY_URL)
             Hint("Bas key daaliye: awaaz (gehri, mard, British) aur model JARVIS aapke account mein se khud chun leta hai.")
-            Hint("ElevenLabs sirf Classic mode, reminders aur confirmations ki awaaz badalta hai — Live mode ki awaaz Gemini ki apni hai. Free account mein mahine ke thode hi characters milte hain; khatam hote hi JARVIS khud phone ki awaaz pe aa jaata hai. Yahan bhi kai keys comma se daal sakte ho.")
+            Hint("ElevenLabs sirf Classic mode, reminders aur confirmations ki awaaz badalta hai — Live mode ki awaaz Gemini ki apni hai. Free account mein mahine ke thode hi characters milte hain; khatam hote hi JARVIS khud phone ki awaaz pe aa jaata hai.")
             OutlinedButton(onClick = viewModel::checkKeys) { Text("Keys check karo", color = Hud.Cyan) }
             viewModel.keyReport.collectAsStateWithLifecycle().value?.let { report -> Text(report, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
             Hint("Har key apne alag box mein daalo (alag-alag accounts ki). Box khaali chhod sakte ho. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
