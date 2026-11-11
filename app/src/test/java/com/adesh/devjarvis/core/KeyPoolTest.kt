@@ -8,7 +8,7 @@ import org.junit.Test
 class KeyPoolTest {
     private var t = 0L
     private val pool = KeyPool { t }
-    private val raw = "k1, k2\nk3  k1"
+    private val raw = "k1, k2\nk3\nk1"
 
     @Test fun parsesAnySeparatorAndDropsDuplicates() = assertEquals(listOf("k1", "k2", "k3"), pool.parse(raw))
 
@@ -39,7 +39,7 @@ class KeyPasteTest {
     @Test fun keysWithSlashesEqualsColonsAndDotsStayWhole() {
         val a = "AQ.Ab8RNexample/part+two=="
         val b = "AIzaSyExample_key-with:colon"
-        assertEquals(listOf(a, b), pool.parse("$a, $b"))
+        assertEquals(listOf(a, b), pool.parse("$a\n$b"))
         assertEquals(listOf(a, b), pool.parse("$a\n$b"))
     }
 
@@ -48,8 +48,20 @@ class KeyPasteTest {
         assertEquals(listOf("gsk_abc", "gsk_def"), pool.parse("[gsk_abc]; (gsk_def)"))
     }
 
-    @Test fun boxesJoinedByTheAppComeBackTheSame() {
-        val keys = listOf("AQ.one/two=", "AIzaThree", "gsk_four")
-        assertEquals(keys, pool.parse(keys.joinToString(", ")))
+    @Test fun aSpaceOrLineBreakInsideAPastedKeyIsRemoved() {
+        assertEquals(listOf("AQ.Ab8RNfirstpartSECONDPART"), pool.parse(pool.store(listOf("AQ.Ab8RNfirstpart SECONDPART"))))
+        assertEquals(listOf("AIzaFirstSecond"), pool.parse(pool.store(listOf("AIzaFirst\tSecond"))))
+    }
+
+    @Test fun boxesKeepTheirPlace() {
+        val stored = pool.store(listOf("", "", "", "AQ.key4"))
+        assertEquals(listOf("", "", "", "AQ.key4"), pool.boxes(stored))
+        assertEquals(listOf("AQ.key4"), pool.parse(stored))
+        assertEquals("AIza1\n\nAIza3", pool.store(listOf("AIza1", "", "AIza3", "", "")))
+    }
+
+    @Test fun olderCommaSeparatedValuesStillLoad() {
+        assertEquals(listOf("AIza1", "AIza2"), pool.parse("AIza1, AIza2"))
+        assertEquals(listOf("AIza1", "AIza2"), pool.boxes("AIza1, AIza2"))
     }
 }

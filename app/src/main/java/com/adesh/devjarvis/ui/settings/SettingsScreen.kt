@@ -428,8 +428,10 @@ private fun HudField(label: String, value: String, onChange: (String) -> Unit) {
  */
 @Composable
 private fun KeySlots(label: String, value: String, count: Int = 5, onChange: (String) -> Unit) {
+    val pool = remember { com.adesh.devjarvis.core.KeyPool() }
     val slots = remember {
-        val saved = com.adesh.devjarvis.core.KeyPool().parse(value)
+        // Each key stays in the box it was typed in (empty boxes keep their place).
+        val saved = pool.boxes(value)
         androidx.compose.runtime.mutableStateListOf<String>().apply { repeat(maxOf(count, saved.size)) { add(saved.getOrElse(it) { "" }) } }
     }
     slots.forEachIndexed { index, key ->
@@ -437,8 +439,8 @@ private fun KeySlots(label: String, value: String, count: Int = 5, onChange: (St
             label = "$label ${index + 1}" + if (index == 0) "" else " (optional)",
             value = key,
             onChange = { v ->
-                slots[index] = v.trim()
-                onChange(slots.filter { it.isNotBlank() }.joinToString(", "))
+                slots[index] = v.filterNot { it.isWhitespace() }
+                onChange(pool.store(slots))
             },
         )
     }

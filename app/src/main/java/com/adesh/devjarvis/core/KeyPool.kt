@@ -8,13 +8,20 @@ class KeyPool(private val now: () -> Long = System::currentTimeMillis) {
     private val blockedUntil = HashMap<String, Long>()
 
     /**
-     * Keys are kept whole: split only on what can never be inside a key (comma, semicolon, spaces, line breaks).
-     * Never on '/', '=', ':', '.', '-' or '_' — real keys contain those. Quotes / brackets around a key are dropped.
+     * One key per line (the Settings boxes are stored one per line; older versions used commas). Inside a key
+     * every space or line break is removed: a key never contains one, but copying a long key on a phone often
+     * inserts one, which used to cut the key in two. Quotes / brackets around it are dropped.
      */
-    fun parse(raw: String): List<String> = raw.split(',', ';', ' ', '\n', '\r', '\t')
-        .map { it.trim().trim('"', '\'', '`', '[', ']', '(', ')', '<', '>') }
+    fun parse(raw: String): List<String> = raw.split('\n', ',', ';')
+        .map { part -> part.filterNot { it.isWhitespace() }.trim('"', '\'', '`', '[', ']', '(', ')', '<', '>') }
         .filter { it.isNotEmpty() }
         .distinct()
+
+    /** Box contents by position (empty boxes kept), for the Settings screen. */
+    fun boxes(raw: String): List<String> = raw.split('\n', ',', ';').map { part -> part.filterNot { it.isWhitespace() } }
+
+    /** Settings boxes -> stored value; empty boxes keep their place. */
+    fun store(boxes: List<String>): String = boxes.joinToString("\n") { box -> box.filterNot { it.isWhitespace() } }.trimEnd('\n')
 
     /** First key that is not resting; if all are resting, the one that comes back soonest. Blank if none. */
     @Synchronized
