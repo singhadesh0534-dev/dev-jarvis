@@ -163,6 +163,8 @@ class JarvisBrain @Inject constructor(
         if (!compact) {
             append("\n\n").append(SystemPrompt.CHARACTER)
             append("\n\n").append(SystemPrompt.BEHAVIOR)
+        } else {
+            append("\n\n").append(SystemPrompt.CHARACTER_SHORT)
         }
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
