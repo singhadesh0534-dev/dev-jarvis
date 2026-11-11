@@ -7,8 +7,9 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SkillsTest {
-    @Test fun moreThanTenSkillsWithUniqueIdsAndRealSteps() {
-        assertTrue(Skills.ALL.size >= 50)
+    @Test fun moreThanTwoHundredFiftySkillsWithUniqueIdsAndRealSteps() {
+        assertTrue(Skills.CORE.size >= 50)
+        assertTrue(Skills.ALL.size - Skills.CORE.size >= 200)
         assertEquals(Skills.ALL.size, Skills.ALL.map { it.id }.toSet().size)
         Skills.ALL.forEach { s ->
             assertTrue(s.id, s.id.matches(Regex("[a-z_]+")))
@@ -19,11 +20,20 @@ class SkillsTest {
     @Test fun findIsForgiving() {
         assertNotNull(Skills.find("Deep Research"))
         assertNotNull(Skills.find(" screen-operator "))
+        assertNotNull(Skills.find("emi_calculator"))
         assertNull(Skills.find("teleport"))
     }
 
-    @Test fun indexListsEverySkill() {
-        val index = Skills.index()
-        Skills.ALL.forEach { assertTrue(it.id in index) }
+    @Test fun searchFindsByWords() {
+        assertEquals("emi_calculator", Skills.search("EMI loan interest").first().id)
+        assertEquals("wifi_fix", Skills.search("wifi not connecting").first().id)
+        assertEquals("resume_writer", Skills.search("make my resume").first().id)
+        assertEquals("deep_research", Skills.search("deep_research").single().id)
+        assertTrue(Skills.search("zzzz qqqq").isEmpty())
+    }
+
+    @Test fun indexesListEverySkill() {
+        val all = Skills.index() + Skills.libraryIndex()
+        Skills.ALL.forEach { assertTrue(it.id, it.id in all) }
     }
 }

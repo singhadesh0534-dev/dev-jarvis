@@ -100,14 +100,21 @@ class ModeTools @Inject constructor(
 
     private val useSkill = object : SimpleTool(
         "use_skill",
-        "Get the exact working method for a kind of request BEFORE you answer or act on it. Call it whenever the request fits one " +
-            "of these, even if you think you know how: " + Skills.index(),
-        params { string("skill", "Skill id", required = true, enum = Skills.ALL.map { it.id }) },
+        "Get the exact working method for a kind of request BEFORE you answer or act on it. Call it whenever the request fits a " +
+            "skill, even if you think you know how. Pass a skill id, or describe the request in a few English words and the best " +
+            "matching skill is found. Core skills: " + Skills.index() + ". Library (${Skills.ALL.size - Skills.CORE.size} more, by area): " +
+            Skills.libraryIndex(),
+        params { string("skill", "Skill id, or a few words describing the request", required = true) },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
-            val skill = Skills.find(args.requireString("skill"))
-                ?: return ToolResult.fail("no such skill; available: ${Skills.ALL.joinToString { it.id }}")
-            return ToolResult.ok(Skills.playbook(skill))
+            val found = Skills.search(args.requireString("skill"))
+            val best = found.firstOrNull()
+                ?: return ToolResult.fail("no matching skill; answer with your own best method")
+            val others = found.drop(1).take(3)
+            return ToolResult.ok(
+                Skills.playbook(best) +
+                    if (others.isEmpty()) "" else "\n(If this does not fit, related skills: ${others.joinToString { it.id }})",
+            )
         }
     }
 

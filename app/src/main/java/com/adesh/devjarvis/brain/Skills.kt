@@ -6,9 +6,10 @@ package com.adesh.devjarvis.brain
  * Pure, unit-tested.
  */
 object Skills {
-    data class Skill(val id: String, val whenToUse: String, val playbook: String)
+    data class Skill(val id: String, val whenToUse: String, val playbook: String, val area: String = "core")
 
-    val ALL: List<Skill> = listOf(
+    /** The big everyday skills, listed in full in the use_skill tool description. */
+    val CORE: List<Skill> = listOf(
         Skill(
             "deep_research", "Sir wants a thorough, researched answer or a comparison (\"deep research\", \"poori jaankari\", \"compare karo\")",
             """
@@ -556,12 +557,40 @@ object Skills {
         ),
     )
 
-    private val byId = ALL.associateBy { it.id }
+    /** Core skills plus the 200+ skill library. */
+    val ALL: List<Skill> by lazy { CORE + SkillLibrary.ALL }
+
+    private val byId by lazy { ALL.associateBy { it.id } }
 
     fun find(id: String): Skill? = byId[id.trim().lowercase().replace(' ', '_').replace('-', '_')]
 
-    /** One line per skill, for the tool description. */
-    fun index(): String = ALL.joinToString("; ") { "${it.id} = ${it.whenToUse}" }
+    /** One line per core skill, then the library areas with their ids, for the tool description. */
+    fun index(): String = CORE.joinToString("; ") { "${it.id} = ${it.whenToUse}" }
+
+    /** Library ids grouped by area, compact. */
+    fun libraryIndex(): String = SkillLibrary.ALL.groupBy { it.area }.entries.joinToString("; ") { e ->
+        e.key + ": " + e.value.joinToString(",") { it.id }
+    }
+
+    private val STOP = setOf("a", "an", "the", "to", "of", "for", "and", "or", "in", "on", "my", "me", "is", "it", "do", "how",
+        "karo", "kar", "do", "de", "ka", "ki", "ke", "ko", "hai", "mujhe", "mera", "meri", "kya", "se", "me", "aur", "sir", "wants")
+
+    private fun words(text: String): Set<String> =
+        text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 1 && it !in STOP }.map { it.trimEnd('s') }.toSet()
+
+    private val wordsOf by lazy { ALL.associate { it.id to (words(it.id.replace('_', ' ')) to words(it.whenToUse)) } }
+
+    /** Best skills for an id or a free-text request, best first. */
+    fun search(query: String, limit: Int = 5): List<Skill> {
+        find(query)?.let { return listOf(it) }
+        val q = words(query)
+        if (q.isEmpty()) return emptyList()
+        return ALL.map { skill ->
+            val (idWords, whenWords) = wordsOf.getValue(skill.id)
+            skill to (q.count { it in idWords } * 3 + q.count { it in whenWords } * 2 +
+                q.count { w -> whenWords.any { it.length > 3 && (it.startsWith(w) || w.startsWith(it)) } })
+        }.filter { it.second > 0 }.sortedByDescending { it.second }.take(limit).map { it.first }
+    }
 
     fun playbook(skill: Skill): String =
         "Skill '${skill.id}'. Follow these steps for this request, in your own voice and Sir's language; " +
