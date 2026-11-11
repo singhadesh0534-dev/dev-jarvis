@@ -32,3 +32,17 @@ class KeyPoolTest {
         assertEquals("", pool.current("  "))
     }
 }
+
+class KeyPasteTest {
+    private val pool = KeyPool()
+    private val a = "AIzaSyA1234567890abcdefghij"
+    private val b = "gsk_abcdefghijklmnopqrstuvwx"
+
+    @Test fun quotesLabelsAndOddSeparatorsAreCleaned() {
+        assertEquals(listOf(a, b), pool.parse("\"$a\" | '$b'"))
+        assertEquals(listOf(a, b), pool.parse("key1: $a, key2=$b."))
+        assertEquals(listOf(a, b), pool.parse("1. $a\n2. $b"))
+    }
+
+    @Test fun aSingleShortValueIsKeptAsItIs() = assertEquals(listOf("only"), pool.parse("only"))
+}

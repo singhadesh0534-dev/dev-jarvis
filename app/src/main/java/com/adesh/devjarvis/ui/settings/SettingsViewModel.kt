@@ -2,6 +2,8 @@ package com.adesh.devjarvis.ui.settings
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.launch
 import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.brain.SystemPrompt
 import com.adesh.devjarvis.core.CrashReporter
@@ -30,6 +32,7 @@ class SettingsViewModel @Inject constructor(
     private val briefing: BriefingScheduler,
     @ApplicationContext private val context: Context,
     val updater: AppUpdater,
+    private val keyChecker: com.adesh.devjarvis.core.KeyChecker,
 ) : ViewModel() {
     /** Last crash + recovered errors, for Settings > Diagnostics (no keys or personal data inside). */
     fun diagnostics(): String? = listOfNotNull(
@@ -52,6 +55,19 @@ class SettingsViewModel @Inject constructor(
 
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
+
+    /** Result of "Keys check karo"; null = not run yet. */
+    val keyReport = MutableStateFlow<String?>(null)
+
+    fun checkKeys() {
+        save()
+        keyReport.value = "Check kar raha hoon…"
+        viewModelScope.launch {
+            val s = repo.current
+            keyReport.value = runCatching { keyChecker.check(s.geminiApiKey, s.groqApiKey, s.elevenApiKey, s.extraApiKey, s.extraBaseUrl) }
+                .getOrElse { "Check nahi ho paya (${it.javaClass.simpleName})." }
+        }
+    }
 
     private val _saveFailed = MutableStateFlow(false)
     val saveFailed: StateFlow<Boolean> = _saveFailed.asStateFlow()
