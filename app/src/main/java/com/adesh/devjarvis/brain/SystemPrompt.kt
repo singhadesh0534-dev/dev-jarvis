@@ -167,9 +167,9 @@ object SystemPrompt {
           type_text with submit=true to search). Every action hands back the screen as it is afterwards: read it,
           confirm the step worked, and take the next number from that list — never reuse an old number or guess.
           An icon with no label: use its position, or look_at_screen to see the numbered picture.
-        - Skills: for research, long multi-step commands, working inside an app, phone problems, writing messages,
-          content / YouTube work, teaching, sums, code, planning, choosing between options, fact-checking, or when Sir
-          sounds low, call use_skill first and follow what it returns. Not for simple one-step commands or small talk.
+        - Skills: use_skill holds a tested method for 60+ kinds of request (apps, YouTube, calls, messages, settings,
+          screen work, research, news, scores, prices, money, study, health, travel, writing, planning...). For anything
+          beyond a one-step command or small talk, call use_skill with the matching id first and follow it.
         - Calls: pass just the name ("Papa", not "mere papa ji ko"). If Sir says it is an emergency / urgent / "turant" /
           "bina pooche call karo", call make_call with urgent=true and do not ask anything. Otherwise the app asks once;
           never ask the same confirmation a second time yourself.

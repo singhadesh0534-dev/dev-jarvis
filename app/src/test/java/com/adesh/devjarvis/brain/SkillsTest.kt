@@ -8,7 +8,7 @@ import org.junit.Test
 
 class SkillsTest {
     @Test fun moreThanTenSkillsWithUniqueIdsAndRealSteps() {
-        assertTrue(Skills.ALL.size >= 12)
+        assertTrue(Skills.ALL.size >= 50)
         assertEquals(Skills.ALL.size, Skills.ALL.map { it.id }.toSet().size)
         Skills.ALL.forEach { s ->
             assertTrue(s.id, s.id.matches(Regex("[a-z_]+")))
