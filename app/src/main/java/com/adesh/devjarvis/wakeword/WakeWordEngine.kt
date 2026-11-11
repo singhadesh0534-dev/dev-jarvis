@@ -164,7 +164,8 @@ class WakeWordEngine @Inject constructor(
                 setWords(true)
                 setEndpointerMode(Recognizer.EndpointerMode.SHORT)
             }
-            recognizer = build(currentMode)
+            var rec = build(currentMode)
+            recognizer = rec
             val buffer = ShortArray(SAMPLE_RATE / 10) // 100 ms
             var silentChunks = 0
             var cooldownUntil = 0L
@@ -177,8 +178,9 @@ class WakeWordEngine @Inject constructor(
                     // A fresh recognizer for the new phrases. Calling setGrammar() on this one while it is in the
                     // middle of an utterance (TV, music, Sir typing while the room is noisy) crashed the app natively.
                     currentMode = mode
-                    runCatching { recognizer?.close() }
-                    recognizer = build(currentMode)
+                    runCatching { rec.close() }
+                    rec = build(currentMode)
+                    recognizer = rec
                     partialStreak = 0
                 }
                 val n = record.read(buffer, 0, buffer.size)
@@ -201,12 +203,12 @@ class WakeWordEngine @Inject constructor(
                 // Battery: only decode when there's sound (with pre-roll so the first word isn't clipped).
                 val chunks = when (val g = gate.offer(buffer, n)) {
                     is EnergyGate.Result.Feed -> g.chunks
-                    EnergyGate.Result.Closed -> { recognizer.reset(); continue }
+                    EnergyGate.Result.Closed -> { rec.reset(); continue }
                     EnergyGate.Result.Skip -> continue
                 }
                 for (chunk in chunks) {
-                    var isFinal = recognizer.acceptWaveForm(chunk, chunk.size)
-                    var raw = if (isFinal) recognizer.result else recognizer.partialResult
+                    var isFinal = rec.acceptWaveForm(chunk, chunk.size)
+                    var raw = if (isFinal) rec.result else rec.partialResult
                     var heard = WakePhraseMatcher.parse(raw, isFinal)
                     if (heard == null) {
                         partialStreak = 0
@@ -229,7 +231,7 @@ class WakeWordEngine @Inject constructor(
                         partialStreak = if (stable) partialStreak + 1 else 0
                         if (partialStreak < STABLE_PARTIALS) continue
                         partialStreak = 0
-                        raw = recognizer.finalResult
+                        raw = rec.finalResult
                         heard = WakePhraseMatcher.parse(raw, true)
                         if (heard == null) continue
                         isFinal = true
@@ -258,13 +260,13 @@ class WakeWordEngine @Inject constructor(
                         if (profile != null && candidate != null) {
                             val ok = SpeakerVerification.matches(profile, candidate, speakerThreshold)
                             _lastSpeaker.value = if (ok) "you ✓" else "not you"
-                            if (!ok) { recognizer.reset(); continue } // someone else — ignore the wake
+                            if (!ok) { rec.reset(); continue } // someone else — ignore the wake
                         }
                         // No vector: fail open (wake anyway) so Sir is never locked out — except over the phone's own
                         // video / music, where an unverified "Jarvis" is most likely the video itself.
-                        if ((profile == null || candidate == null) && overMedia) { recognizer.reset(); continue }
+                        if ((profile == null || candidate == null) && overMedia) { rec.reset(); continue }
                     }
-                    recognizer.reset()
+                    rec.reset()
                     cooldownUntil = now + COOLDOWN_MS
                     _lastHeard.value = heard.text
                     _detections.tryEmit(Detection(currentMode, phrase))
