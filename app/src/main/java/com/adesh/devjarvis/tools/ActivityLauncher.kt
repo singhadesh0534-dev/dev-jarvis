@@ -41,19 +41,34 @@ class ActivityLauncher @Inject constructor(@ApplicationContext private val conte
             return Outcome.NEEDS_TAP
         }
         return try {
-            context.startActivity(intent)
+            // From the accessibility service itself when it is running: Android always lets it start activities,
+            // even when JARVIS is in the background on Android 14 / 15.
+            val svc = JarvisAccessibilityService.get()
+            if (svc != null && !AppVisibility.isForeground) svc.startActivity(intent) else context.startActivity(intent)
             Outcome.LAUNCHED
         } catch (e: ActivityNotFoundException) {
             Outcome.NOT_FOUND
+        } catch (e: SecurityException) {
+            postTapNotification(intent, whatForUser)
+            Outcome.NEEDS_TAP
         }
     }
+
+    /** Accessibility is switched on in Settings but Android has not (re)connected it — XOS often does this. */
+    fun accessibilityStuck(): Boolean = !JarvisAccessibilityService.isConnected && runCatching {
+        Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+            .contains(context.packageName)
+    }.getOrDefault(false)
 
     /** Converts an outcome into a tool result with the right message for the LLM. */
     fun result(outcome: Outcome, done: String, whatForUser: String, endsConversation: Boolean = false): ToolResult = when (outcome) {
         Outcome.LAUNCHED -> ToolResult.ok(done, endsConversation)
         Outcome.NEEDS_TAP -> ToolResult.ok(
-            "Android blocked opening it from the background. A notification '$whatForUser' was posted — " +
-                "tell Sir to tap it (or turn on JARVIS Accessibility in Setup so this works hands-free).",
+            "NOT opened yet: Android only lets JARVIS open apps from the background while JARVIS Accessibility is " +
+                "running" + (if (accessibilityStuck()) " (it is switched on but Android disconnected it — Sir should turn " +
+                "JARVIS off and on again in Settings > Accessibility)" else " (it is off — JARVIS Setup > Accessibility)") +
+                ". A notification '$whatForUser' was posted: say exactly this to Sir in one line — tap the notification " +
+                "and it opens. Do not say you have no access.",
         )
         Outcome.NOT_FOUND -> ToolResult.fail("no app on this phone can do that")
     }

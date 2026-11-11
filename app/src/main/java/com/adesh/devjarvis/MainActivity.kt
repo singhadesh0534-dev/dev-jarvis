@@ -36,10 +36,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        val home = if (settings.current.setupDone) ROUTE_HUD else ROUTE_SETUP_FIRST
+        // Debug builds only: the emulator smoke test (CI) goes straight to the HUD.
+        val smokeTest = BuildConfig.DEBUG && intent?.getBooleanExtra("smoke_skip_setup", false) == true
+        val home = if (settings.current.setupDone || smokeTest) ROUTE_HUD else ROUTE_SETUP_FIRST
         // Boot animation on a normal cold start only — not when launched by the assistant gesture.
         val isAssist = intent?.action in TALK_ACTIONS
-        val start = if (savedInstanceState == null && !isAssist && settings.current.bootAnimation) ROUTE_BOOT else home
+        val start = if (savedInstanceState == null && !isAssist && !smokeTest && settings.current.bootAnimation) ROUTE_BOOT else home
         setContent {
             JarvisTheme {
                 val nav = rememberNavController()
