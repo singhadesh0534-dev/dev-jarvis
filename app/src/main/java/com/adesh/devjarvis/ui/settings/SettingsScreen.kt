@@ -101,17 +101,9 @@ fun SettingsScreen(
 
             Section("API KEYS")
             Hint("JARVIS ka dimaag chalu karne ke liye Gemini key zaruri hai (bilkul free). Button dabao → key banao → copy karo → yahan paste karo → SAVE.")
-            SecretField(
-                label = "Gemini API key",
-                value = draft.geminiApiKey,
-                onChange = { v -> viewModel.edit { it.copy(geminiApiKey = v) } },
-            )
+            KeySlots("Gemini API key", draft.geminiApiKey) { v -> viewModel.edit { it.copy(geminiApiKey = v) } }
             OpenLinkButton("Get free Gemini key", JarvisConfig.GEMINI_KEY_URL)
-            SecretField(
-                label = "Groq API key (backup brain + Whisper)",
-                value = draft.groqApiKey,
-                onChange = { v -> viewModel.edit { it.copy(groqApiKey = v) } },
-            )
+            KeySlots("Groq API key", draft.groqApiKey) { v -> viewModel.edit { it.copy(groqApiKey = v) } }
             OpenLinkButton("Get free Groq key", JarvisConfig.GROQ_KEY_URL)
             SecretField(
                 label = "Third brain key (optional)",
@@ -124,17 +116,13 @@ fun SettingsScreen(
             HudField("Third brain model", draft.extraModel, { v -> viewModel.edit { it.copy(extraModel = v) } })
             HudField("Third brain URL", draft.extraBaseUrl, { v -> viewModel.edit { it.copy(extraBaseUrl = v) } })
             Hint("Teesra dimaag tab chalta hai jab Gemini aur Groq dono ki limit khatam ho. Model ka naam us site se copy karke yahan daalo (OpenRouter pe free models ke naam ke aage \":free\" hota hai). Cerebras ke liye URL: https://api.cerebras.ai/v1. Model khaali = band.")
-            SecretField(
-                label = "ElevenLabs key (optional: better Classic voice)",
-                value = draft.elevenApiKey,
-                onChange = { v -> viewModel.edit { it.copy(elevenApiKey = v) } },
-            )
+            KeySlots("ElevenLabs key", draft.elevenApiKey, count = 3) { v -> viewModel.edit { it.copy(elevenApiKey = v) } }
             OpenLinkButton("Get free ElevenLabs key", JarvisConfig.ELEVEN_KEY_URL)
             Hint("Bas key daaliye: awaaz (gehri, mard, British) aur model JARVIS aapke account mein se khud chun leta hai.")
             Hint("ElevenLabs sirf Classic mode, reminders aur confirmations ki awaaz badalta hai — Live mode ki awaaz Gemini ki apni hai. Free account mein mahine ke thode hi characters milte hain; khatam hote hi JARVIS khud phone ki awaaz pe aa jaata hai. Yahan bhi kai keys comma se daal sakte ho.")
             OutlinedButton(onClick = viewModel::checkKeys) { Text("Keys check karo", color = Hud.Cyan) }
             viewModel.keyReport.collectAsStateWithLifecycle().value?.let { report -> Text(report, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
-            Hint("Kai keys daal sakte ho (alag-alag accounts ki): ek hi box mein comma se alag likho, jaise key1, key2, key3. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
+            Hint("Har key apne alag box mein daalo (alag-alag accounts ki). Box khaali chhod sakte ho. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
 
             Section("VOICE ENGINE")
             ChoiceRow(
@@ -433,6 +421,27 @@ private fun HudField(label: String, value: String, onChange: (String) -> Unit) {
         colors = hudFieldColors(),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/**
+ * One box per key ("Gemini API key 1" ... "5"). They are stored together; an empty box is simply skipped.
+ */
+@Composable
+private fun KeySlots(label: String, value: String, count: Int = 5, onChange: (String) -> Unit) {
+    val slots = remember {
+        val saved = com.adesh.devjarvis.core.KeyPool().parse(value)
+        androidx.compose.runtime.mutableStateListOf<String>().apply { repeat(maxOf(count, saved.size)) { add(saved.getOrElse(it) { "" }) } }
+    }
+    slots.forEachIndexed { index, key ->
+        SecretField(
+            label = "$label ${index + 1}" + if (index == 0) "" else " (optional)",
+            value = key,
+            onChange = { v ->
+                slots[index] = v.trim()
+                onChange(slots.filter { it.isNotBlank() }.joinToString(", "))
+            },
+        )
+    }
 }
 
 @Composable
