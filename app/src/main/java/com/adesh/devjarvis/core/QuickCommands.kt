@@ -86,11 +86,14 @@ object QuickCommands {
                 else -> null
             }
         }
-        // ---- brightness (needs a number)
+        // ---- brightness (a number, auto, full, or up / down)
         if (any("brightness", "roshni", "chamak")) {
             return when {
                 number != null -> Quick("set_brightness", mapOf("level" to number.coerceIn(0, 100).toString()), "Brightness $number, Sir.")
                 any("auto") -> Quick("set_brightness", mapOf("auto" to "true"), "Brightness auto pe, Sir.")
+                any("full", "max", "poori", "puri") -> Quick("set_brightness", mapOf("level" to "100"), "Brightness full, Sir.")
+                set.any { it in UP } -> Quick("set_brightness", mapOf("level" to "85"), "Brightness badha di, Sir.")
+                set.any { it in DOWN } -> Quick("set_brightness", mapOf("level" to "25"), "Brightness kam kar di, Sir.")
                 else -> null
             }
         }
