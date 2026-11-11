@@ -40,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import com.adesh.devjarvis.calls.IncomingCall
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -178,6 +179,8 @@ class JarvisSession @Inject constructor(
     private var liveClosingByUs = false
     /** Don't retry Live before this time (after a non-quota failure). */
     private var liveRetryAt = 0L
+    /** Live restarts with the next key in this wake (bad keys at the front of the list). */
+    private var liveAuthRetries = 0
     private val liveActive: Boolean get() = liveJob?.isActive == true
     /** Set if the server refused our turn-taking config; then we connect without it. */
     private val liveConfirm = SpokenConfirmation()
@@ -514,6 +517,7 @@ class JarvisSession @Inject constructor(
         if (!_ui.value.inConversation) conversationStartedAt = System.currentTimeMillis()
         focus.acquire()
         _ui.update { it.copy(inConversation = true) }
+        liveAuthRetries = 0
         if (shouldUseLive(settings.current)) startLive() else startListening(followUp = false)
     }
 
@@ -653,23 +657,47 @@ class JarvisSession @Inject constructor(
                     // It did not work and the brain is reachable: let it handle the request properly.
                     lineId = nextId++
                 }
-                brain.reply(userText, ::runTool).collect { ev ->
-                    when (ev) {
-                        is BrainEvent.Text -> {
-                            full.append(ev.delta)
-                            speakingText = full.toString()
-                            upsertLine(lineId, SpeechSanitizer.clean(full.substring(lineStart)))
-                            chunker.feed(ev.delta).forEach(::speakPiece)
+                // If the stream stalls after the text (seen on phones: words on screen, no voice, stuck on PROCESSING),
+                // speak what has arrived after a short pause, and give up waiting after 20 s of silence.
+                var lastEventAt = System.currentTimeMillis()
+                var toolRunning = false // a long screen task is not a stall
+                coroutineScope {
+                    val collector = launch {
+                        brain.reply(userText, ::runTool).collect { ev ->
+                            lastEventAt = System.currentTimeMillis()
+                            when (ev) {
+                                is BrainEvent.Text -> {
+                                    full.append(ev.delta)
+                                    speakingText = full.toString()
+                                    upsertLine(lineId, SpeechSanitizer.clean(full.substring(lineStart)))
+                                    chunker.feed(ev.delta).forEach(::speakPiece)
+                                }
+                                is BrainEvent.ToolStarted -> {
+                                    // Say what was already streamed before the action, then start a fresh line after it.
+                                    toolRunning = true
+                                    chunker.flush()?.let(::speakPiece)
+                                    if (full.isNotEmpty()) full.append(' ')
+                                    lineId = nextId++
+                                    lineStart = full.length
+                                }
+                                is BrainEvent.ToolFinished -> toolRunning = false
+                            }
                         }
-                        is BrainEvent.ToolStarted -> {
-                            // Say what was already streamed before the action, then start a fresh line after it.
-                            chunker.flush()?.let(::speakPiece)
-                            if (full.isNotEmpty()) full.append(' ')
-                            lineId = nextId++
-                            lineStart = full.length
-                        }
-                        is BrainEvent.ToolFinished -> Unit
                     }
+                    val watcher = launch {
+                        while (collector.isActive) {
+                            delay(300)
+                            val idle = System.currentTimeMillis() - lastEventAt
+                            if (toolRunning) continue
+                            if (idle > 1_200) chunker.flush()?.let(::speakPiece)
+                            if (idle > 20_000 && full.isNotBlank()) {
+                                ProblemJournal.add("REPLY_STALLED", "no new data for 20 s after the text; finished without waiting")
+                                collector.cancel()
+                            }
+                        }
+                    }
+                    collector.join()
+                    watcher.cancel()
                 }
                 chunker.flush()?.let(::speakPiece)
                 brain.remember(userText, full.toString())
@@ -1079,11 +1107,17 @@ class JarvisSession @Inject constructor(
                 if (!another) usage.markExhausted(Provider.LIVE)
             }
             LiveMessages.CloseKind.AUTH -> {
-                // This key is wrong or revoked: rest it so the next wake uses another one.
+                // This key is wrong or revoked: rest it and, if another key is ready, start Live again with it right
+                // away — a bad key in box 1 must not push Sir into classic mode.
                 val s = settings.current
-                if (!keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), 6 * 3_600_000L) && !anyReply) {
-                    liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
+                val another = keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), 6 * 3_600_000L)
+                SessionTrace.add("KEY live rejected, ready=${keys.live.readyCount(s.geminiApiKey)}")
+                if (another && !anyReply && _ui.value.inConversation && liveAuthRetries < 4) {
+                    liveAuthRetries++
+                    startLive()
+                    return
                 }
+                if (!another && !anyReply) liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
             }
             LiveMessages.CloseKind.MODEL, LiveMessages.CloseKind.OTHER ->
                 if (!anyReply) liveRetryAt = System.currentTimeMillis() + JarvisConfig.LIVE_RETRY_AFTER_MS
