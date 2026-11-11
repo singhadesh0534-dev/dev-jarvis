@@ -5,8 +5,11 @@ set -u
 PKG=com.adesh.devjarvis
 APK=app/build/outputs/apk/full/debug/app-full-debug.apk
 DEAD=0
+TYPED=0
 
 adb wait-for-device
+# A freshly booted CI emulator is slow: let it settle so the launcher doesn't show "isn't responding".
+sleep 45
 adb install -r -g "$APK" || { echo "!!! install failed"; exit 1; }
 adb logcat -c
 adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true
@@ -22,20 +25,37 @@ tap_node() {
   [ $# -eq 4 ] || return 1
   adb shell input tap $(( ($1 + $3) / 2 )) $(( ($2 + $4) / 2 ))
 }
+# Close any "<app> isn't responding" dialog (it covers the whole screen on a slow emulator).
+dismiss() {
+  local i
+  for i in 1 2 3; do
+    if dump | grep -q "isn't responding\|isn&apos;t responding"; then
+      echo "(closing a system 'not responding' dialog)"
+      tap_node 'text="Wait"' || adb shell input keyevent 4
+      sleep 3
+    else
+      return 0
+    fi
+  done
+}
 check() {
   if ! alive; then echo "!!! APP DIED after: $1"; DEAD=1; adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 8; fi
 }
 type_to_jarvis() {
   echo "=== typing: $1"
+  dismiss
   tap_node 'Type to JARVIS' || { echo "input box not found"; texts | head -20; return; }
   sleep 1
+  TYPED=$((TYPED + 1))
   adb shell input text "$(printf '%s' "$1" | sed 's/ /%s/g')"
   tap_node 'content-desc="Send"' || adb shell input keyevent 66
   sleep "${2:-10}"
   check "$1"
+  dismiss
   echo "--- screen now:"; texts | tail -n 14
 }
 
+dismiss
 echo "=== HUD on start:"; texts | head -30
 check "start"
 
@@ -49,6 +69,7 @@ type_to_jarvis "5 minute ka timer lagao"
 adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 4
 
 echo "=== always-on switch (wake engine + model download)"
+dismiss
 tap_node 'checkable="true"' && sleep 60
 check "always-on"
 echo "--- screen now:"; texts | head -20
@@ -61,6 +82,7 @@ check "talk intent"
 
 echo "=== settings screen"
 adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 4
+dismiss
 tap_node 'content-desc="Settings"' && sleep 4
 check "settings"
 texts | head -40
@@ -81,5 +103,5 @@ echo "=== crashes in logcat"
 adb logcat -d > logcat.txt
 grep -n -E "FATAL EXCEPTION|Fatal signal|ANR in $PKG|Process: $PKG|libc  *: Fatal|terminating with uncaught" -A 30 logcat.txt | head -n 200 || true
 CRASH=$(grep -c -E "FATAL EXCEPTION|Fatal signal [0-9]+ .*$PKG|ANR in $PKG" logcat.txt || true)
-echo "=== result: died=$DEAD crashes_in_logcat=$CRASH"
-[ "$DEAD" -eq 0 ] && [ "${CRASH:-0}" -eq 0 ]
+echo "=== result: died=$DEAD crashes_in_logcat=$CRASH typed=$TYPED"
+[ "$DEAD" -eq 0 ] && [ "${CRASH:-0}" -eq 0 ] && [ "$TYPED" -gt 0 ]
