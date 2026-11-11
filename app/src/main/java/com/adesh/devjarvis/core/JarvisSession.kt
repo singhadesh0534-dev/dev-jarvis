@@ -687,8 +687,13 @@ class JarvisSession @Inject constructor(
                 speechOut.awaitIdle()
                 endConversation(chime = false)
             } catch (e: Exception) {
+                ProblemJournal.add("REPLY_ERROR", "${e.javaClass.simpleName}: ${e.message?.take(160)}")
                 say("Sir, kuch gadbad ho gayi. Ek baar phir try karte hain.", detail = e.javaClass.simpleName)
                 speechOut.awaitIdle()
+                endConversation(chime = false)
+            } catch (t: Throwable) {
+                // Not an ordinary exception (a missing class, out of memory...): never leave the HUD on PROCESSING.
+                ProblemJournal.add("REPLY_CRASH", "${t.javaClass.name}: ${t.message?.take(200)}")
                 endConversation(chime = false)
             } finally {
                 speakingText = ""
@@ -1126,7 +1131,12 @@ class JarvisSession @Inject constructor(
     private fun speakPiece(piece: String) {
         val clean = SpeechSanitizer.clean(piece)
         if (clean.isEmpty()) return
-        speechOut.speak(clean)
+        SessionTrace.add("SAY ${clean.length} chars")
+        try {
+            speechOut.speak(clean)
+        } catch (t: Throwable) {
+            ProblemJournal.add("VOICE", "speak failed: ${t.javaClass.simpleName}: ${t.message?.take(120)}")
+        }
         setState(JarvisState.SPEAKING)
     }
 

@@ -125,6 +125,9 @@ class AutomationEngine @Inject constructor(
             serviceScope.launch {
                 notifications.arrivals.collect { n -> fire("message_from", "${n.title}|${n.appLabel}") }
             },
+            serviceScope.launch {
+                // (kept as a separate job so one failing collector cannot stop the other)
+            },
         )
         SessionTrace.add("AUTO engine on, triggers=${store.get().triggers.size}")
     }
@@ -141,17 +144,27 @@ class AutomationEngine @Inject constructor(
     }
 
     private fun fire(event: String, value: String = "") {
+        try {
+            fireUnsafe(event, value)
+        } catch (t: Throwable) {
+            com.adesh.devjarvis.core.ProblemJournal.add("AUTO", "rule check failed: ${t.javaClass.simpleName}: ${t.message?.take(120)}")
+        }
+    }
+
+    private fun fireUnsafe(event: String, value: String) {
         val now = System.currentTimeMillis()
         val due = TriggerLogic.due(store.get().triggers, event, value, now)
         if (due.isEmpty()) return
         store.update { d -> d.copy(triggers = d.triggers.map { t -> if (due.any { it.id == t.id }) t.copy(lastFired = now) else t }) }
         due.forEach { t ->
             SessionTrace.add("AUTO trigger ${t.event} '${t.param}'")
-            scope?.launch(Dispatchers.Main) { session.runAutomation(t.action, TriggerLogic.describe(t)) }
+            scope?.launch(Dispatchers.Main) { runCatching { session.runAutomation(t.action, TriggerLogic.describe(t)) } }
         }
     }
 
-    private fun onMinute() {
+    private fun onMinute() = runCatching { everyMinute() }.let { }
+
+    private fun everyMinute() {
         val now = LocalDateTime.now()
         val minute = now.hour * 60 + now.minute
         fire("time", minute.toString())
@@ -174,7 +187,7 @@ class AutomationEngine @Inject constructor(
         SessionTrace.add("AUTO suggestion ${s.tool} days=${s.days}")
         // So that a later "haan, kar do" makes sense to the brain.
         brain.noteOffer(line)
-        scope?.launch { speaker.offer(ProactivePolicy.Kind.NOTIFICATION, line) }
+        scope?.launch { runCatching { speaker.offer(ProactivePolicy.Kind.NOTIFICATION, line) } }
     }
 
     // ---------------------------------------------------------------- diary

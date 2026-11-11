@@ -55,7 +55,11 @@ class JarvisVoice @Inject constructor(
     private val keys: KeyRing,
 ) : SpeechOutput {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // A failure in the voice must never take the app down: note it and carry on with the phone voice.
+    private val guard = kotlinx.coroutines.CoroutineExceptionHandler { _, e ->
+        com.adesh.devjarvis.core.ProblemJournal.add("VOICE", "voice worker error: ${e.javaClass.simpleName}: ${e.message?.take(120)}")
+    }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO + guard)
     private val queue = Channel<Pair<Int, String>>(Channel.UNLIMITED)
     private val generation = AtomicInteger(0)
     /** Sentences handed to the cloud queue and not finished yet. */
@@ -103,8 +107,13 @@ class JarvisVoice @Inject constructor(
 
     override fun speak(text: String) {
         if (text.isBlank()) return
+        // No ElevenLabs key: exactly the old path, nothing in between.
+        if (settings.current.elevenApiKey.isBlank() && cloudPending.get() == 0) {
+            local.speak(text)
+            return
+        }
         // Once a reply started in the cloud voice, later sentences queue behind it so nothing overlaps.
-        if (cloudPending.get() > 0 || cloudUsable()) {
+        if (cloudPending.get() > 0 || runCatching { cloudUsable() }.getOrDefault(false)) {
             cloudPending.incrementAndGet()
             cloudSpeaking.value = true
             queue.trySend(generation.get() to text)
@@ -122,6 +131,7 @@ class JarvisVoice @Inject constructor(
     }
 
     override suspend fun awaitIdle() {
+        if (settings.current.elevenApiKey.isBlank() && cloudPending.get() == 0) return local.awaitIdle()
         while (true) {
             while (cloudPending.get() > 0) delay(40)
             local.awaitIdle()
