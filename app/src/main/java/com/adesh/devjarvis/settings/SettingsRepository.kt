@@ -101,7 +101,8 @@ data class JarvisSettings(
     val elevenVoiceId: String = "",
     val elevenModel: String = "",
 ) {
-    val hasExtraBrain: Boolean get() = extraApiKey.isNotBlank() && extraModel.isNotBlank() && extraBaseUrl.startsWith("https://")
+    /** The model is optional: JARVIS picks the best free one from the service's own list. */
+    val hasExtraBrain: Boolean get() = extraApiKey.isNotBlank() && extraBaseUrl.startsWith("https://")
     val speakerEnrolled: Boolean get() = speakerProfile.isNotBlank()
     val hasGroqKey: Boolean get() = groqApiKey.isNotBlank()
 

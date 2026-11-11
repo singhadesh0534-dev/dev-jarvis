@@ -51,6 +51,7 @@ class JarvisBrain @Inject constructor(
     private val notifications: NotificationStore,
     private val life: LifeStore,
     private val keys: com.adesh.devjarvis.core.KeyRing,
+    private val http: okhttp3.OkHttpClient,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
     /** Exchanges not yet looked at by the memory extractor. */
@@ -135,17 +136,59 @@ class JarvisBrain @Inject constructor(
             throw BrainError.RateLimited()
         }
         _active.value = Provider.GROQ
+        // Backup brains: every good model of each service, each with its own free limit, strongest first. The full
+        // character prompt is tried first; only if the service says the request is too big, the compact one.
         val small = systemPrompt(s, forLive = false, query = userText, compact = true)
-        if (s.hasGroqKey && (!usage.isExhausted(Provider.GROQ) || !s.hasExtraBrain)) {
-            try {
-                groqLoop(s, small, userText, runTool, extra = false)
-                return@flow
-            } catch (f: Fallback) {
-                if (!s.hasExtraBrain) throw f.cause as BrainError
+        var last: BrainError? = null
+        val services = buildList {
+            if (s.hasGroqKey && (!usage.isExhausted(Provider.GROQ) || !s.hasExtraBrain)) add(false)
+            if (s.hasExtraBrain) add(true)
+        }
+        for (extra in services) {
+            for (model in backupModels(s, extra)) {
+                for (prompt in listOf(system, small)) {
+                    try {
+                        groqLoop(s, prompt, userText, runTool, extra, model)
+                        return@flow
+                    } catch (f: Fallback) {
+                        val e = f.cause as? BrainError ?: throw f
+                        last = e
+                        SessionTrace.add("BRAIN ${if (extra) "third" else "groq"} $model ${if (prompt === system) "full" else "compact"}: ${e.javaClass.simpleName}")
+                        val tooBig = e is BrainError.Server && e.code == 413
+                        if (!tooBig) break // limit / unsupported model: the next model, not a smaller prompt
+                    }
+                }
             }
         }
-        SessionTrace.add("BRAIN third brain in use")
-        groqLoop(s, small, userText, runTool, extra = true)
+        if (last is BrainError.RateLimited) usage.markExhausted(Provider.GROQ, cooldownFor(last))
+        throw last ?: BrainError.RateLimited()
+    }
+
+    private val modelLists = HashMap<String, Pair<Long, List<String>>>()
+
+    /** The models to try on a backup service, best first: from its own list (cached 6 h), else the configured one. */
+    private suspend fun backupModels(s: JarvisSettings, extra: Boolean): List<String> {
+        val base = (if (extra) s.extraBaseUrl else JarvisConfig.GROQ_BASE_URL).trimEnd('/')
+        val configured = if (extra) s.extraModel.trim() else s.groqModel.trim()
+        val key = (if (extra) keys.extra else keys.groq).current(if (extra) s.extraApiKey else s.groqApiKey)
+        val cacheKey = base + "|" + key.hashCode()
+        modelLists[cacheKey]?.let { (at, list) -> if (System.currentTimeMillis() - at < 6 * 3_600_000L && list.isNotEmpty()) return list }
+        val body = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                http.newCall(okhttp3.Request.Builder().url("$base/models").header("Authorization", "Bearer $key").build()).execute().use { r ->
+                    if (r.isSuccessful) r.body?.string() else null
+                }
+            }.getOrNull()
+        }
+        val picked = when {
+            body == null -> emptyList()
+            extra && "openrouter" in base -> BackupModels.pickOpenRouterFree(body).let { list -> (listOf(configured).filter { it.isNotBlank() } + list).distinct() }
+            else -> BackupModels.pick(body, configured)
+        }
+        val list = picked.ifEmpty { listOf(configured).filter { it.isNotBlank() } }
+        if (picked.isNotEmpty()) modelLists[cacheKey] = System.currentTimeMillis() to list
+        SessionTrace.add("BRAIN ${if (extra) "third" else "groq"} models: ${list.joinToString()}")
+        return list
     }
 
     /**
@@ -250,6 +293,7 @@ class JarvisBrain @Inject constructor(
         userText: String,
         runTool: suspend (String, JsonObject) -> ToolResult,
         extra: Boolean,
+        model: String,
     ) {
         val messages = mutableListOf(GroqMessages.text("system", system))
         conversation.snapshot().takeLast(8).forEach { messages += GroqMessages.text(if (it.role == Role.USER) "user" else "assistant", it.text.take(600)) }
@@ -259,7 +303,7 @@ class JarvisBrain @Inject constructor(
             val assembler = GroqStreamParser.ToolCallAssembler()
             if (!extra) usage.recordGroqRequest()
             try {
-                groqTurn(s, if (extra) s.extraModel else s.groqModel, JsonArray(messages), registry.groqTools, extra = extra).collect { d ->
+                groqTurn(s, model, JsonArray(messages), registry.groqTools, extra = extra).collect { d ->
                     d.toolFragments.forEach(assembler::add)
                     if (d.text.isNotEmpty()) {
                         text.append(d.text)
@@ -267,9 +311,8 @@ class JarvisBrain @Inject constructor(
                     }
                 }
             } catch (e: BrainError) {
-                if (e is BrainError.RateLimited && !extra) usage.markExhausted(Provider.GROQ, cooldownFor(e))
-                // Nothing said or done yet: the next brain may take this turn.
-                if (!extra && round == 0 && text.isEmpty() && assembler.calls().isEmpty()) throw Fallback(e)
+                // Nothing said or done yet: another model / brain may take this turn.
+                if (round == 0 && text.isEmpty() && assembler.calls().isEmpty()) throw Fallback(e)
                 throw e
             }
             val calls = assembler.calls()

@@ -113,9 +113,9 @@ fun SettingsScreen(
             OpenLinkButton("Get free OpenRouter key", JarvisConfig.OPENROUTER_KEY_URL)
             OpenLinkButton("See free OpenRouter models", JarvisConfig.OPENROUTER_MODELS_URL)
             OpenLinkButton("Or: free Cerebras key", JarvisConfig.CEREBRAS_KEY_URL)
-            HudField("Third brain model", draft.extraModel, { v -> viewModel.edit { it.copy(extraModel = v) } })
+            HudField("Third brain model (optional)", draft.extraModel, { v -> viewModel.edit { it.copy(extraModel = v) } })
             HudField("Third brain URL", draft.extraBaseUrl, { v -> viewModel.edit { it.copy(extraBaseUrl = v) } })
-            Hint("Teesra dimaag tab chalta hai jab Gemini aur Groq dono ki limit khatam ho. Model ka naam us site se copy karke yahan daalo (OpenRouter pe free models ke naam ke aage \":free\" hota hai). Cerebras ke liye URL: https://api.cerebras.ai/v1. Model khaali = band.")
+            Hint("Teesra dimaag tab chalta hai jab Gemini aur Groq dono ki limit khatam ho. Model khaali chhod sakte ho — JARVIS us service ke sabse achhe free model khud chunta hai. Cerebras ke liye URL: https://api.cerebras.ai/v1.")
             KeySlots("ElevenLabs key", draft.elevenApiKey, count = 3) { v -> viewModel.edit { it.copy(elevenApiKey = v) } }
             OpenLinkButton("Get free ElevenLabs key", JarvisConfig.ELEVEN_KEY_URL)
             Hint("Bas key daaliye: awaaz (gehri, mard, British) aur model JARVIS aapke account mein se khud chun leta hai.")
