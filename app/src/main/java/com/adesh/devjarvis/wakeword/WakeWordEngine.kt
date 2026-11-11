@@ -157,12 +157,14 @@ class WakeWordEngine @Inject constructor(
             val spk = if (useSpeaker) {
                 (spkModel ?: runCatching { SpeakerModel(speakerModels.modelDir.absolutePath) }.getOrNull()?.also { spkModel = it })
             } else null
-            recognizer = (if (spk != null) Recognizer(m, SAMPLE_RATE.toFloat(), spk) else Recognizer(m, SAMPLE_RATE.toFloat(), grammarFor(currentMode))).apply {
+            // Grammar in the constructor, speaker model attached before any audio: the only order the native
+            // library accepts. Changing either on a recognizer that is already decoding aborts the whole app.
+            fun build(forMode: Mode): Recognizer = Recognizer(m, SAMPLE_RATE.toFloat(), grammarFor(forMode)).apply {
+                if (spk != null) setSpeakerModel(spk)
                 setWords(true)
                 setEndpointerMode(Recognizer.EndpointerMode.SHORT)
-                // With a speaker model we can't also pass a grammar in the ctor, so set it after.
-                if (spk != null) setGrammar(grammarFor(currentMode))
             }
+            recognizer = build(currentMode)
             val buffer = ShortArray(SAMPLE_RATE / 10) // 100 ms
             var silentChunks = 0
             var cooldownUntil = 0L
@@ -172,9 +174,12 @@ class WakeWordEngine @Inject constructor(
 
             while (!stopRequested) {
                 if (mode != currentMode) {
+                    // A fresh recognizer for the new phrases. Calling setGrammar() on this one while it is in the
+                    // middle of an utterance (TV, music, Sir typing while the room is noisy) crashed the app natively.
                     currentMode = mode
-                    recognizer.setGrammar(grammarFor(currentMode))
-                    recognizer.reset()
+                    runCatching { recognizer?.close() }
+                    recognizer = build(currentMode)
+                    partialStreak = 0
                 }
                 val n = record.read(buffer, 0, buffer.size)
                 if (n < 0) {
