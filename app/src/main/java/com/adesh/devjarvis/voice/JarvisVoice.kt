@@ -84,13 +84,22 @@ class JarvisVoice @Inject constructor(
             for ((gen, text) in queue) {
                 try {
                     if (gen == generation.get()) {
-                        val spoken = cloudUsable() && runCatching { speakCloud(gen, text) }.getOrDefault(false)
+                        // A sentence that takes longer than this is stuck: give up on the cloud for it.
+                        val spoken = cloudUsable() && kotlinx.coroutines.withTimeoutOrNull(SENTENCE_TIMEOUT_MS) {
+                            kotlinx.coroutines.runInterruptible { runCatching { speakCloud(gen, text) }.getOrDefault(false) }
+                        } == true
+                        if (!spoken) runCatching { call?.cancel() }
                         if (!spoken && gen == generation.get()) {
                             // Same sentence, phone voice, still in order.
                             local.speak(text)
-                            local.awaitIdle()
+                            kotlinx.coroutines.withTimeoutOrNull(60_000) { local.awaitIdle() }
                         }
                     }
+                } catch (t: Throwable) {
+                    if (t is kotlinx.coroutines.CancellationException) throw t
+                    com.adesh.devjarvis.core.ProblemJournal.add("VOICE", "sentence failed: ${t.javaClass.simpleName}: ${t.message?.take(120)}")
+                    cloudOffUntil = System.currentTimeMillis() + 10 * 60_000L
+                    runCatching { local.speak(text) }
                 } finally {
                     if (cloudPending.decrementAndGet() <= 0) {
                         cloudPending.set(0)
@@ -132,8 +141,16 @@ class JarvisVoice @Inject constructor(
 
     override suspend fun awaitIdle() {
         if (settings.current.elevenApiKey.isBlank() && cloudPending.get() == 0) return local.awaitIdle()
+        val giveUpAt = System.currentTimeMillis() + 90_000L
         while (true) {
-            while (cloudPending.get() > 0) delay(40)
+            while (cloudPending.get() > 0) {
+                if (System.currentTimeMillis() > giveUpAt) { // never leave JARVIS waiting on a stuck voice
+                    cloudPending.set(0)
+                    cloudSpeaking.value = false
+                    return
+                }
+                delay(40)
+            }
             local.awaitIdle()
             if (cloudPending.get() == 0) return
         }
@@ -149,10 +166,11 @@ class JarvisVoice @Inject constructor(
     /** True if the sentence was spoken in the cloud voice. */
     private fun speakCloud(gen: Int, text: String): Boolean {
         val s = settings.current
-        val voice = s.elevenVoiceId.trim().ifBlank { JarvisConfig.ELEVEN_VOICE_ID }
+        val (autoVoice, autoModel) = choose(keys.eleven.current(s.elevenApiKey))
+        val voice = s.elevenVoiceId.trim().ifBlank { autoVoice }
         val body = buildJsonObject {
             put("text", text)
-            put("model_id", s.elevenModel.trim().ifBlank { JarvisConfig.ELEVEN_MODEL })
+            put("model_id", s.elevenModel.trim().ifBlank { autoModel })
             putJsonObject("voice_settings") { put("stability", 0.5); put("similarity_boost", 0.8) }
         }.toString().toRequestBody(JSON)
         repeat(4) {
@@ -208,6 +226,32 @@ class JarvisVoice @Inject constructor(
             }
         }
         return false
+    }
+
+    /**
+     * Sir only gives the key: the best voice and model of that account are looked up once (and remembered),
+     * with the built-in defaults when the lookup fails.
+     */
+    private fun choose(key: String): Pair<String, String> {
+        val tag = key.hashCode().toString()
+        val prefs = context.getSharedPreferences("eleven_choice", Context.MODE_PRIVATE)
+        if (prefs.getString("for", "") == tag) {
+            return prefs.getString("voice", JarvisConfig.ELEVEN_VOICE_ID).orEmpty().ifBlank { JarvisConfig.ELEVEN_VOICE_ID } to
+                prefs.getString("model", JarvisConfig.ELEVEN_MODEL).orEmpty().ifBlank { JarvisConfig.ELEVEN_MODEL }
+        }
+        fun fetch(path: String): String? = runCatching {
+            http.newCall(Request.Builder().url("${JarvisConfig.ELEVEN_BASE_URL}/$path").header("xi-api-key", key).build()).execute().use { r ->
+                if (r.isSuccessful) r.body?.string() else null
+            }
+        }.getOrNull()
+        val voices = fetch("voices")
+        val models = fetch("models")
+        val voice = ElevenPicker.pickVoice(voices) ?: JarvisConfig.ELEVEN_VOICE_ID
+        val model = ElevenPicker.pickModel(models) ?: JarvisConfig.ELEVEN_MODEL
+        SessionTrace.add("VOICE eleven chose voice=$voice model=$model (lists: ${voices != null}/${models != null})")
+        // Remember only a real answer, so a failed lookup is tried again next time.
+        if (voices != null && models != null) prefs.edit().putString("for", tag).putString("voice", voice).putString("model", model).apply()
+        return voice to model
     }
 
     /** Raw 24 kHz PCM, played while it downloads. */
@@ -300,6 +344,7 @@ class JarvisVoice @Inject constructor(
     private companion object {
         val JSON = "application/json".toMediaType()
         const val KEY_REST_MS = 6 * 3_600_000L
+        const val SENTENCE_TIMEOUT_MS = 25_000L
         const val DONE = 0
         const val RETRY = 1
         const val FAILED = 2
