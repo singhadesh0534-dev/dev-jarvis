@@ -776,6 +776,7 @@ class JarvisSession @Inject constructor(
     private suspend fun confirmByVoiceInner(question: String): Boolean {
         addLine(fromUser = false, text = question)
         speakingText = question
+        runCatching { focus.prepareToSpeak() }
         speechOut.speak(question)
         setState(JarvisState.SPEAKING)
         speechOut.awaitIdle()
@@ -1131,7 +1132,8 @@ class JarvisSession @Inject constructor(
     private fun speakPiece(piece: String) {
         val clean = SpeechSanitizer.clean(piece)
         if (clean.isEmpty()) return
-        SessionTrace.add("SAY ${clean.length} chars")
+        runCatching { focus.prepareToSpeak() }
+        SessionTrace.add("SAY ${clean.length} chars ${focus.describeVolume()} engine=${speechOut.activeVoiceName() ?: "none"} err=${speechOut.error.value != null}")
         try {
             speechOut.speak(clean)
         } catch (t: Throwable) {
@@ -1142,6 +1144,7 @@ class JarvisSession @Inject constructor(
 
     /** JARVIS's own line (errors, notices): shown and spoken. */
     private fun say(text: String, detail: String? = null) {
+        runCatching { focus.prepareToSpeak() }
         addLine(fromUser = false, text = text)
         detail?.let { addLine(fromUser = false, text = it, system = true) }
         speakingText = text

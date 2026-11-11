@@ -22,6 +22,7 @@ class JarvisApp : Application() {
     @Inject lateinit var calls: com.adesh.devjarvis.calls.CallMonitor
     @Inject lateinit var places: com.adesh.devjarvis.life.PlaceReminders
     @Inject lateinit var focus: com.adesh.devjarvis.voice.AudioFocusHelper
+    @Inject lateinit var speechInput: com.adesh.devjarvis.voice.SpeechInput
 
     override fun onCreate() {
         super.onCreate()
@@ -36,6 +37,7 @@ class JarvisApp : Application() {
         calls.restoreRing() // in case we were killed while the ring was lowered
         places.schedule()
         focus.restoreVolume() // in case we were killed while the voice was boosted
+        speechInput.recoverMutes() // ...or while streams were muted for listening
         // One-time import of Phase-3 reminders into the database (+ re-arm).
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { runCatching { reminders.rearmAll() } }
     }

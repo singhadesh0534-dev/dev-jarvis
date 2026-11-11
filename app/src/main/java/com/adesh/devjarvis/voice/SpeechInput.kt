@@ -107,8 +107,13 @@ class SpeechInput @Inject constructor(@ApplicationContext private val context: C
         else -> Reason.OTHER
     }
 
-    /** Streams jin par recognizer ki beep bajti hai. Ring/alarm ko haath nahi lagate. */
-    private val beepStreams = intArrayOf(AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_MUSIC)
+    /**
+     * Streams jin par recognizer ki beep bajti hai. Ring/alarm ko haath nahi lagate, aur MUSIC ko bhi nahi:
+     * JARVIS ki apni awaaz usi pe aati hai — use mute karna (aur app ke beech mein band hone par mute reh jaana)
+     * hi "jawab likha aata hai, awaaz nahi" ki wajah tha.
+     */
+    private val beepStreams = intArrayOf(AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION)
+    private val prefs = context.getSharedPreferences("speech_input", Context.MODE_PRIVATE)
 
     private fun muteBeeps(): List<Int> {
         val am = context.getSystemService(AudioManager::class.java) ?: return emptyList()
@@ -121,11 +126,30 @@ class SpeechInput @Inject constructor(@ApplicationContext private val context: C
                 }
             }
         }
+        if (muted.isNotEmpty()) prefs.edit().putString(K_MUTED, muted.joinToString(",")).commit()
         return muted
     }
 
     private fun unmute(streams: List<Int>) {
         val am = context.getSystemService(AudioManager::class.java) ?: return
         streams.forEach { s -> runCatching { am.adjustStreamVolume(s, AudioManager.ADJUST_UNMUTE, 0) } }
+        prefs.edit().remove(K_MUTED).apply()
+    }
+
+    /**
+     * App start: if JARVIS was killed while streams were muted for listening, unmute them now. Also undoes the
+     * music mute older versions left behind.
+     */
+    fun recoverMutes() {
+        val am = context.getSystemService(AudioManager::class.java) ?: return
+        val saved = prefs.getString(K_MUTED, null)?.split(',')?.mapNotNull { it.toIntOrNull() }.orEmpty()
+        (saved + AudioManager.STREAM_MUSIC).distinct().forEach { s ->
+            runCatching { if (am.isStreamMute(s)) am.adjustStreamVolume(s, AudioManager.ADJUST_UNMUTE, 0) }
+        }
+        prefs.edit().remove(K_MUTED).apply()
+    }
+
+    private companion object {
+        const val K_MUTED = "muted_streams"
     }
 }

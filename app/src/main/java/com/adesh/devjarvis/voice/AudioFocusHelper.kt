@@ -33,6 +33,8 @@ class AudioFocusHelper @Inject constructor(
      */
     private fun boostVoice() {
         val am = audio ?: return
+        // A muted media stream means JARVIS is silent whatever the volume says.
+        runCatching { if (am.isStreamMute(AudioManager.STREAM_MUSIC)) am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0) }
         if (!settings.current.fullVoiceVolume || headphones()) return
         runCatching {
             val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
@@ -43,6 +45,15 @@ class AudioFocusHelper @Inject constructor(
             }
         }
     }
+
+    /** Call right before JARVIS speaks (voice or typed chat): makes sure he can be heard. */
+    fun prepareToSpeak() = boostVoice()
+
+    /** "vol=7/15 muted=false" for the flight recorder. */
+    fun describeVolume(): String = runCatching {
+        val am = audio ?: return "no audio"
+        "vol=${am.getStreamVolume(AudioManager.STREAM_MUSIC)}/${am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)} muted=${am.isStreamMute(AudioManager.STREAM_MUSIC)}"
+    }.getOrDefault("?")
 
     /** Put Sir's media volume back. Also called at app start, in case JARVIS was killed mid-conversation. */
     fun restoreVolume() {
