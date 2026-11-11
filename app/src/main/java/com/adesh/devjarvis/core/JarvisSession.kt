@@ -316,6 +316,7 @@ class JarvisSession @Inject constructor(
 
     fun onTextSubmitted(text: String) {
         if (text.isBlank()) return
+        SessionTrace.add("TYPED ${text.trim().length} chars")
         memoryJob?.cancel()
         if (conversationStartedAt == 0L) conversationStartedAt = System.currentTimeMillis()
         listenJob?.cancel()

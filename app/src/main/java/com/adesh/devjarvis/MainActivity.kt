@@ -108,6 +108,8 @@ class MainActivity : ComponentActivity() {
 
     /** Home long-press / assistant button: seedha sunna shuru. */
     private fun handleAssist(intent: Intent?) {
+        // Debug builds only: the emulator smoke test types to JARVIS through this extra (no screen scraping needed).
+        if (BuildConfig.DEBUG) intent?.getStringExtra("smoke_say")?.let { session.onTextSubmitted(it) }
         val action = intent?.action ?: return
         if (action in TALK_ACTIONS) {
             // Earbud / car button, home long-press, tile or widget: work over the lock screen too.

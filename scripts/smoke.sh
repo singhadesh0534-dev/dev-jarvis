@@ -12,6 +12,8 @@ adb wait-for-device
 sleep 45
 adb install -r -g "$APK" || { echo "!!! install failed"; exit 1; }
 adb logcat -c
+# The CI emulator's launcher keeps hanging ("Pixel Launcher isn't responding"); JARVIS doesn't need it.
+adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher >/dev/null 2>&1 || true
 adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true
 sleep 12
 
@@ -41,18 +43,17 @@ dismiss() {
 check() {
   if ! alive; then echo "!!! APP DIED after: $1"; DEAD=1; adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 8; fi
 }
+# Types to JARVIS through the debug-only intent extra: no screen scraping, so a slow or hung launcher can't block it.
 type_to_jarvis() {
   echo "=== typing: $1"
-  dismiss
-  tap_node 'Type to JARVIS' || { echo "input box not found"; texts | head -20; return; }
-  sleep 1
+  local before
+  before=$(adb shell run-as "$PKG" cat files/crash/trace.log 2>/dev/null | wc -l)
+  adb shell "am start -n $PKG/.MainActivity --ez smoke_skip_setup true --es smoke_say '$1'" >/dev/null
   TYPED=$((TYPED + 1))
-  adb shell input text "$(printf '%s' "$1" | sed 's/ /%s/g')"
-  tap_node 'content-desc="Send"' || adb shell input keyevent 66
   sleep "${2:-10}"
   check "$1"
-  dismiss
-  echo "--- screen now:"; texts | tail -n 14
+  echo "--- JARVIS did:"
+  adb shell run-as "$PKG" cat files/crash/trace.log 2>/dev/null | tail -n +"$((before + 1))" | head -n 12
 }
 
 dismiss
@@ -64,9 +65,10 @@ type_to_jarvis "hello Dev"
 type_to_jarvis "torch on karo"
 type_to_jarvis "volume badhao"
 type_to_jarvis "YouTube kholo"
-adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 4
 type_to_jarvis "5 minute ka timer lagao"
-adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 4
+type_to_jarvis "brightness kam karo"
+type_to_jarvis "wifi band karo"
+type_to_jarvis "EMI kitni banegi 5 lakh 10 percent 3 saal"
 
 echo "=== always-on switch (wake engine + model download)"
 dismiss
@@ -101,7 +103,8 @@ adb shell run-as "$PKG" cat files/crash/problems.log 2>/dev/null | tail -n 40
 
 echo "=== crashes in logcat"
 adb logcat -d > logcat.txt
-grep -n -E "FATAL EXCEPTION|Fatal signal|ANR in $PKG|Process: $PKG|libc  *: Fatal|terminating with uncaught" -A 30 logcat.txt | head -n 200 || true
-CRASH=$(grep -c -E "FATAL EXCEPTION|Fatal signal [0-9]+ .*$PKG|ANR in $PKG" logcat.txt || true)
+# Only JARVIS's own crashes count (the emulator's uiautomator and launcher crash on their own).
+grep -n -E "Process: $PKG|ANR in $PKG|>>> $PKG <<<|Fatal signal [0-9]+ .*$PKG" -B 2 -A 30 logcat.txt | head -n 200 || true
+CRASH=$(grep -c -E "Process: $PKG|ANR in $PKG|>>> $PKG <<<|Fatal signal [0-9]+ .*$PKG" logcat.txt || true)
 echo "=== result: died=$DEAD crashes_in_logcat=$CRASH typed=$TYPED"
 [ "$DEAD" -eq 0 ] && [ "${CRASH:-0}" -eq 0 ] && [ "$TYPED" -gt 0 ]
