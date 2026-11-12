@@ -32,6 +32,7 @@ class JarvisApp : Application() {
             ProblemJournal.init(dir)
         }
         SessionTrace.add("APP start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${Edition.label}")
+        noteLastExit()
         AppVisibility.install(this)
         briefing.reschedule()
         calls.restoreRing() // in case we were killed while the ring was lowered
@@ -40,5 +41,32 @@ class JarvisApp : Application() {
         speechInput.recoverMutes() // ...or while streams were muted for listening
         // One-time import of Phase-3 reminders into the database (+ re-arm).
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch { runCatching { reminders.rearmAll() } }
+    }
+
+    /** Why the app stopped last time (crash, native crash, killed by the phone to save battery, low memory…). */
+    private fun noteLastExit() {
+        if (android.os.Build.VERSION.SDK_INT < 30) return
+        runCatching {
+            val am = getSystemService(android.app.ActivityManager::class.java) ?: return
+            val info = am.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull() ?: return
+            val reason = when (info.reason) {
+                android.app.ApplicationExitInfo.REASON_CRASH -> "CRASH"
+                android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "NATIVE_CRASH"
+                android.app.ApplicationExitInfo.REASON_ANR -> "ANR (app hung)"
+                android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "LOW_MEMORY (phone ran out of RAM)"
+                android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "USER (swiped away / force stop)"
+                android.app.ApplicationExitInfo.REASON_USER_STOPPED -> "USER_STOPPED"
+                android.app.ApplicationExitInfo.REASON_SIGNALED -> "KILLED signal ${info.status}"
+                android.app.ApplicationExitInfo.REASON_EXCESSIVE_RESOURCE_USAGE -> "KILLED_BY_PHONE (battery / resource limit)"
+                android.app.ApplicationExitInfo.REASON_PACKAGE_UPDATED -> "UPDATED"
+                android.app.ApplicationExitInfo.REASON_OTHER -> "KILLED_BY_SYSTEM"
+                else -> "reason ${info.reason}"
+            }
+            val line = "$reason importance=${info.importance} ${info.description.orEmpty().take(120)}"
+            SessionTrace.add("LAST EXIT $line")
+            if (info.reason !in setOf(android.app.ApplicationExitInfo.REASON_USER_REQUESTED, android.app.ApplicationExitInfo.REASON_PACKAGE_UPDATED, android.app.ApplicationExitInfo.REASON_EXIT_SELF)) {
+                ProblemJournal.add("APP_STOPPED", line)
+            }
+        }
     }
 }

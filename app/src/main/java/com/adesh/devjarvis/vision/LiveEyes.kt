@@ -67,6 +67,9 @@ class LiveEyes @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var screenJob: Job? = null
 
+    /** One picture straight into the open Live conversation (the `look` tools). False when no Live session is open. */
+    fun show(jpeg: ByteArray): Boolean = sink?.let { it(jpeg); it(jpeg); true } ?: false // twice: a single realtime frame can be dropped
+
     fun offerCameraFrame(jpeg: ByteArray) {
         if (modes.liveVision) sink?.invoke(jpeg)
     }

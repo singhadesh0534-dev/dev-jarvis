@@ -65,3 +65,21 @@ class KeyPasteTest {
         assertEquals(listOf("AIza1", "AIza2"), pool.boxes("AIza1, AIza2"))
     }
 }
+
+class KeyRestMemoryTest {
+    @Test fun longRestsSurviveARestartShortOnesDoNot() {
+        var t = 1_000L
+        var saved = ""
+        val first = KeyPool(onChange = { saved = it }) { t }
+        first.rest("bad\ngood", "bad", 24 * 3_600_000L)   // rejected key
+        first.rest("bad\ngood\nbusy", "busy", 30_000L)     // short rate limit
+        assertFalse("bad" in saved)                         // only fingerprints are stored
+
+        val afterRestart = KeyPool(saved = saved) { t }
+        assertEquals("good", afterRestart.current("bad\ngood\nbusy"))
+        assertTrue(afterRestart.isResting("bad"))
+        assertFalse(afterRestart.isResting("busy"))
+        t += 25 * 3_600_000L
+        assertEquals("bad", KeyPool(saved = saved) { t }.current("bad\ngood"))
+    }
+}

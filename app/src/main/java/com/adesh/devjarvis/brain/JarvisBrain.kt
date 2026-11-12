@@ -80,6 +80,7 @@ class JarvisBrain @Inject constructor(
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
+                if (e is BrainError.InvalidKey) keys.live.rest(s.geminiApiKey, key, restFor(e)) // wrong for Live as well
                 if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !keys.gemini.rest(s.geminiApiKey, key, restFor(e))) throw e
                 SessionTrace.add("KEY gemini rotated (${e.javaClass.simpleName}), ready=${keys.gemini.readyCount(s.geminiApiKey)}")
             }
@@ -108,7 +109,7 @@ class JarvisBrain @Inject constructor(
     }
 
     private fun restFor(e: BrainError): Long =
-        if (e is BrainError.InvalidKey) 6 * 3_600_000L else (cooldownFor(e) - System.currentTimeMillis()).coerceAtLeast(30_000L)
+        if (e is BrainError.InvalidKey) 24 * 3_600_000L else (cooldownFor(e) - System.currentTimeMillis()).coerceAtLeast(30_000L)
 
     /**
      * Streams JARVIS's reply. [runTool] executes a tool call (the session supplies confirmation UI).
@@ -209,6 +210,7 @@ class JarvisBrain @Inject constructor(
         } else {
             append("\n\n").append(SystemPrompt.CHARACTER_SHORT)
         }
+        Persona.overlay(s.persona).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(

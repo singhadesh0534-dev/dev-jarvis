@@ -102,8 +102,8 @@ class ModeTools @Inject constructor(
         "use_skill",
         "Get the exact working method for a kind of request BEFORE you answer or act on it. Call it whenever the request fits a " +
             "skill, even if you think you know how. Pass a skill id, or describe the request in a few English words and the best " +
-            "matching skill is found. Core skills: " + Skills.index() + ". Library (${Skills.ALL.size - Skills.CORE.size} more, by area): " +
-            Skills.libraryIndex(),
+            "matching skill is found. Core skills: " + Skills.index() + ". Plus a library of ${Skills.ALL.size - Skills.CORE.size} more, found by " +
+            "words, in these areas: " + Skills.areas() + ".",
         params { string("skill", "Skill id, or a few words describing the request", required = true) },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {

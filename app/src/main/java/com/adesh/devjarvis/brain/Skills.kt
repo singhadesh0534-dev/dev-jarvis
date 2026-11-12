@@ -567,6 +567,9 @@ object Skills {
     /** One line per core skill, then the library areas with their ids, for the tool description. */
     fun index(): String = CORE.joinToString("; ") { "${it.id} = ${it.whenToUse}" }
 
+    /** Library areas only: the ids stay out of every request (smaller, faster, cheaper); search finds them by words. */
+    fun areas(): String = SkillLibrary.ALL.map { it.area }.distinct().joinToString(", ")
+
     /** Library ids grouped by area, compact. */
     fun libraryIndex(): String = SkillLibrary.ALL.groupBy { it.area }.entries.joinToString("; ") { e ->
         e.key + ": " + e.value.joinToString(",") { it.id }

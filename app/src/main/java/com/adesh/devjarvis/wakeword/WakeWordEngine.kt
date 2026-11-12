@@ -40,7 +40,7 @@ import javax.inject.Singleton
  *  - WAKE: standby mein "Hello Dev" / "Jarvis" sunna.
  *  - BARGE_IN: JARVIS bol raha ho tab "Jarvis" / "stop" / "ruko" sunna (echo canceller ke saath).
  *
- * Ek hi background thread; mode badalne pe sirf grammar badalti hai, mic band nahi hota.
+ * Ek hi background thread aur ek hi recognizer; mode sirf ye tay karta hai ki kaunse shabd gine jaayein.
  */
 @Singleton
 class WakeWordEngine @Inject constructor(
@@ -157,14 +157,14 @@ class WakeWordEngine @Inject constructor(
             val spk = if (useSpeaker) {
                 (spkModel ?: runCatching { SpeakerModel(speakerModels.modelDir.absolutePath) }.getOrNull()?.also { spkModel = it })
             } else null
-            // Grammar in the constructor, speaker model attached before any audio: the only order the native
-            // library accepts. Changing either on a recognizer that is already decoding aborts the whole app.
-            fun build(forMode: Mode): Recognizer = Recognizer(m, SAMPLE_RATE.toFloat(), grammarFor(forMode)).apply {
+            // One recognizer for the whole run, with the wake phrases AND the barge-in words in its grammar; the mode
+            // only decides which of them count. Changing the grammar of, or replacing, a recognizer in the middle
+            // of an utterance aborted the whole app natively (typing to JARVIS switches the mode).
+            val rec = Recognizer(m, SAMPLE_RATE.toFloat(), WakePhraseMatcher.grammarJson((wakePhrases + JarvisConfig.BARGE_IN_PHRASES).distinct())).apply {
                 if (spk != null) setSpeakerModel(spk)
                 setWords(true)
                 setEndpointerMode(Recognizer.EndpointerMode.SHORT)
             }
-            var rec = build(currentMode)
             recognizer = rec
             val buffer = ShortArray(SAMPLE_RATE / 10) // 100 ms
             var silentChunks = 0
@@ -175,13 +175,9 @@ class WakeWordEngine @Inject constructor(
 
             while (!stopRequested) {
                 if (mode != currentMode) {
-                    // A fresh recognizer for the new phrases. Calling setGrammar() on this one while it is in the
-                    // middle of an utterance (TV, music, Sir typing while the room is noisy) crashed the app natively.
                     currentMode = mode
-                    runCatching { rec.close() }
-                    rec = build(currentMode)
-                    recognizer = rec
                     partialStreak = 0
+                    runCatching { rec.reset() }
                 }
                 val n = record.read(buffer, 0, buffer.size)
                 if (n < 0) {
@@ -260,11 +256,17 @@ class WakeWordEngine @Inject constructor(
                         if (profile != null && candidate != null) {
                             val ok = SpeakerVerification.matches(profile, candidate, speakerThreshold)
                             _lastSpeaker.value = if (ok) "you ✓" else "not you"
-                            if (!ok) { rec.reset(); continue } // someone else — ignore the wake
+                            if (!ok) { // someone else — ignore the wake
+                                rejected.tryEmit("'${heard.text}' not Sir's voice (match ${"%.2f".format(SpeakerVerification.cosine(profile, candidate))}, needs $speakerThreshold)")
+                                rec.reset(); continue
+                            }
                         }
-                        // No vector: fail open (wake anyway) so Sir is never locked out — except over the phone's own
-                        // video / music, where an unverified "Jarvis" is most likely the video itself.
-                        if ((profile == null || candidate == null) && overMedia) { rec.reset(); continue }
+                        // No voiceprint came out of this utterance. With the lock on, or over the phone's own video /
+                        // music, an unverified "Jarvis" does not wake him (Sir says it once more, a little longer).
+                        if ((profile == null || candidate == null) && (overMedia || (speakerLock && profile != null))) {
+                            rejected.tryEmit("'${heard.text}' voice could not be checked")
+                            rec.reset(); continue
+                        }
                     }
                     rec.reset()
                     cooldownUntil = now + COOLDOWN_MS
@@ -322,8 +324,6 @@ class WakeWordEngine @Inject constructor(
 
     private fun phrasesFor(mode: Mode) =
         if (mode == Mode.WAKE) wakePhrases else JarvisConfig.BARGE_IN_PHRASES
-
-    private fun grammarFor(mode: Mode) = WakePhraseMatcher.grammarJson(phrasesFor(mode))
 
     private fun rms(a: ShortArray, n: Int): Float {
         var sum = 0.0

@@ -37,8 +37,9 @@ class ToolRegistry @Inject constructor(
     safety: SafetyTools,
     macros: com.adesh.devjarvis.screen.MacroTools,
     automation: com.adesh.devjarvis.tools.impl.AutomationTools,
+    self: com.adesh.devjarvis.tools.impl.SelfTools,
 ) {
-    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools + life.tools + modes.tools + safety.tools + macros.tools + automation.tools)
+    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools + life.tools + modes.tools + safety.tools + macros.tools + automation.tools + self.tools)
         .filter { Edition.isFull || it.name !in Edition.FULL_ONLY_TOOLS }
         .filter { t -> Edition.TOOL_NEEDS_PERMISSION[t.name]?.let { Edition.declares(context, it) } ?: true }
     private val byName = tools.associateBy { it.name }
@@ -65,6 +66,7 @@ class ToolRegistry @Inject constructor(
             "set_toggle", "search_in_app", "open_settings", "play_music", "media_control", "device_status",
             "make_call", "send_sms", "send_whatsapp", "weather", "calculate", "get_time", "web_answer",
             "remember", "add_note", "read_notifications", "read_screen", "tap", "type_text", "scroll", "go_back", "go_home", "look",
+            "jarvis_settings", "set_persona",
         )
     }
 

@@ -519,6 +519,8 @@ class JarvisSession @Inject constructor(
         focus.acquire()
         _ui.update { it.copy(inConversation = true) }
         liveAuthRetries = 0
+        // A call / "bye" in the last conversation set this; left set, every new Live session closed the moment it opened.
+        endAfterReply = false
         if (shouldUseLive(settings.current)) startLive() else startListening(followUp = false)
     }
 
@@ -923,7 +925,7 @@ class JarvisSession @Inject constructor(
             updateMode()
 
             val liveKey = keys.live.current(s.geminiApiKey)
-            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, s.liveVoice, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
+            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, com.adesh.devjarvis.brain.Persona.liveVoice(s.persona, s.liveVoice), brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter) { bytes, n -> conn.sendAudio(bytes, n) }
             SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
@@ -1078,11 +1080,17 @@ class JarvisSession @Inject constructor(
                 focus.ownCommunicationMode = false
                 usage.recordLiveSeconds(((System.currentTimeMillis() - startedAt) / 1000).toInt())
             }
-            lastWake?.let { w ->
-                if (!userSpoke) noteFalseWake()
-                if (!userSpoke) ProblemJournal.add("FALSE_WAKE?", "Woke on $w but Sir said nothing in the whole conversation")
+            // Live that never got going (wrong key, no network, model refused) is not an "empty wake": Sir had no chance to speak.
+            val neverStarted = !anyReply && !liveClosingByUs
+            if (!neverStarted) {
+                lastWake?.let { w ->
+                    if (!userSpoke) {
+                        noteFalseWake()
+                        ProblemJournal.add("FALSE_WAKE?", "Woke on $w but Sir said nothing in the whole conversation")
+                    }
+                }
+                lastWake = null
             }
-            lastWake = null
             if (!anyReply && !liveClosingByUs) ProblemJournal.add("LIVE_FAILED", "kind=$closeKind detail='$closeDetail' model=${s.liveModel}")
             onLiveEnded(closeKind, closeDetail, anyReply)
         }
@@ -1111,7 +1119,9 @@ class JarvisSession @Inject constructor(
                 // This key is wrong or revoked: rest it and, if another key is ready, start Live again with it right
                 // away — a bad key in box 1 must not push Sir into classic mode.
                 val s = settings.current
-                val another = keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), 6 * 3_600_000L)
+                val bad = keys.live.current(s.geminiApiKey)
+                keys.gemini.rest(s.geminiApiKey, bad, 24 * 3_600_000L) // the same key is wrong for typed chat and vision too
+                val another = keys.live.rest(s.geminiApiKey, bad, 24 * 3_600_000L)
                 SessionTrace.add("KEY live rejected, ready=${keys.live.readyCount(s.geminiApiKey)}")
                 if (another && !anyReply && _ui.value.inConversation && liveAuthRetries < 4) {
                     liveAuthRetries++
@@ -1227,6 +1237,6 @@ class JarvisSession @Inject constructor(
         const val CARD_VISIBLE_MS = 15_000L
         const val LIVE_GREETING =
             "[Sir has just called you by name. Answer him now, out loud, with one short warm line (at most 8 words) " +
-                "such as \"Ji Sir, bataiye\" and then wait for his command.]"
+                "in your current role (as JARVIS: \"Ji Sir, bataiye\") and then wait for what he says.]"
     }
 }

@@ -39,7 +39,15 @@ class ScreenTools @Inject constructor(
     private val brainProvider: Provider<JarvisBrain>,
     private val launcher: ActivityLauncher,
     private val apps: AppRepository,
+    private val eyes: com.adesh.devjarvis.vision.LiveEyes,
 ) {
+    /**
+     * In a Live conversation the picture goes straight into that conversation: JARVIS sees it himself. That is
+     * faster than a second request and still works when the text keys are at their limit.
+     */
+    private fun shownInLive(jpeg: ByteArray, what: String): ToolResult? =
+        if (eyes.show(jpeg)) ToolResult.ok("$what has just been sent to you as an image. Look at it now and answer Sir's question from what you see; if you cannot see an image, say so plainly.") else null
+
     private val _progress = MutableSharedFlow<String>(extraBufferCapacity = 32)
     /** Screen-agent step lines for the HUD transcript. */
     val progress: SharedFlow<String> = _progress.asSharedFlow()
@@ -83,6 +91,7 @@ class ScreenTools @Inject constructor(
             // If Android needed a tap, Sir has a notification; give him time.
             val timeout = if (outcome == ActivityLauncher.Outcome.NEEDS_TAP) 45_000L else 15_000L
             val jpeg = withTimeoutOrNull(timeout) { result.await() } ?: return ToolResult.fail("couldn't take a photo")
+            shownInLive(jpeg, "The camera photo")?.let { return it }
             val answer = brain.see(jpeg, args.requireString("question")) ?: return ToolResult.fail("the photo was taken but the vision model did not answer (all Gemini keys at their limit, or the network dropped). Tell Sir exactly that and offer to try again in a minute.")
             return ToolResult.ok(answer)
         }
@@ -109,6 +118,7 @@ class ScreenTools @Inject constructor(
             val jpeg = ImageUtil.toJpeg(marked, maxSide = 1280, quality = 75)
             if (marked !== bmp) marked.recycle()
             bmp.recycle()
+            shownInLive(jpeg, "A screenshot of the screen (every tappable thing has a yellow number; use that number with tap)")?.let { return it }
             val answer = brain.see(jpeg, args.requireString("question") + MARKS_NOTE)
                 ?: return snap?.let { ToolResult.ok("the vision model did not answer; screen as text:\n" + ScreenFormatter.compact(it, 60)) }
                     ?: ToolResult.fail("vision unavailable")
