@@ -90,6 +90,48 @@ object Persona {
         else -> ""
     }
 
+    // ---- hearing the request in Sir's own words, so the switch never depends on the model calling a tool
+
+    /** Speech recognition often writes these words in Hindi script; bring the ones that matter to Roman. */
+    private val HINDI = listOf(
+        Regex("गर्ल\\s*फ़?्र\\S*") to "girlfriend", Regex("जी\\.?\\s*एफ़?\\.?") to "gf", Regex("प्रेमिका") to "premika",
+        Regex("दोस्त") to "dost", Regex("यार") to "yaar", Regex("फ़?्रें?ण?्?ड") to "friend",
+        Regex("जार्?विस") to "jarvis", Regex("न[ॉाो]र्मल") to "normal",
+        Regex("बन\\s*जाओ") to "ban jao", Regex("बन\\s*जा") to "ban ja", Regex("बन\\s*के") to "ban ke", Regex("बन\\s*कर") to "ban kar", Regex("बनो") to "bano",
+        Regex("की\\s+तरह") to "ki tarah", Regex("जैस[ेी]") to "jaise", Regex("मोड") to "mode", Regex("रूप") to "roop", Regex("रोल") to "role",
+        Regex("हो\\s*जाओ") to "ho jao", Regex("हो\\s*जा") to "ho ja", Regex("वापस") to "wapas",
+        Regex("बं?न?्?द") to "band", Regex("मत") to "mat", Regex("नहीं") to "nahi", Regex("ऑफ़?") to "off", Regex("हटाओ") to "hatao", Regex("छोड़ो") to "chhodo",
+    )
+    private const val GAP = """(?:\s+\S+){0,2}?\s+"""
+    private const val BECOME = """(?:ban\s?ja+o?\b|ban\s?ke\b|ban\s?kar\b|bano\b|ki tarah\b|jaise\b|jaisi\b|mode\b|roop\b|role\b)"""
+    private val ASK_PARTNER = Regex("""\b(?:gf|g f|girl ?friend|premika)\b$GAP$BECOME""")
+    private val ASK_DOST = Regex("""\b(?:dost|yaar|friend|buddy)\b$GAP$BECOME""")
+    private val ASK_JARVIS = listOf(
+        Regex("""\bjarvis(?:\s+\S+)?\s+(?:ban\s?ja+o?\b|ban\s?ke\b|bano\b)"""), Regex("""\bjarvis\s+(?:mode|roop)\b"""),
+        Regex("""\bnormal\s+(?:ho\s?ja+o?\b|mode\b|ban\b)"""), Regex("""\b(?:wapas|vapas|waapas|vaapas)\s+jarvis\b"""),
+    )
+    private val STOP_IT = Regex("""\b(?:band|off|hatao|chhodo|chodo|mat|nahi|nahin)\b""")
+
+    /**
+     * The role Sir is asking for in this sentence ("gf ban ke baat karo", "दोस्त बन जाओ", "Jarvis ban jao",
+     * "gf mode band karo"), or null when he is talking about something else ("Rahul mera dost ban gaya").
+     */
+    fun requested(said: String?): String? {
+        var t = said.orEmpty().lowercase()
+        if (t.isBlank()) return null
+        HINDI.forEach { (hindi, roman) -> t = hindi.replace(t, " $roman ") }
+        t = t.replace(Regex("""[^\p{L}\p{M}\p{N}]+"""), " ").trim()
+        if (t.isEmpty() || t.split(' ').size > 14) return null
+        val role = when {
+            ASK_PARTNER.containsMatchIn(t) -> PARTNER
+            ASK_DOST.containsMatchIn(t) -> DOST
+            ASK_JARVIS.any { it.containsMatchIn(t) } -> return JARVIS
+            else -> return null
+        }
+        // "gf mode band karo" / "dost mat bano": he wants the role to stop.
+        return if (STOP_IT.containsMatchIn(t)) JARVIS else role
+    }
+
     private val SIR = Regex("""\bSir\b""")
 
     /** The app's own fixed lines are written for JARVIS ("Volume badha diya, Sir."); in another role the address changes too. */

@@ -52,6 +52,30 @@ class PersonaTest {
         assertTrue(Persona.overlay(Persona.PARTNER).contains("How she sounds"))
     }
 
+    @Test fun hearsTheRoleInSirsOwnWords() {
+        assertEquals(Persona.PARTNER, Persona.requested("gf ban ke baat karo"))
+        assertEquals(Persona.PARTNER, Persona.requested("Jarvis, meri girlfriend ban jao"))
+        assertEquals(Persona.PARTNER, Persona.requested("GF बन के बात करो"))
+        assertEquals(Persona.PARTNER, Persona.requested("जीएफ बन जाओ"))
+        assertEquals(Persona.PARTNER, Persona.requested("गर्लफ्रेंड की तरह बात करो"))
+        assertEquals(Persona.PARTNER, Persona.requested("gf mode on karo"))
+        assertEquals(Persona.DOST, Persona.requested("dost ban ke baat karo"))
+        assertEquals(Persona.DOST, Persona.requested("दोस्त बनकर बात करो"))
+        assertEquals(Persona.DOST, Persona.requested("ab yaar ki tarah baat kar"))
+        assertEquals(Persona.JARVIS, Persona.requested("Jarvis ban jao"))
+        assertEquals(Persona.JARVIS, Persona.requested("वापस जार्विस बन जाओ"))
+        assertEquals(Persona.JARVIS, Persona.requested("normal ho jao"))
+        assertEquals(Persona.JARVIS, Persona.requested("gf mode band karo"))
+        assertEquals(Persona.JARVIS, Persona.requested("dost mat bano"))
+    }
+
+    @Test fun ordinaryTalkIsNotARoleRequest() {
+        listOf(
+            "Rahul mera dost ban gaya", "meri gf ko call karo", "dost ko message bhejo", "Jarvis focus mode on karo",
+            "girlfriend ke liye gift batao", "volume badha do", "", "yaar aaj bahut thak gaya",
+        ).forEach { assertEquals(it, null, Persona.requested(it)) }
+    }
+
     @Test fun partnerGetsHerOwnVoice() {
         assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Charon"))
         assertEquals("Charon", Persona.liveVoice(Persona.DOST, "Charon"))

@@ -94,11 +94,14 @@ class AndroidTts @Inject constructor(
         val s = settings.current
         appliedPersona = s.persona
         // Girlfriend role: a woman's voice at its own natural pitch, a touch slower. No such voice installed? Sir's voice stays.
-        val hers = if (Persona.isPartner(s.persona)) pickFemaleVoice() else null
+        val partner = Persona.isPartner(s.persona)
+        val hers = if (partner) pickFemaleVoice() else null
         val voice = hers ?: pickVoice(s.ttsVoiceName)
         if (voice != null) tts.voice = voice else tts.language = Locale("en", "IN")
-        tts.setPitch(if (hers != null) 1.0f else s.ttsPitch)
+        // No woman's voice on this phone: at least lift the pitch so she does not speak in the deep butler voice.
+        tts.setPitch(if (hers != null) 1.0f else if (partner) NO_FEMALE_VOICE_PITCH else s.ttsPitch)
         tts.setSpeechRate(if (hers != null) s.ttsRate * 0.96f else s.ttsRate)
+        if (partner) com.adesh.devjarvis.core.SessionTrace.add("VOICE phone role=gf voice=${hers?.name ?: "none installed, pitch raised"}")
     }
 
     private fun englishVoices(): List<Voice> = runCatching { tts.voices }.getOrNull().orEmpty()
@@ -110,7 +113,12 @@ class AndroidTts @Inject constructor(
             val matches = voices.filter { it.name.startsWith(prefix) }
             (matches.firstOrNull { !it.isNetworkConnectionRequired } ?: matches.firstOrNull())?.let { return it }
         }
-        return null
+        // Other engines / newer Google voices carry the gender in the name ("…#female_1-local").
+        val marked = voices.filter { "female" in it.name.lowercase() }
+        return marked.firstOrNull { it.locale.country == "IN" && !it.isNetworkConnectionRequired }
+            ?: marked.firstOrNull { it.locale.country == "IN" }
+            ?: marked.firstOrNull { !it.isNetworkConnectionRequired }
+            ?: marked.firstOrNull()
     }
 
     private fun pickVoice(preferredName: String): Voice? {
@@ -192,5 +200,9 @@ class AndroidTts @Inject constructor(
             }
             _level.value = 0f
         }
+    }
+
+    private companion object {
+        const val NO_FEMALE_VOICE_PITCH = 1.3f
     }
 }

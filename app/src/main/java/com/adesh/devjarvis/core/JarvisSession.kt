@@ -181,6 +181,10 @@ class JarvisSession @Inject constructor(
     private var liveRetryAt = 0L
     /** Live restarts with the next key in this wake (bad keys at the front of the list). */
     private var liveAuthRetries = 0
+    /** The role changed in the middle of a Live conversation: start it again at once with the new voice and manner. */
+    private var liveRestartForRole = false
+    /** First line of the next Live session, when it is not the usual greeting. */
+    private var liveKickoff: String? = null
     private val liveActive: Boolean get() = liveJob?.isActive == true
     /** Set if the server refused our turn-taking config; then we connect without it. */
     private val liveConfirm = SpokenConfirmation()
@@ -198,7 +202,11 @@ class JarvisSession @Inject constructor(
     init {
         scope.launch {
             var prevSpeakerKey = ""
+            var prevRole = ""
             settings.settings.collect { s ->
+                val role = com.adesh.devjarvis.brain.Persona.normalize(s.persona)
+                if (prevRole.isNotEmpty() && role != prevRole) onRoleChanged(role)
+                prevRole = role
                 wake.sensitivity = s.wakeSensitivity
                 wake.speakerLock = s.speakerLockEnabled
                 wake.speakerProfile = SpeakerVerification.decode(s.speakerProfile)
@@ -627,6 +635,7 @@ class JarvisSession @Inject constructor(
     }
 
     private fun ask(userText: String) {
+        noteRoleRequest(userText)
         noteComplaint(userText)
         lastWake = null
         interrupt()
@@ -908,6 +917,26 @@ class JarvisSession @Inject constructor(
         _ui.update { it.copy(mode = label, fuelPercent = usage.fuel.value[provider] ?: 100) }
     }
 
+    // ---------------------------------------------------------------- roles (Jarvis / dost / gf)
+
+    /** Sir's own words decide the role ("gf ban ke baat karo"), whether or not the model calls set_persona. */
+    private fun noteRoleRequest(said: String) {
+        val want = com.adesh.devjarvis.brain.Persona.requested(said) ?: return
+        if (want == com.adesh.devjarvis.brain.Persona.normalize(settings.current.persona)) return
+        SessionTrace.add("ROLE asked -> $want")
+        settings.update { it.copy(persona = want) }
+    }
+
+    private fun onRoleChanged(role: String) {
+        SessionTrace.add("ROLE now $role live=$liveActive")
+        runCatching { speechOut.applySettings() } // the phone voice follows the role
+        // A Live session keeps the voice it started with: open it again so he hears the new voice right now.
+        if (liveActive && !liveClosingByUs && !liveRestartForRole) {
+            liveRestartForRole = true
+            liveConn?.close()
+        }
+    }
+
     // ---------------------------------------------------------------- Live mode
 
     /**
@@ -917,6 +946,8 @@ class JarvisSession @Inject constructor(
     private fun startLive() {
         listenJob?.cancel()
         liveClosingByUs = false
+        val greeting = liveKickoff ?: LIVE_GREETING
+        liveKickoff = null
         val s = settings.current
         _ui.update { it.copy(partial = "", micLevel = 0f) }
         liveJob = scope.launch {
@@ -983,7 +1014,7 @@ class JarvisSession @Inject constructor(
             try {
                 conn.connect()
                 // Spoken acknowledgement in JARVIS's own Live voice, instead of silence after the chime.
-                conn.sendText(LIVE_GREETING)
+                conn.sendText(greeting)
                 wake.awaitStopped()
                 audio.start()
                 // No voice a few seconds after the call and Sir hasn't spoken either: ask once more.
@@ -991,7 +1022,7 @@ class JarvisSession @Inject constructor(
                     delay(4_500)
                     if (!firstAudioLogged && !userSpoke && liveConn === conn) {
                         SessionTrace.add("LIVE greeting retry")
-                        conn.sendText(LIVE_GREETING)
+                        conn.sendText(greeting)
                     }
                 }
                 armFollowUp()
@@ -1008,6 +1039,7 @@ class JarvisSession @Inject constructor(
                             userSpoke = true
                             falseWakes = 0
                             userSaid.append(e.text)
+                            noteRoleRequest(userSaid.toString())
                             if (userLine < 0) userLine = nextId++
                             upsertLine(userLine, userSaid.toString().trim(), fromUser = true)
                             if (_ui.value.state != JarvisState.SPEAKING) setState(JarvisState.LISTENING)
@@ -1083,7 +1115,7 @@ class JarvisSession @Inject constructor(
                 usage.recordLiveSeconds(((System.currentTimeMillis() - startedAt) / 1000).toInt())
             }
             // Live that never got going (wrong key, no network, model refused) is not an "empty wake": Sir had no chance to speak.
-            val neverStarted = !anyReply && !liveClosingByUs
+            val neverStarted = !anyReply && !liveClosingByUs && !liveRestartForRole
             if (!neverStarted) {
                 lastWake?.let { w ->
                     if (!userSpoke) {
@@ -1093,7 +1125,7 @@ class JarvisSession @Inject constructor(
                 }
                 lastWake = null
             }
-            if (!anyReply && !liveClosingByUs) ProblemJournal.add("LIVE_FAILED", "kind=$closeKind detail='$closeDetail' model=${s.liveModel}")
+            if (!anyReply && !liveClosingByUs && !liveRestartForRole) ProblemJournal.add("LIVE_FAILED", "kind=$closeKind detail='$closeDetail' model=${s.liveModel}")
             onLiveEnded(closeKind, closeDetail, anyReply)
         }
     }
@@ -1102,6 +1134,16 @@ class JarvisSession @Inject constructor(
         liveJob = null
         updateMode()
         SessionTrace.add("LIVE ended kind=$kind detail='$detail' anyReply=$anyReply byUs=$liveClosingByUs")
+        if (liveRestartForRole && !liveClosingByUs) {
+            // "gf ban jao" / "Jarvis ban jao" in the middle of a conversation: same conversation, new voice and manner.
+            liveRestartForRole = false
+            if (_ui.value.inConversation) {
+                liveKickoff = ROLE_GREETING
+                startLive()
+                return
+            }
+        }
+        liveRestartForRole = false
         if (liveClosingByUs) return // closeLive() already handled the ending
         if (!anyReply && liveUsedPatientVad && kind == LiveMessages.CloseKind.OTHER && _ui.value.inConversation) {
             // Maybe this model doesn't accept the turn-taking config: try once more without it before giving up on Live.
@@ -1239,6 +1281,9 @@ class JarvisSession @Inject constructor(
         const val CONFIRM_TIMEOUT_MS = 25_000L
         const val RING_LISTEN_MS = 8_000L
         const val CARD_VISIBLE_MS = 15_000L
+        const val ROLE_GREETING =
+            "[Sir has just asked you to change to the role described above, and you have: your voice and manner are new. " +
+                "Say one short line out loud in this role to show it (as JARVIS: \"Wapas haazir hoon, Sir.\"), then wait for what he says.]"
         const val LIVE_GREETING =
             "[Sir has just called you by name. Answer him now, out loud, with one short warm line (at most 8 words) " +
                 "in your current role (as JARVIS: \"Ji Sir, bataiye\") and then wait for what he says.]"

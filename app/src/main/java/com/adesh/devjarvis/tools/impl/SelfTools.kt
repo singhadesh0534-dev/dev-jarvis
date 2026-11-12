@@ -187,12 +187,8 @@ class SelfTools @Inject constructor(
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val persona = Persona.normalize(args.requireString("persona"))
-            val before = settings.current.persona
             settings.update { it.copy(persona = persona) }
-            val voice = if ((persona == Persona.PARTNER) != (Persona.normalize(before) == Persona.PARTNER)) {
-                " (The Live voice itself changes from the next time Sir calls you.)"
-            } else ""
-            return ToolResult.ok(Persona.switched(persona) + voice)
+            return ToolResult.ok(Persona.switched(persona))
         }
     }
 
