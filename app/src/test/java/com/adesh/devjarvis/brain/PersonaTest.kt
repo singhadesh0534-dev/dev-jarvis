@@ -41,6 +41,17 @@ class PersonaTest {
         assertEquals("Sirf ek minute, jaan.", Persona.address("Sirf ek minute, Sir.", "gf"))
     }
 
+    @Test fun shortFormKeepsTheRulesThatMatter() {
+        assertEquals("", Persona.overlay(Persona.JARVIS, compact = true))
+        listOf(Persona.DOST, Persona.PARTNER).forEach {
+            val short = Persona.overlay(it, compact = true)
+            assertTrue(short.length < Persona.overlay(it).length / 2 || it == Persona.DOST)
+            assertTrue(short.contains("safety rule") && short.contains("set_persona") && short.contains("OFF"))
+        }
+        assertTrue(Persona.overlay(Persona.PARTNER, compact = true).contains("nothing sexually explicit"))
+        assertTrue(Persona.overlay(Persona.PARTNER).contains("How she sounds"))
+    }
+
     @Test fun partnerGetsHerOwnVoice() {
         assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Charon"))
         assertEquals("Charon", Persona.liveVoice(Persona.DOST, "Charon"))

@@ -214,7 +214,7 @@ class JarvisBrain @Inject constructor(
         } else {
             append("\n\n").append(SystemPrompt.CHARACTER_SHORT)
         }
-        Persona.overlay(s.persona).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
+        Persona.overlay(s.persona, compact).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(
