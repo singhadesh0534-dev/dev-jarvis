@@ -409,14 +409,14 @@ class JarvisBrain @Inject constructor(
      * One-shot JSON / text completion for background jobs (memory extraction, briefing).
      * Gemini first, Groq if Gemini is out of quota. Returns null if neither works.
      */
-    suspend fun complete(system: String, user: String, json: Boolean): String? {
+    suspend fun complete(system: String, user: String, json: Boolean, thinking: String = JarvisConfig.GEMINI_THINKING_LEVEL): String? {
         val s = settings.current
         if (!device.isOnline()) return null
         if (s.hasGeminiKey && !usage.isExhausted(Provider.GEMINI)) {
             try {
                 usage.recordGeminiRequest()
                 val out = StringBuilder()
-                geminiTurn(s, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json)
+                geminiTurn(s, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json, thinking = thinking)
                     .collect { out.append(it.text) }
                 return out.toString()
             } catch (e: BrainError) {

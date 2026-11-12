@@ -2,6 +2,7 @@ package com.adesh.devjarvis.tools.impl
 
 import android.os.Build
 import com.adesh.devjarvis.accessibility.JarvisAccessibilityService
+import com.adesh.devjarvis.brain.SkillWriter
 import com.adesh.devjarvis.brain.Skills
 import com.adesh.devjarvis.core.ConversationMode
 import com.adesh.devjarvis.tools.ActivityLauncher
@@ -21,6 +22,10 @@ class ModeTools @Inject constructor(
     private val modes: ConversationMode,
     private val eyes: LiveEyes,
     private val launcher: ActivityLauncher,
+    private val learned: com.adesh.devjarvis.brain.LearnedSkills,
+    // Providers: JarvisBrain -> ToolRegistry -> ModeTools would otherwise be a cycle.
+    private val brain: javax.inject.Provider<com.adesh.devjarvis.brain.JarvisBrain>,
+    private val registry: javax.inject.Provider<com.adesh.devjarvis.tools.ToolRegistry>,
 ) {
     private val liveCamera = object : SimpleTool(
         "live_camera",
@@ -128,7 +133,11 @@ class ModeTools @Inject constructor(
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val found = Skills.search(args.requireString("skill"))
             val best = found.firstOrNull()
-                ?: return ToolResult.fail("no matching skill; answer with your own best method")
+                ?: return ToolResult.fail(
+                    "no skill for this yet. If it is a task with several steps on the phone, call write_skill with a short " +
+                        "description of this kind of request (you will get a tested playbook and keep it); for anything simple, " +
+                        "answer with your own best method.",
+                )
             val others = found.drop(1).take(3)
             return ToolResult.ok(
                 Skills.playbook(best) +
@@ -137,5 +146,48 @@ class ModeTools @Inject constructor(
         }
     }
 
-    val tools: List<JarvisTool> = listOf(interpreter, liveCamera, screenWatch, useSkill)
+    private val writeSkill = object : SimpleTool(
+        "write_skill",
+        "Write a new skill (a tested step-by-step playbook) for a kind of request, think it through with the strongest " +
+            "reasoning, save it for ever and get it back to follow now. Use it when use_skill has nothing for a task with " +
+            "several steps, and when Sir corrects how you did a task (pass his words as lesson; the skill for that kind of " +
+            "request is improved). action=list shows the skills you wrote, action=delete removes one.",
+        params {
+            string("action", "write (default) | list | delete", enum = listOf("write", "list", "delete"))
+            string("task", "The kind of request, in a few English words, e.g. \"order groceries on Blinkit\"")
+            string("lesson", "Sir's correction or wish, in his words, if any")
+            string("skill", "Id of an existing skill to improve or delete")
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            when (args.enum("action", listOf("write", "list", "delete")) ?: "write") {
+                "list" -> return ToolResult.ok(
+                    learned.all().takeIf { it.isNotEmpty() }?.joinToString("\n") { "${it.id}: ${it.whenToUse}" }
+                        ?: "no skills written yet",
+                )
+                "delete" -> {
+                    val id = args.string("skill") ?: return ToolResult.fail("which skill? give its id")
+                    return if (learned.delete(id)) ToolResult.ok("skill $id deleted") else ToolResult.fail("no skill I wrote is called $id")
+                }
+            }
+            val task = args.string("task") ?: args.string("skill")?.replace('_', ' ')
+                ?: return ToolResult.fail("describe the kind of request in a few words (task)")
+            val existing = args.string("skill")?.let { Skills.find(it) } ?: Skills.search(task, 1).firstOrNull()
+                .takeIf { !args.string("lesson").isNullOrBlank() }
+            val names = registry.get().tools.map { it.name }
+            val raw = brain.get().complete(
+                SkillWriter.system(names), SkillWriter.request(task, args.string("lesson"), existing),
+                json = true, thinking = "high",
+            ) ?: return ToolResult.fail("couldn't write the skill now (the brain is offline or at its limit); do the task with your own best method")
+            val skill = SkillWriter.parse(raw, keepId = existing?.id)
+                ?: return ToolResult.fail("the skill came out unusable; do the task with your own best method")
+            learned.save(skill)
+            return ToolResult.ok(
+                (if (existing != null) "Improved skill '${skill.id}' and saved it. " else "New skill '${skill.id}' written and saved. ") +
+                    "Tell Sir in a few words that you have learned it, then follow it now:\n" + Skills.playbook(skill),
+            )
+        }
+    }
+
+    val tools: List<JarvisTool> = listOf(interpreter, liveCamera, screenWatch, useSkill, writeSkill)
 }

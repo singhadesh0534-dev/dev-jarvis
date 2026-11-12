@@ -562,7 +562,17 @@ object Skills {
 
     private val byId by lazy { ALL.associateBy { it.id } }
 
-    fun find(id: String): Skill? = byId[id.trim().lowercase().replace(' ', '_').replace('-', '_')]
+    /** Skills JARVIS wrote himself (see SkillWriter); they win over a built-in skill with the same id. */
+    @Volatile var learned: List<Skill> = emptyList()
+        set(value) {
+            field = value
+            learnedWords = value.associate { it.id to (words(it.id.replace('_', ' ')) to words(it.whenToUse)) }
+        }
+    @Volatile private var learnedWords: Map<String, Pair<Set<String>, Set<String>>> = emptyMap()
+
+    private fun key(id: String) = id.trim().lowercase().replace(' ', '_').replace('-', '_')
+
+    fun find(id: String): Skill? = key(id).let { k -> learned.firstOrNull { it.id == k } ?: byId[k] }
 
     /** One line per core skill, then the library areas with their ids, for the tool description. */
     fun index(): String = CORE.joinToString(", ") { it.id }
@@ -588,11 +598,16 @@ object Skills {
         find(query)?.let { return listOf(it) }
         val q = words(query)
         if (q.isEmpty()) return emptyList()
-        return ALL.map { skill ->
-            val (idWords, whenWords) = wordsOf.getValue(skill.id)
+        val mine = learned
+        val mineIds = mine.map { it.id }.toSet()
+        return (mine + ALL.filter { it.id !in mineIds }).map { skill ->
+            val (idWords, whenWords) = learnedWords[skill.id]?.takeIf { skill in mine } ?: wordsOf.getValue(skill.id)
             skill to (q.count { it in idWords } * 3 + q.count { it in whenWords } * 2 +
                 q.count { w -> whenWords.any { it.length > 3 && (it.startsWith(w) || w.startsWith(it)) } })
-        }.filter { it.second > 0 }.sortedByDescending { it.second }.take(limit).map { it.first }
+        }.filter { it.second > 0 }
+            // On a tie, a skill Sir's own JARVIS wrote for this kind of request comes first.
+            .sortedWith(compareByDescending<Pair<Skill, Int>> { it.second }.thenByDescending { it.first.id in mineIds })
+            .take(limit).map { it.first }
     }
 
     fun playbook(skill: Skill): String =
