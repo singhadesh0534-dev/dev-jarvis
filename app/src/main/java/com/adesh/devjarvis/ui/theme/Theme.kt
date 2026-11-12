@@ -25,6 +25,8 @@ object Hud {
     val Amber = Color(0xFFFFB300)
     val Red = Color(0xFFFF5252)
     val Green = Color(0xFF00E676)
+    /** The girlfriend role's colour on the HUD. */
+    val Pink = Color(0xFFFF6FB5)
     val White = Color(0xFFEFFBFF)
 }
 

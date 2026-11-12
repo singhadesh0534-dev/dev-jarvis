@@ -38,13 +38,6 @@ class HudViewModel @Inject constructor(
     val role: StateFlow<String> = settings.settings.map { Persona.normalize(it.persona) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Persona.normalize(settings.current.persona))
 
-    /** The role buttons on the HUD: the same as saying "dost ban jao" / "gf ban jao" / "Jarvis ban jao". */
-    fun setRole(role: String) {
-        if (Persona.normalize(settings.current.persona) == role) return
-        settings.update { it.copy(persona = role) } // the session changes the voice (and reopens Live) by itself
-        session.note("Roop: ${Persona.label(role)}")
-    }
-
     fun refreshDevice() = session.refreshDevice()
     fun onReactorTap() = session.onReactorTap()
     fun onMicPermissionDenied() = session.onMicPermissionDenied()

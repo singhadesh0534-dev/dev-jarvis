@@ -961,7 +961,7 @@ class JarvisSession @Inject constructor(
     private fun startLive() {
         listenJob?.cancel()
         liveClosingByUs = false
-        val greeting = liveKickoff ?: LIVE_GREETING
+        val greeting = liveKickoff ?: greetingFor(settings.current.persona)
         liveKickoff = null
         val s = settings.current
         _ui.update { it.copy(partial = "", micLevel = 0f) }
@@ -1033,14 +1033,7 @@ class JarvisSession @Inject constructor(
                 conn.sendText(greeting)
                 wake.awaitStopped()
                 audio.start()
-                // No voice a few seconds after the call and Sir hasn't spoken either: ask once more.
-                launch {
-                    delay(4_500)
-                    if (!firstAudioLogged && !userSpoke && liveConn === conn) {
-                        SessionTrace.add("LIVE greeting retry")
-                        conn.sendText(greeting)
-                    }
-                }
+                // No greeting retry: a slow first answer plus a retry made JARVIS say his greeting twice.
                 armFollowUp()
                 for (ev in conn.events) {
                     if (ev is LiveConnection.Event.Closed) {
@@ -1300,11 +1293,21 @@ class JarvisSession @Inject constructor(
         const val CONFIRM_TIMEOUT_MS = 25_000L
         const val RING_LISTEN_MS = 8_000L
         const val CARD_VISIBLE_MS = 15_000L
+        /** The greeting must not carry JARVIS's "Ji Sir" example into another role: the model copied it word for word. */
+        fun greetingFor(persona: String): String = when (com.adesh.devjarvis.brain.Persona.normalize(persona)) {
+            com.adesh.devjarvis.brain.Persona.PARTNER ->
+                "[He has just called you. Answer him now, out loud, as his girlfriend: one short loving line of your own " +
+                    "(at most 10 words), never \"Sir\", then wait for what he says.]"
+            com.adesh.devjarvis.brain.Persona.DOST ->
+                "[Your friend has just called you. Answer him now, out loud, as his yaar: one short casual line of your own " +
+                    "(at most 8 words), never \"Sir\", then wait for what he says.]"
+            else -> LIVE_GREETING
+        }
         const val ROLE_GREETING =
-            "[Sir has just asked you to change to the role described above, and you have: your voice and manner are new. " +
-                "Say one short line out loud in this role to show it (as JARVIS: \"Wapas haazir hoon, Sir.\"), then wait for what he says.]"
+            "[He has just asked you to change to the role described above, and you have: your voice and manner are new. " +
+                "Say one short line of your own out loud in that role to show it, then wait for what he says.]"
         const val LIVE_GREETING =
             "[Sir has just called you by name. Answer him now, out loud, with one short warm line (at most 8 words) " +
-                "in your current role (as JARVIS: \"Ji Sir, bataiye\") and then wait for what he says.]"
+                "such as \"Ji Sir, bataiye\" and then wait for what he says.]"
     }
 }

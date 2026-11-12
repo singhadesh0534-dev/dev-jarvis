@@ -128,7 +128,7 @@ fun BootScreen(viewModel: BootViewModel, onDone: () -> Unit) {
             }
             Spacer(Modifier.height(28.dp))
             Text(
-                "JARVIS ONLINE",
+                "DEV JARVIS ONLINE",
                 style = TextStyle(
                     fontFamily = Orbitron, fontWeight = FontWeight.Bold, fontSize = 34.sp, letterSpacing = 6.sp,
                     shadow = Shadow(color = Hud.Cyan, blurRadius = 24f),
@@ -141,6 +141,13 @@ fun BootScreen(viewModel: BootViewModel, onDone: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = Hud.Ice,
                 modifier = Modifier.alpha(title.value).align(Alignment.CenterHorizontally),
+            )
+            Text(
+                "◢  BUILT BY DEV  ◣",
+                style = TextStyle(fontFamily = Orbitron, fontWeight = FontWeight.Medium, fontSize = 12.sp, letterSpacing = 5.sp,
+                    shadow = Shadow(color = Hud.Amber, blurRadius = 12f)),
+                color = Hud.Amber,
+                modifier = Modifier.alpha(title.value).align(Alignment.CenterHorizontally).padding(top = 10.dp),
             )
         }
     }

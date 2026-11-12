@@ -50,6 +50,21 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -111,15 +126,15 @@ fun HudScreen(
             .background(
                 Brush.radialGradient(listOf(Hud.BackgroundGlow, Hud.Background), radius = 1400f)
             )
+            .hudGrid()
             .safeDrawingPadding()
             .imePadding()
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-            TopBar(onOpenSettings, onOpenActivity, onOpenMemory)
-            StatusRow(ui)
-            AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             val role by viewModel.role.collectAsStateWithLifecycle()
-            RoleRow(role, onPick = viewModel::setRole)
+            TopBar(onOpenSettings, onOpenActivity, onOpenMemory)
+            StatusRow(ui, role)
+            AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
             val update by viewModel.update.collectAsStateWithLifecycle()
             (update as? AppUpdater.State.Available)?.let { u ->
@@ -160,7 +175,7 @@ fun HudScreen(
 
             ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
             ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
-            Transcript(ui, Modifier.weight(1f))
+            Transcript(ui, role, Modifier.weight(1f))
             InputRow(onSend = viewModel::onTextSubmitted, onFile = viewModel::onFilePicked)
         }
     }
@@ -168,13 +183,37 @@ fun HudScreen(
 
 @Composable
 private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpenMemory: () -> Unit) {
+    val pulse = rememberInfiniteTransition(label = "online")
+    val dot by pulse.animateFloat(0.25f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "dot")
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text("J.A.R.V.I.S.", style = MaterialTheme.typography.headlineSmall, color = Hud.Cyan)
-            Text("JUST A RATHER VERY INTELLIGENT SYSTEM", style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
+            Text(
+                "DEV JARVIS",
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    brush = Brush.linearGradient(listOf(Hud.Ice, Hud.Cyan, Hud.Cyan.copy(alpha = 0.7f))),
+                    shadow = Shadow(color = Hud.Cyan.copy(alpha = 0.8f), blurRadius = 18f),
+                    letterSpacing = 5.sp,
+                ),
+            )
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
+                Box(Modifier.size(6.dp).alpha(dot).background(Hud.Green, CircleShape))
+                Text(
+                    "  NEURAL CORE ONLINE  ·  ",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    color = Hud.Dim,
+                )
+                Text(
+                    "BUILT BY DEV",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 9.sp, letterSpacing = 2.5.sp,
+                        shadow = Shadow(color = Hud.Amber.copy(alpha = 0.9f), blurRadius = 10f),
+                    ),
+                    color = Hud.Amber,
+                )
+            }
         }
         IconButton(onClick = onOpenMemory) {
             Icon(Icons.Filled.Person, contentDescription = "Memory", tint = Hud.Cyan)
@@ -189,31 +228,40 @@ private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpe
 }
 
 @Composable
-private fun StatusRow(ui: HudUiState) {
+private fun StatusRow(ui: HudUiState, role: String) {
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val battWarn = ui.batteryPercent in 0..19 && !ui.charging
         Chip("PWR", if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%", battWarn, Modifier.weight(1f))
         Chip("NET", ui.network.label, ui.network == NetworkKind.NONE, Modifier.weight(1f))
-        Chip("MODE", if (ui.alwaysOn) "ALWAYS-ON" else ui.mode, false, Modifier.weight(1f))
         Chip("FUEL", "${ui.fuelPercent}%", ui.fuelPercent < 15, Modifier.weight(1f))
+        // Changed by voice only: "dost ban jao", "gf ban jao", "Jarvis ban jao".
+        Chip("ROOP", Persona.label(role).uppercase(), false, Modifier.weight(1f), accent = role != Persona.JARVIS)
     }
 }
 
 @Composable
-private fun Chip(label: String, value: String, warn: Boolean, modifier: Modifier) {
-    val color = if (warn) Hud.Amber else Hud.Cyan
+private fun Chip(label: String, value: String, warn: Boolean, modifier: Modifier, accent: Boolean = false) {
+    val color = when {
+        warn -> Hud.Amber
+        accent -> Hud.Pink
+        else -> Hud.Cyan
+    }
     Column(
         modifier
-            .border(1.dp, color.copy(alpha = 0.45f), RoundedCornerShape(4.dp))
-            .background(Hud.Panel.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+            .hudFrame(color.copy(alpha = 0.8f), corner = 7f)
+            .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.10f), Hud.Panel.copy(alpha = 0.35f))))
             .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
-        Text(value, style = MaterialTheme.typography.labelMedium, color = color, maxLines = 1)
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = Hud.Dim)
+        Text(
+            value,
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, shadow = Shadow(color = color.copy(alpha = 0.7f), blurRadius = 8f)),
+            color = color, maxLines = 1,
+        )
     }
 }
 
@@ -223,8 +271,10 @@ private fun AlwaysOnRow(ui: HudUiState, onToggle: (Boolean) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    "\u201CHELLO DEV\u201D ALWAYS-ON",
-                    style = MaterialTheme.typography.labelMedium,
+                    if (ui.alwaysOn) "◉  ALWAYS LISTENING" else "○  WAKE WORD OFF",
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        shadow = if (ui.alwaysOn) Shadow(color = Hud.Cyan.copy(alpha = 0.7f), blurRadius = 10f) else null,
+                    ),
                     color = if (ui.alwaysOn) Hud.Cyan else Hud.Dim,
                 )
                 val sub = ui.wakeNotice
@@ -241,33 +291,6 @@ private fun AlwaysOnRow(ui: HudUiState, onToggle: (Boolean) -> Unit) {
                     uncheckedThumbColor = Hud.Dim,
                     uncheckedTrackColor = Hud.Faint,
                 ),
-            )
-        }
-    }
-}
-
-/** One tap changes who JARVIS is being — the same as saying "dost ban jao" / "gf ban jao" / "Jarvis ban jao". */
-@Composable
-private fun RoleRow(role: String, onPick: (String) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text("ROOP", style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
-        Persona.ALL.forEach { id ->
-            val active = id == role
-            Text(
-                Persona.label(id).uppercase(),
-                style = MaterialTheme.typography.labelMedium,
-                color = if (active) Hud.Background else Hud.Dim,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .weight(1f)
-                    .border(1.dp, (if (active) Hud.Cyan else Hud.Dim).copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                    .background(if (active) Hud.Cyan else Hud.Panel.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                    .clickable { onPick(id) }
-                    .padding(vertical = 7.dp),
             )
         }
     }
@@ -331,42 +354,70 @@ private fun KeyBanner(onOpenSettings: () -> Unit) {
 }
 
 @Composable
-private fun Transcript(ui: HudUiState, modifier: Modifier) {
+private fun Transcript(ui: HudUiState, role: String, modifier: Modifier) {
     val listState = rememberLazyListState()
     val lastLength = ui.transcript.lastOrNull()?.text?.length ?: 0
     LaunchedEffect(ui.transcript.size, lastLength, ui.partial) {
         val count = ui.transcript.size + if (ui.partial.isNotEmpty()) 1 else 0
         if (count > 0) listState.animateScrollToItem(count - 1)
     }
+    val speaker = Persona.label(role).uppercase()
+    val voiceColor = if (role == Persona.PARTNER) Hud.Pink else Hud.Cyan
     LazyColumn(
         state = listState,
         modifier = modifier
             .fillMaxWidth()
-            .border(1.dp, Hud.Faint, RoundedCornerShape(6.dp))
-            .background(Hud.Panel.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .hudFrame(Hud.Cyan.copy(alpha = 0.55f), corner = 14f)
+            .background(Hud.Panel.copy(alpha = 0.30f))
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         items(ui.transcript, key = { it.id }) { line ->
             when {
-                line.isSystem -> Text(line.text, style = MaterialTheme.typography.bodySmall, color = Hud.Dim)
-                line.fromUser -> Row {
-                    Text("YOU › ", style = MaterialTheme.typography.labelSmall, color = Hud.Dim, modifier = Modifier.padding(top = 3.dp))
-                    Text(line.text, style = MaterialTheme.typography.bodyMedium, color = Hud.Dim)
+                line.isSystem -> Text(
+                    "▸ " + line.text,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                    color = Hud.Dim.copy(alpha = 0.85f),
+                    maxLines = 2,
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+                line.fromUser -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        line.text,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Hud.Ice,
+                        modifier = Modifier
+                            .widthIn(max = 300.dp)
+                            .background(Hud.Faint.copy(alpha = 0.55f), RoundedCornerShape(14.dp, 14.dp, 3.dp, 14.dp))
+                            .padding(horizontal = 12.dp, vertical = 7.dp),
+                    )
                 }
-                else -> Row {
-                    Text("JARVIS › ", style = MaterialTheme.typography.labelSmall, color = Hud.Cyan, modifier = Modifier.padding(top = 4.dp))
+                else -> Column(
+                    Modifier
+                        .fillMaxWidth(0.92f)
+                        .background(
+                            Brush.horizontalGradient(listOf(voiceColor.copy(alpha = 0.14f), Color.Transparent)),
+                            RoundedCornerShape(3.dp, 14.dp, 14.dp, 14.dp),
+                        )
+                        .drawBehind {
+                            drawRect(voiceColor, size = androidx.compose.ui.geometry.Size(2.dp.toPx(), size.height))
+                        }
+                        .padding(start = 12.dp, end = 10.dp, top = 6.dp, bottom = 8.dp),
+                ) {
+                    Text(speaker, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = voiceColor)
                     Text(line.text, style = MaterialTheme.typography.bodyLarge, color = Hud.White)
                 }
             }
         }
         if (ui.partial.isNotEmpty()) {
             item(key = "partial") {
-                Text(
-                    ui.partial + " …",
-                    style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
-                    color = Hud.Dim.copy(alpha = 0.8f),
-                )
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                    Text(
+                        ui.partial + " …",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
+                        color = Hud.Dim,
+                    )
+                }
             }
         }
     }
@@ -391,16 +442,19 @@ private fun InputRow(onSend: (String) -> Unit, onFile: (android.net.Uri) -> Unit
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            placeholder = { Text("Type to JARVIS…", style = MaterialTheme.typography.bodyMedium) },
+            placeholder = { Text("Type to JARVIS…", style = MaterialTheme.typography.bodyMedium, color = Hud.Dim) },
             singleLine = true,
             textStyle = MaterialTheme.typography.bodyMedium,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
             keyboardActions = KeyboardActions(onSend = { send() }),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Hud.Cyan,
-                unfocusedBorderColor = Hud.Faint,
+                unfocusedBorderColor = Hud.Cyan.copy(alpha = 0.35f),
                 cursorColor = Hud.Cyan,
+                focusedContainerColor = Hud.Panel.copy(alpha = 0.6f),
+                unfocusedContainerColor = Hud.Panel.copy(alpha = 0.4f),
             ),
+            shape = RoundedCornerShape(24.dp),
             modifier = Modifier.weight(1f),
         )
         // Photo / PDF: JARVIS looks at it and explains.
@@ -410,5 +464,39 @@ private fun InputRow(onSend: (String) -> Unit, onFile: (android.net.Uri) -> Unit
         IconButton(onClick = send) {
             Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Hud.Cyan)
         }
+    }
+}
+
+/** Faint moving grid with a scan line, behind the whole HUD. */
+@Composable
+private fun Modifier.hudGrid(): Modifier {
+    val t = rememberInfiniteTransition(label = "grid")
+    val scan by t.animateFloat(0f, 1f, infiniteRepeatable(tween(6_000, easing = LinearEasing)), label = "scan")
+    return drawBehind {
+        val step = 28.dp.toPx()
+        val line = Hud.Cyan.copy(alpha = 0.035f)
+        var x = 0f
+        while (x < size.width) { drawLine(line, Offset(x, 0f), Offset(x, size.height)); x += step }
+        var y = 0f
+        while (y < size.height) { drawLine(line, Offset(0f, y), Offset(size.width, y)); y += step }
+        val sy = size.height * scan
+        drawRect(
+            Brush.verticalGradient(listOf(Color.Transparent, Hud.Cyan.copy(alpha = 0.07f), Color.Transparent), startY = sy - 60f, endY = sy + 60f),
+            topLeft = Offset(0f, sy - 60f), size = androidx.compose.ui.geometry.Size(size.width, 120f),
+        )
+    }
+}
+
+/** Thin outline with bright cut corners — the HUD panel look. */
+private fun Modifier.hudFrame(color: Color, corner: Float = 10f): Modifier = drawBehind {
+    val c = corner.dp.toPx()
+    val w = 1.5.dp.toPx()
+    drawRect(color.copy(alpha = color.alpha * 0.35f), style = Stroke(1.dp.toPx()))
+    listOf(
+        Offset(0f, 0f) to Offset(1f, 1f), Offset(size.width, 0f) to Offset(-1f, 1f),
+        Offset(0f, size.height) to Offset(1f, -1f), Offset(size.width, size.height) to Offset(-1f, -1f),
+    ).forEach { (p, d) ->
+        drawLine(color, p, Offset(p.x + d.x * c, p.y), strokeWidth = w)
+        drawLine(color, p, Offset(p.x, p.y + d.y * c), strokeWidth = w)
     }
 }
