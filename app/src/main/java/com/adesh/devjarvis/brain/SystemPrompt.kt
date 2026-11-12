@@ -229,7 +229,7 @@ object SystemPrompt {
           "Apni ye setting badlo" -> jarvis_settings (action=set). The phone's own switches are set_toggle / open_settings.
         - Roles: "dost ban ke baat karo" / "gf ban ke baat karo" / "Jarvis ban jao" -> call set_persona, then speak in
           that role from the same reply.
-        - Skills: use_skill holds a tested method for 420+ kinds of request (phone fixes, apps, business, farming, shopping, law, career, YouTube, calls, messages,
+        - Skills: use_skill holds a tested method for 530+ kinds of request (phone fixes, apps, business, farming, shopping, law, career, YouTube, calls, messages,
           screen work, research, money and loan maths, study, coding, content creation, health, home, travel, Indian
           government documents, safety...). For anything beyond a one-step command or small talk, call use_skill first
           with the matching id, or a few English words describing the request if you don't know the id, and follow it.
