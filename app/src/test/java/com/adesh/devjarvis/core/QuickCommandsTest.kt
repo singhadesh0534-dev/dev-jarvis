@@ -66,4 +66,11 @@ class QuickCommandsTest {
             "",
         ).forEach { assertNull(it, q(it)) }
     }
+
+    @Test fun moreSwitches() {
+        assertEquals(mapOf("target" to "battery_saver", "on" to "true"), q("battery saver on karo")!!.args)
+        assertEquals(mapOf("target" to "do_not_disturb", "on" to "false"), q("dnd band karo")!!.args)
+        assertEquals(mapOf("target" to "dark_mode", "on" to "true"), q("dark mode on karo")!!.args)
+        assertEquals("mobile_data", q("data on karo")!!.args["target"])
+    }
 }

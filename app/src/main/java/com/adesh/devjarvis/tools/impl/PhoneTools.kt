@@ -337,12 +337,64 @@ class PhoneTools @Inject constructor(
         "gaana" to "com.gaana",
     )
 
-    private val toggleTargets = listOf("bluetooth", "wifi", "mobile_data", "hotspot", "location", "airplane", "nfc")
+    private val toggleTargets = listOf(
+        "bluetooth", "wifi", "mobile_data", "hotspot", "location", "airplane", "nfc",
+        "battery_saver", "dark_mode", "do_not_disturb", "auto_rotate", "auto_brightness", "eye_comfort", "data_saver",
+        "vibrate_on_ring", "auto_sync",
+    )
+
+    /** Settings page to open and the words of the switch on it (XOS names included). */
+    private fun toggleRoute(target: String): Pair<List<String>, List<String>> = when (target) {
+        "bluetooth" -> listOf(Settings.ACTION_BLUETOOTH_SETTINGS) to listOf("bluetooth")
+        "wifi" -> listOf(Settings.ACTION_WIFI_SETTINGS) to listOf("wi-fi", "wifi", "wlan")
+        "mobile_data" -> listOf(Settings.ACTION_DATA_ROAMING_SETTINGS, "android.settings.DATA_USAGE_SETTINGS") to listOf("mobile data", "data")
+        "hotspot" -> listOf("android.settings.TETHER_SETTINGS") to listOf("hotspot")
+        "location" -> listOf(Settings.ACTION_LOCATION_SOURCE_SETTINGS) to listOf("location")
+        "airplane" -> listOf(Settings.ACTION_AIRPLANE_MODE_SETTINGS) to listOf("airplane", "aeroplane", "flight")
+        "nfc" -> listOf(Settings.ACTION_NFC_SETTINGS) to listOf("nfc")
+        "battery_saver" -> listOf(Settings.ACTION_BATTERY_SAVER_SETTINGS, "android.intent.action.POWER_USAGE_SUMMARY") to
+            listOf("battery saver", "power saving", "power saver", "saver", "power marathon", "low power", "ultra power")
+        "dark_mode" -> listOf("android.settings.DARK_THEME_SETTINGS", Settings.ACTION_DISPLAY_SETTINGS) to listOf("dark theme", "dark mode", "dark")
+        "do_not_disturb" -> listOf("android.settings.ZEN_MODE_SETTINGS", Settings.ACTION_SOUND_SETTINGS) to listOf("do not disturb", "dnd", "disturb")
+        "auto_rotate" -> listOf(Settings.ACTION_DISPLAY_SETTINGS) to listOf("auto-rotate", "auto rotate", "rotate", "rotation")
+        "auto_brightness" -> listOf(Settings.ACTION_DISPLAY_SETTINGS) to listOf("adaptive brightness", "auto brightness", "automatic brightness", "auto-brightness")
+        "eye_comfort" -> listOf("android.settings.NIGHT_DISPLAY_SETTINGS", Settings.ACTION_DISPLAY_SETTINGS) to
+            listOf("eye comfort", "night light", "eye care", "reading mode", "blue light")
+        "data_saver" -> listOf("android.settings.DATA_SAVER_SETTINGS", "android.settings.DATA_USAGE_SETTINGS") to listOf("data saver", "save data")
+        "vibrate_on_ring" -> listOf(Settings.ACTION_SOUND_SETTINGS) to listOf("vibrate for calls", "vibrate when ringing", "vibrate")
+        else -> listOf(Settings.ACTION_SYNC_SETTINGS) to listOf("auto-sync", "auto sync", "automatically sync", "sync")
+    }
+
+    /** Switches Android lets an app set itself, without going through the settings screen. */
+    private fun setDirectly(target: String, on: Boolean): Boolean = runCatching {
+        when (target) {
+            "do_not_disturb" -> {
+                val nm = context.getSystemService(android.app.NotificationManager::class.java)
+                if (nm == null || !nm.isNotificationPolicyAccessGranted) return false
+                nm.setInterruptionFilter(
+                    if (on) android.app.NotificationManager.INTERRUPTION_FILTER_PRIORITY else android.app.NotificationManager.INTERRUPTION_FILTER_ALL,
+                )
+                true
+            }
+            "auto_rotate" -> Settings.System.canWrite(context) &&
+                Settings.System.putInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, if (on) 1 else 0)
+            "auto_brightness" -> Settings.System.canWrite(context) &&
+                Settings.System.putInt(
+                    context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE,
+                    if (on) Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC else Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL,
+                )
+            "auto_sync" -> { android.content.ContentResolver.setMasterSyncAutomatically(on); true }
+            else -> false
+        }
+    }.getOrDefault(false)
 
     private val setToggle = object : SimpleTool(
         "set_toggle",
-        "Really switch Bluetooth, Wi-Fi, mobile data, hotspot, location, airplane mode or NFC ON or OFF (JARVIS opens the " +
-            "settings page and flips the switch himself). Use this, not open_settings, when Sir says on / off / chalu / band karo.",
+        "Really switch a phone setting ON or OFF: Bluetooth, Wi-Fi, mobile data, hotspot, location, airplane mode, NFC, battery " +
+            "saver, dark mode, do not disturb, auto-rotate, auto brightness, eye comfort / night light, data saver, vibrate on " +
+            "ring, auto-sync. JARVIS sets it directly where Android allows, otherwise opens the right settings page and flips " +
+            "the switch himself. Use this, not open_settings, when Sir says on / off / chalu / band karo. For any other " +
+            "setting: open_settings, then read_screen and tap.",
         params {
             string("target", toggleTargets.joinToString(" | "), required = true, enum = toggleTargets)
             boolean("on", "true = on, false = off", required = true)
@@ -351,17 +403,15 @@ class PhoneTools @Inject constructor(
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val target = args.enum("target", toggleTargets) ?: return ToolResult.fail("unknown toggle")
             val on = args.bool("on") ?: return ToolResult.fail("on or off?")
-            val (action, hints) = when (target) {
-                "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS to listOf("bluetooth")
-                "wifi" -> Settings.ACTION_WIFI_SETTINGS to listOf("wi-fi", "wifi", "wlan")
-                "mobile_data" -> Settings.ACTION_DATA_ROAMING_SETTINGS to listOf("mobile data", "data")
-                "hotspot" -> "android.settings.TETHER_SETTINGS" to listOf("hotspot")
-                "location" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS to listOf("location")
-                "airplane" -> Settings.ACTION_AIRPLANE_MODE_SETTINGS to listOf("airplane", "aeroplane", "flight")
-                else -> Settings.ACTION_NFC_SETTINGS to listOf("nfc")
-            }
+            val state = if (on) "ON" else "OFF"
+            if (setDirectly(target, on)) return ToolResult.ok("$target switched $state")
+            val (actions, hints) = toggleRoute(target)
             val svc = com.adesh.devjarvis.accessibility.JarvisAccessibilityService.get()
-            var outcome = launcher.launch(Intent(action), "Open $target settings")
+            var outcome = ActivityLauncher.Outcome.NOT_FOUND
+            for (a in actions) {
+                outcome = launcher.launch(Intent(a), "Open $target settings")
+                if (outcome != ActivityLauncher.Outcome.NOT_FOUND) break
+            }
             if (outcome == ActivityLauncher.Outcome.NOT_FOUND) outcome = launcher.launch(Intent(Settings.ACTION_SETTINGS), "Open settings")
             if (svc == null || outcome != ActivityLauncher.Outcome.LAUNCHED) {
                 return launcher.result(
@@ -371,12 +421,14 @@ class PhoneTools @Inject constructor(
                 )
             }
             var result: String? = null
-            for (attempt in 0 until 5) {
+            var openedRow = false
+            for (attempt in 0 until 6) {
                 kotlinx.coroutines.delay(if (attempt == 0) 1_200 else 600)
                 result = runCatching { svc.setSwitch(on, hints) }.getOrNull()
                 if (result != null) break
+                // The switch may live one level deeper (XOS: Battery > Power saving): open that row once, then look again.
+                if (!openedRow && attempt >= 1) openedRow = runCatching { svc.openRow(hints) }.getOrDefault(false)
             }
-            val state = if (on) "ON" else "OFF"
             return when (result) {
                 "changed" -> {
                     kotlinx.coroutines.delay(500)
@@ -387,7 +439,10 @@ class PhoneTools @Inject constructor(
                     svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK)
                     ToolResult.ok("$target was already $state")
                 }
-                else -> ToolResult.fail("$target settings are open but no switch was found on that screen — use read_screen and tap to finish, or tell Sir")
+                else -> ToolResult.fail(
+                    "$target settings are open but JARVIS could not find that exact switch. Do it yourself now: read_screen, " +
+                        "tap the row or switch for $target (scroll if needed), then confirm the new state to Sir.",
+                )
             }
         }
     }

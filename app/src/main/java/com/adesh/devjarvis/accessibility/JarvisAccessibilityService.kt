@@ -309,7 +309,8 @@ class JarvisAccessibilityService : AccessibilityService() {
             val around = if (p == null) "" else (0 until p.childCount).mapNotNull { p.getChild(it)?.text }.joinToString(" ")
             return "$own $around".lowercase()
         }
-        val target = switches.firstOrNull { s -> hints.any { it in labelOf(s) } } ?: switches.first()
+        // Only the switch whose label matches; a lone switch on a page opened for it is fine. Never a random one.
+        val target = switches.firstOrNull { s -> hints.any { it in labelOf(s) } } ?: switches.singleOrNull() ?: return null
         if (target.isChecked == on) return "already"
         var node: android.view.accessibility.AccessibilityNodeInfo? = target
         repeat(4) {
@@ -318,6 +319,26 @@ class JarvisAccessibilityService : AccessibilityService() {
             node = n.parent
         }
         return null
+    }
+
+    /** Taps the first visible row whose text matches one of [hints] (for a setting one level deeper). */
+    fun openRow(hints: List<String>): Boolean {
+        val root = rootInActiveWindow ?: return false
+        var hit: android.view.accessibility.AccessibilityNodeInfo? = null
+        fun walk(n: android.view.accessibility.AccessibilityNodeInfo?, depth: Int) {
+            if (n == null || depth > 40 || hit != null) return
+            val label = listOfNotNull(n.text, n.contentDescription).joinToString(" ").lowercase()
+            if (n.isVisibleToUser && label.isNotBlank() && hints.any { it in label }) hit = n
+            for (i in 0 until n.childCount) walk(n.getChild(i), depth + 1)
+        }
+        walk(root, 0)
+        var node = hit
+        repeat(5) {
+            val n = node ?: return false
+            if (n.isClickable && n.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)) return true
+            node = n.parent
+        }
+        return false
     }
 
     companion object {

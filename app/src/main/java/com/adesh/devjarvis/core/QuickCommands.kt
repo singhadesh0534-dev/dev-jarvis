@@ -64,6 +64,12 @@ object QuickCommands {
         }
         // ---- Wi-Fi, Bluetooth and friends (only with a clear on / off)
         val target = when {
+            ("battery" in text || "power" in text) && any("saver", "saving", "save") -> "battery_saver" to "Battery saver"
+            any("dnd") || "do not disturb" in text || "disturb" in text -> "do_not_disturb" to "Do not disturb"
+            "dark mode" in text || "dark theme" in text -> "dark_mode" to "Dark mode"
+            "auto rotate" in text || any("rotation", "autorotate") -> "auto_rotate" to "Auto-rotate"
+            "data saver" in text -> "data_saver" to "Data saver"
+            "eye comfort" in text || "night light" in text -> "eye_comfort" to "Eye comfort"
             any("wifi") || "wi fi" in text -> "wifi" to "Wi-Fi"
             any("bluetooth", "blutooth", "blootooth") -> "bluetooth" to "Bluetooth"
             any("hotspot") -> "hotspot" to "Hotspot"
@@ -72,7 +78,7 @@ object QuickCommands {
             any("data", "internet", "net") -> "mobile_data" to "Mobile data"
             else -> null
         }
-        if (target != null && (on || off) && w.size <= 4) {
+        if (target != null && (on || off) && w.size <= 5) {
             return Quick("set_toggle", mapOf("target" to target.first, "on" to on.toString()), "${target.second} ${if (on) "chalu" else "band"} kar diya, Sir.")
         }
         // ---- volume
