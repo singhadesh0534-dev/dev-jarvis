@@ -67,11 +67,32 @@ class LiveEyes @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var screenJob: Job? = null
 
+    /**
+     * A tool is working on the screen right now: the watcher must not look (and so re-number the screen)
+     * underneath it, or the number JARVIS is about to tap would point at something else.
+     */
+    @Volatile var hold: Boolean = false
+
+    /** Frames handed to the Live conversation so far (the tools wait for the first one before they answer). */
+    @Volatile var framesSent: Int = 0
+        private set
+
+    private fun send(jpeg: ByteArray) {
+        sink?.let { it(jpeg); framesSent++ }
+    }
+
+    /** Waits (briefly) until a new frame has gone out, so JARVIS has something to look at when he answers. */
+    suspend fun awaitFrame(after: Int, timeoutMs: Long = 4_000L): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (framesSent == after && System.currentTimeMillis() < deadline) delay(100)
+        return framesSent != after
+    }
+
     /** One picture straight into the open Live conversation (the `look` tools). False when no Live session is open. */
     fun show(jpeg: ByteArray): Boolean = sink?.let { it(jpeg); it(jpeg); true } ?: false // twice: a single realtime frame can be dropped
 
     fun offerCameraFrame(jpeg: ByteArray) {
-        if (modes.liveVision) sink?.invoke(jpeg)
+        if (modes.liveVision) send(jpeg)
     }
 
     fun startCamera(front: Boolean): Intent {
@@ -91,6 +112,10 @@ class LiveEyes @Inject constructor(
         SessionTrace.add("EYES screen watch on")
         screenJob = scope.launch {
             while (modes.screenWatch && sink != null) {
+                if (hold) { // a tap / type / scroll is in progress: look again once it is done
+                    delay(300)
+                    continue
+                }
                 val svc = JarvisAccessibilityService.get() ?: break
                 val snap = runCatching { svc.snapshot() }.getOrNull()
                 // Never JARVIS's own HUD, never a password / payment / OTP screen.
@@ -98,11 +123,17 @@ class LiveEyes @Inject constructor(
                 if (snap?.packageName != context.packageName && !isPrivate) {
                     val bmp = runCatching { svc.screenshot() }.getOrNull()
                     if (bmp != null) {
+                        // The same yellow numbers read_screen gives: JARVIS can tap what he sees without another look.
+                        val marks = runCatching { svc.marks() }.getOrDefault(emptyList())
                         val jpeg = withContext(Dispatchers.Default) {
-                            runCatching { ImageUtil.toJpeg(bmp, maxSide = FRAME_SIDE, quality = FRAME_QUALITY) }.getOrNull()
+                            runCatching {
+                                val marked = runCatching { ImageUtil.withMarks(bmp, marks) }.getOrDefault(bmp)
+                                ImageUtil.toJpeg(marked, maxSide = SCREEN_FRAME_SIDE, quality = SCREEN_FRAME_QUALITY)
+                                    .also { if (marked !== bmp) marked.recycle() }
+                            }.getOrNull()
                         }
                         bmp.recycle()
-                        if (jpeg != null && modes.screenWatch) sink?.invoke(jpeg)
+                        if (jpeg != null && modes.screenWatch && !hold) send(jpeg)
                     }
                 }
                 delay(SCREEN_INTERVAL_MS)
@@ -139,6 +170,9 @@ class LiveEyes @Inject constructor(
         const val FRAME_QUALITY = 60
         const val CAMERA_INTERVAL_MS = 1_000L
         const val SCREEN_INTERVAL_MS = 2_500L
+        /** A phone screen is tall and full of small text: it needs more pixels than a camera frame to be readable. */
+        const val SCREEN_FRAME_SIDE = 1_024
+        const val SCREEN_FRAME_QUALITY = 70
     }
 }
 

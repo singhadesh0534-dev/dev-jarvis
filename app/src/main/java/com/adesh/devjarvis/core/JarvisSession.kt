@@ -768,7 +768,14 @@ class JarvisSession @Inject constructor(
                     "or tell Sir in one line exactly what you could not do.",
             )
         }
-        val result = registry.execute(name, args, toolContext)
+        // Screen watch must not look at (and re-number) the screen while a tool is acting on it
+        // (screen_watch itself waits for its first picture, so it is not held).
+        eyes.hold = name != "screen_watch"
+        val result = try {
+            registry.execute(name, args, toolContext)
+        } finally {
+            eyes.hold = false
+        }
         if (!result.ok && !result.awaitingConfirmation) toolFailures[failKey] = (toolFailures[failKey] ?: 0) + 1
         SessionTrace.add("TOOL $name ok=${result.ok} awaitingConfirm=${result.awaitingConfirmation}")
         if (!result.ok && !result.awaitingConfirmation) ProblemJournal.add("TOOL_FAILED", "$name($argText) -> ${result.message.take(160)}")

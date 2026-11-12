@@ -25,7 +25,8 @@ class ModeTools @Inject constructor(
     private val liveCamera = object : SimpleTool(
         "live_camera",
         "Start or stop LIVE camera vision: you keep seeing through the phone camera (about one frame a second) and can talk about " +
-            "what you see. Start ONLY when Sir explicitly asks (\"camera se live dekho\", \"dekhte raho\"); never on your own. " +
+            "what you see. Start ONLY when Sir explicitly asks (\"camera se live dekho\", \"dekhte raho\", \"camera on karke batao\", " +
+            "\"video pe dekho\"); never on your own. " +
             "For a single question about one thing use `look` instead. Stop when Sir says band karo.",
         params {
             boolean("on", "true = start, false = stop", required = true)
@@ -39,15 +40,25 @@ class ModeTools @Inject constructor(
             }
             if (!eyes.liveSessionOpen) return ToolResult.fail("live camera works only in Live voice mode — use the look tool for one photo instead")
             if (!eyes.hasCameraPermission()) return ToolResult.fail("camera permission is off — Sir can allow it in JARVIS Setup")
+            val before = eyes.framesSent
             val outcome = launcher.launch(eyes.startCamera(front = args.enum("camera", listOf("back", "front")) == "front"), "JARVIS live camera")
             if (outcome == ActivityLauncher.Outcome.NOT_FOUND) {
                 eyes.stopCamera()
                 return ToolResult.fail("camera screen couldn't open")
             }
+            if (outcome == ActivityLauncher.Outcome.NEEDS_TAP) {
+                return ToolResult.ok(
+                    "Sir must tap the JARVIS notification to open the camera; tell him that. Once it opens, frames arrive about " +
+                        "once a second. When he says stop / band karo, call this tool with on=false.",
+                )
+            }
+            // Answer only once the first picture has really arrived, so the reply is about what the camera shows.
+            val seeing = eyes.awaitFrame(before)
             return ToolResult.ok(
-                (if (outcome == ActivityLauncher.Outcome.NEEDS_TAP) "Sir must tap the JARVIS notification to open the camera. " else "") +
-                    "live camera ON: frames now arrive about once a second. Answer what Sir asks about what you see; don't narrate " +
-                    "everything unprompted. When he says stop / band karo, call this tool with on=false.",
+                (if (seeing) "live camera ON and the first frames have arrived: you can see through the camera now. "
+                else "live camera is opening; frames will arrive in a moment (if you still see nothing, say so plainly). ") +
+                    "A new frame comes about once a second. Answer what Sir asks about what you see, in one or two lines; don't " +
+                    "narrate everything unprompted. When he says stop / band karo, call this tool with on=false.",
             )
         }
     }
@@ -55,7 +66,8 @@ class ModeTools @Inject constructor(
     private val screenWatch = object : SimpleTool(
         "screen_watch",
         "Start or stop LIVE screen watching: you keep seeing Sir's phone screen (a frame every few seconds) to guide or help him. " +
-            "Start ONLY when Sir explicitly asks (\"meri screen dekhte raho\", \"screen pe guide karo\"); never on your own. " +
+            "Start ONLY when Sir explicitly asks (\"screen share karo\", \"meri screen dekho / dekhte raho\", \"screen pe guide karo\", " +
+            "\"screen dekh ke ye kar do\"); never on your own. " +
             "Password, payment and OTP screens are never sent. Stop when Sir says band karo.",
         params { boolean("on", "true = start, false = stop", required = true) },
     ) {
@@ -67,10 +79,17 @@ class ModeTools @Inject constructor(
             if (!eyes.liveSessionOpen) return ToolResult.fail("screen watch works only in Live voice mode — use look_at_screen for one look instead")
             if (!JarvisAccessibilityService.isConnected) return ToolResult.fail("needs JARVIS Accessibility turned on in Setup")
             if (Build.VERSION.SDK_INT < 30) return ToolResult.fail("screen watch needs Android 11 or newer")
+            val before = eyes.framesSent
             eyes.startScreenWatch()
+            val seeing = eyes.awaitFrame(before, 3_000L)
             return ToolResult.ok(
-                "screen watch ON: you now get Sir's screen every few seconds (private screens are skipped). Help with what he asks; " +
-                    "don't read everything aloud. When he says stop / band karo, call this tool with on=false.",
+                "screen watch ON: you get Sir's screen every few seconds (password, payment and OTP screens are skipped). " +
+                    (if (seeing) "The first picture has arrived. "
+                    else "No picture yet: JARVIS's own screen is never sent, so tell Sir to open the app he wants help with. ") +
+                    "Every tappable thing in the picture carries a yellow number: to do something for him use that number straight " +
+                    "away with tap / type_text / long_press (no read_screen needed first); each action returns the new screen, and " +
+                    "the next picture shows the new numbers — never reuse an old number. To guide him instead, say what to press " +
+                    "in words. Don't read the whole screen aloud. When he says stop / band karo, call this tool with on=false.",
             )
         }
     }
