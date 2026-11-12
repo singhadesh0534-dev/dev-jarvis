@@ -15,7 +15,16 @@ import javax.inject.Singleton
 class KeyChecker @Inject constructor(private val http: OkHttpClient) {
 
     /** HTTP code and the service's short reason (e.g. API_KEY_INVALID). The key itself is never part of it. */
-    private fun code(url: String, header: String, value: String): Pair<Int, String> = runCatching {
+    private fun code(url: String, header: String, value: String): Pair<Int, String> =
+        ask(url, header, value).also { (c, _) ->
+            val key = value.removePrefix("Bearer ")
+            when {
+                c in 200..299 || c == 429 -> BadKeys.clear(key)          // works, or only at its limit
+                c == 400 || c == 401 || c == 403 -> BadKeys.mark(key)    // rejected by the service
+            }
+        }
+
+    private fun ask(url: String, header: String, value: String): Pair<Int, String> = runCatching {
         http.newCall(Request.Builder().url(url).header(header, value).build()).execute().use { r ->
             val body = if (r.isSuccessful) "" else r.body?.string().orEmpty().take(2_000)
             val reason = Regex("\"reason\"\\s*:\\s*\"([A-Z_]+)\"").find(body)?.groupValues?.get(1)

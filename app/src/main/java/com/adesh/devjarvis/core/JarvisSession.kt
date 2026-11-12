@@ -1120,6 +1120,7 @@ class JarvisSession @Inject constructor(
                 // away — a bad key in box 1 must not push Sir into classic mode.
                 val s = settings.current
                 val bad = keys.live.current(s.geminiApiKey)
+                BadKeys.mark(bad)
                 keys.gemini.rest(s.geminiApiKey, bad, 24 * 3_600_000L) // the same key is wrong for typed chat and vision too
                 val another = keys.live.rest(s.geminiApiKey, bad, 24 * 3_600_000L)
                 SessionTrace.add("KEY live rejected, ready=${keys.live.readyCount(s.geminiApiKey)}")

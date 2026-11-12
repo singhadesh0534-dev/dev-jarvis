@@ -56,6 +56,15 @@ class SettingsViewModel @Inject constructor(
     private val _saved = MutableStateFlow(false)
     val saved: StateFlow<Boolean> = _saved.asStateFlow()
 
+    /** Fingerprints of keys their service rejected: those boxes are shown in red. */
+    val rejectedKeys = MutableStateFlow(com.adesh.devjarvis.core.BadKeys.bad).also { flow ->
+        com.adesh.devjarvis.core.BadKeys.listener = { flow.value = it }
+    }
+
+    override fun onCleared() {
+        com.adesh.devjarvis.core.BadKeys.listener = null
+    }
+
     /** Result of "Keys check karo"; null = not run yet. */
     val keyReport = MutableStateFlow<String?>(null)
 

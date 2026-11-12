@@ -71,6 +71,7 @@ fun SettingsScreen(
     onOpenVoiceLock: () -> Unit,
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
+    val rejectedKeys by viewModel.rejectedKeys.collectAsStateWithLifecycle()
     val saved by viewModel.saved.collectAsStateWithLifecycle()
     val saveFailed by viewModel.saveFailed.collectAsStateWithLifecycle()
     var showVoices by remember { mutableStateOf(false) }
@@ -101,9 +102,9 @@ fun SettingsScreen(
 
             Section("API KEYS")
             Hint("JARVIS ka dimaag chalu karne ke liye Gemini key zaruri hai (bilkul free). Button dabao → key banao → copy karo → yahan paste karo → SAVE.")
-            KeySlots("Gemini API key", draft.geminiApiKey) { v -> viewModel.edit { it.copy(geminiApiKey = v) } }
+            KeySlots("Gemini API key", draft.geminiApiKey, rejectedKeys) { v -> viewModel.edit { it.copy(geminiApiKey = v) } }
             OpenLinkButton("Get free Gemini key", JarvisConfig.GEMINI_KEY_URL)
-            KeySlots("Groq API key", draft.groqApiKey) { v -> viewModel.edit { it.copy(groqApiKey = v) } }
+            KeySlots("Groq API key", draft.groqApiKey, rejectedKeys) { v -> viewModel.edit { it.copy(groqApiKey = v) } }
             OpenLinkButton("Get free Groq key", JarvisConfig.GROQ_KEY_URL)
             SecretField(
                 label = "Third brain key (optional)",
@@ -116,7 +117,7 @@ fun SettingsScreen(
             HudField("Third brain model (optional)", draft.extraModel, { v -> viewModel.edit { it.copy(extraModel = v) } })
             HudField("Third brain URL", draft.extraBaseUrl, { v -> viewModel.edit { it.copy(extraBaseUrl = v) } })
             Hint("Teesra dimaag tab chalta hai jab Gemini aur Groq dono ki limit khatam ho. Model khaali chhod sakte ho — JARVIS us service ke sabse achhe free model khud chunta hai. Cerebras ke liye URL: https://api.cerebras.ai/v1.")
-            KeySlots("ElevenLabs key", draft.elevenApiKey, count = 3) { v -> viewModel.edit { it.copy(elevenApiKey = v) } }
+            KeySlots("ElevenLabs key", draft.elevenApiKey, rejectedKeys, count = 3) { v -> viewModel.edit { it.copy(elevenApiKey = v) } }
             OpenLinkButton("Get free ElevenLabs key", JarvisConfig.ELEVEN_KEY_URL)
             Hint("Bas key daaliye: awaaz (gehri, mard, British) aur model JARVIS aapke account mein se khud chun leta hai.")
             Hint("ElevenLabs sirf Classic mode, reminders aur confirmations ki awaaz badalta hai — Live mode ki awaaz Gemini ki apni hai. Free account mein mahine ke thode hi characters milte hain; khatam hote hi JARVIS khud phone ki awaaz pe aa jaata hai.")
@@ -427,7 +428,7 @@ private fun HudField(label: String, value: String, onChange: (String) -> Unit) {
  * One box per key ("Gemini API key 1" ... "5"). They are stored together; an empty box is simply skipped.
  */
 @Composable
-private fun KeySlots(label: String, value: String, count: Int = 5, onChange: (String) -> Unit) {
+private fun KeySlots(label: String, value: String, rejected: Set<String>, count: Int = 5, onChange: (String) -> Unit) {
     val pool = remember { com.adesh.devjarvis.core.KeyPool() }
     val slots = remember {
         // Each key stays in the box it was typed in (empty boxes keep their place).
@@ -435,9 +436,12 @@ private fun KeySlots(label: String, value: String, count: Int = 5, onChange: (St
         androidx.compose.runtime.mutableStateListOf<String>().apply { repeat(maxOf(count, saved.size)) { add(saved.getOrElse(it) { "" }) } }
     }
     slots.forEachIndexed { index, key ->
+        // Red only when the service REJECTED this key; a key that is just at its limit stays normal.
+        val wrong = key.isNotBlank() && com.adesh.devjarvis.core.BadKeys.fingerprint(key) in rejected
         SecretField(
-            label = "$label ${index + 1}" + if (index == 0) "" else " (optional)",
+            label = "$label ${index + 1}" + if (wrong) " — GALAT KEY" else if (index == 0) "" else " (optional)",
             value = key,
+            wrong = wrong,
             onChange = { v ->
                 slots[index] = v.filterNot { it.isWhitespace() }
                 onChange(pool.store(slots))
@@ -447,13 +451,15 @@ private fun KeySlots(label: String, value: String, count: Int = 5, onChange: (St
 }
 
 @Composable
-private fun SecretField(label: String, value: String, onChange: (String) -> Unit) {
+private fun SecretField(label: String, value: String, wrong: Boolean = false, onChange: (String) -> Unit) {
     var visible by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
         onValueChange = onChange,
         label = { Text(label) },
         singleLine = true,
+        isError = wrong,
+        supportingText = if (wrong) { { Text("Service ne ye key reject ki hai. Ise hata do ya nayi key daalo.", color = MaterialTheme.colorScheme.error) } } else null,
         textStyle = MaterialTheme.typography.bodyMedium,
         visualTransformation = if (visible) VisualTransformation.None else PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),

@@ -80,7 +80,10 @@ class JarvisBrain @Inject constructor(
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
-                if (e is BrainError.InvalidKey) keys.live.rest(s.geminiApiKey, key, restFor(e)) // wrong for Live as well
+                if (e is BrainError.InvalidKey) {
+                    keys.live.rest(s.geminiApiKey, key, restFor(e)) // wrong for Live as well
+                    com.adesh.devjarvis.core.BadKeys.mark(key)
+                }
                 if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !keys.gemini.rest(s.geminiApiKey, key, restFor(e))) throw e
                 SessionTrace.add("KEY gemini rotated (${e.javaClass.simpleName}), ready=${keys.gemini.readyCount(s.geminiApiKey)}")
             }
@@ -102,6 +105,7 @@ class JarvisBrain @Inject constructor(
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
+                if (e is BrainError.InvalidKey) com.adesh.devjarvis.core.BadKeys.mark(key)
                 if (!rotatable || started || ++tries >= MAX_KEY_TRIES || !pool.rest(raw, key, restFor(e))) throw e
                 SessionTrace.add("KEY ${if (extra) "third" else "groq"} rotated (${e.javaClass.simpleName}), ready=${pool.readyCount(raw)}")
             }

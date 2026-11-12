@@ -32,6 +32,9 @@ class JarvisApp : Application() {
             ProblemJournal.init(dir)
         }
         SessionTrace.add("APP start ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) ${Edition.label}")
+        getSharedPreferences("bad_keys", MODE_PRIVATE).let { p ->
+            com.adesh.devjarvis.core.BadKeys.init(p.getString("fp", "").orEmpty()) { v -> p.edit().putString("fp", v).apply() }
+        }
         noteLastExit()
         AppVisibility.install(this)
         briefing.reschedule()

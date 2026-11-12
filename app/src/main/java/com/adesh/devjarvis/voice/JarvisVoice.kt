@@ -196,6 +196,7 @@ class JarvisVoice @Inject constructor(
                         // Wrong key or this account's characters are used up: rest it, try the next key if there is one.
                         code == 401 || code == 402 || code == 429 -> {
                             SessionTrace.add("VOICE eleven http $code, key rested")
+                            if (code == 401) com.adesh.devjarvis.core.BadKeys.mark(key)
                             if (keys.eleven.rest(s.elevenApiKey, key, KEY_REST_MS)) {
                                 RETRY
                             } else {
