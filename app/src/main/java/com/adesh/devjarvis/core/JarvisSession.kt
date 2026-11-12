@@ -919,8 +919,7 @@ class JarvisSession @Inject constructor(
         _ui.update { it.copy(partial = "", micLevel = 0f) }
         liveJob = scope.launch {
             setState(JarvisState.LISTENING) // syncMic(): Live owns the mic now
-            wake.stop()
-            wake.awaitStopped()
+            wake.stop() // the mic is released while the connection is being made (awaited just before audio.start())
             focus.ownCommunicationMode = true
             updateMode()
 
@@ -983,6 +982,7 @@ class JarvisSession @Inject constructor(
                 conn.connect()
                 // Spoken acknowledgement in JARVIS's own Live voice, instead of silence after the chime.
                 conn.sendText(LIVE_GREETING)
+                wake.awaitStopped()
                 audio.start()
                 // No voice a few seconds after the call and Sir hasn't spoken either: ask once more.
                 launch {
