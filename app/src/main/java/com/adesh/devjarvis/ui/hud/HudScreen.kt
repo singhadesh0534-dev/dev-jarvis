@@ -58,6 +58,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import com.adesh.devjarvis.brain.Persona
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -116,6 +118,8 @@ fun HudScreen(
             TopBar(onOpenSettings, onOpenActivity, onOpenMemory)
             StatusRow(ui)
             AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
+            val role by viewModel.role.collectAsStateWithLifecycle()
+            RoleRow(role, onPick = viewModel::setRole)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
             val update by viewModel.update.collectAsStateWithLifecycle()
             (update as? AppUpdater.State.Available)?.let { u ->
@@ -237,6 +241,33 @@ private fun AlwaysOnRow(ui: HudUiState, onToggle: (Boolean) -> Unit) {
                     uncheckedThumbColor = Hud.Dim,
                     uncheckedTrackColor = Hud.Faint,
                 ),
+            )
+        }
+    }
+}
+
+/** One tap changes who JARVIS is being — the same as saying "dost ban jao" / "gf ban jao" / "Jarvis ban jao". */
+@Composable
+private fun RoleRow(role: String, onPick: (String) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("ROOP", style = MaterialTheme.typography.labelSmall, color = Hud.Dim)
+        Persona.ALL.forEach { id ->
+            val active = id == role
+            Text(
+                Persona.label(id).uppercase(),
+                style = MaterialTheme.typography.labelMedium,
+                color = if (active) Hud.Background else Hud.Dim,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, (if (active) Hud.Cyan else Hud.Dim).copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                    .background(if (active) Hud.Cyan else Hud.Panel.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                    .clickable { onPick(id) }
+                    .padding(vertical = 7.dp),
             )
         }
     }

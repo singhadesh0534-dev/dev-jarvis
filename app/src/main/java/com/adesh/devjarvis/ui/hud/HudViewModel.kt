@@ -13,7 +13,11 @@ import com.adesh.devjarvis.wakeword.VoskModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import com.adesh.devjarvis.brain.Persona
 
 /** HUD ka thin wrapper — asli dimaag [JarvisSession] mein hai (service ke saath shared). */
 @HiltViewModel
@@ -29,6 +33,17 @@ class HudViewModel @Inject constructor(
 
     val ui: StateFlow<HudUiState> = session.ui
     val speechLevel: StateFlow<Float> = session.speechLevel
+
+    /** Who JARVIS is being right now: jarvis / dost / gf. */
+    val role: StateFlow<String> = settings.settings.map { Persona.normalize(it.persona) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, Persona.normalize(settings.current.persona))
+
+    /** The role buttons on the HUD: the same as saying "dost ban jao" / "gf ban jao" / "Jarvis ban jao". */
+    fun setRole(role: String) {
+        if (Persona.normalize(settings.current.persona) == role) return
+        settings.update { it.copy(persona = role) } // the session changes the voice (and reopens Live) by itself
+        session.note("Roop: ${Persona.label(role)}")
+    }
 
     fun refreshDevice() = session.refreshDevice()
     fun onReactorTap() = session.onReactorTap()
