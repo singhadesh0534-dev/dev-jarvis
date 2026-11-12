@@ -29,6 +29,7 @@ class SelfTools @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
     private val keys: KeyRing,
+    private val modes: com.adesh.devjarvis.core.ConversationMode,
 ) {
     private class Item(
         val name: String,
@@ -110,6 +111,8 @@ class SelfTools @Inject constructor(
             { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 50..150 }?.let { s.copy(ttsPitch = it / 100f) } }),
         Item("listening_engine", "Classic ears: android (Google speech) or groq (Whisper, better Hinglish, needs a Groq key)", { it.sttEngine },
             { s, v -> v.lowercase().trim().takeIf { it == "android" || it == "groq" }?.let { s.copy(sttEngine = it) } }),
+        Item("gf_voice", "Live voice of the girlfriend role: " + Persona.HER_VOICES.joinToString(", "), { it.gfVoice },
+            { s, v -> Persona.HER_VOICES.firstOrNull { it.equals(v.trim(), ignoreCase = true) }?.let { s.copy(gfVoice = it) } }),
         Item("role", "Who JARVIS is being: jarvis, dost or gf", { Persona.label(it.persona) }, { s, v -> s.copy(persona = Persona.normalize(v)) }),
     )
 
@@ -142,7 +145,7 @@ class SelfTools @Inject constructor(
             "floating_bubble, boot_animation, morning_briefing, morning_briefing_time, night_summary, night_summary_time, " +
             "quiet_hours_start, quiet_hours_end, notification_alerts, important_apps, important_contacts, announce_calls, " +
             "low_battery_alert, pause_on_low_battery, habit_suggestions, diary, home_city, emergency_contacts, speech_speed, " +
-            "speech_pitch, listening_engine, role. API keys can never be read or changed here: Sir types them in Settings. " +
+            "speech_pitch, listening_engine, gf_voice, role. API keys can never be read or changed here: Sir types them in Settings. " +
             "The wake word itself is changed with set_wake_word.",
         params {
             string("action", "get | set", required = true, enum = listOf("get", "set"))
@@ -170,7 +173,7 @@ class SelfTools @Inject constructor(
                 if (changed.alwaysOn) ServiceController.start(context) else ServiceController.stop(context)
             }
             val note = when (item.name) {
-                "live_voice", "voice_mode", "noise_filter", "hd_voice" -> " It takes effect from the next conversation."
+                "live_voice", "voice_mode", "noise_filter", "hd_voice", "gf_voice" -> " It takes effect from the next conversation."
                 "role" -> " " + Persona.switched(changed.persona)
                 else -> ""
             }
@@ -187,6 +190,10 @@ class SelfTools @Inject constructor(
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val persona = Persona.normalize(args.requireString("persona"))
+            // Only on Sir's own words: the role must not change because the model felt like it.
+            if (persona != Persona.normalize(settings.current.persona) && !Persona.mentions(modes.lastUserWords, persona)) {
+                return ToolResult.fail("Sir did not ask for the ${Persona.label(persona)} role just now. Stay exactly as you are and answer what he said.")
+            }
             settings.update { it.copy(persona = persona) }
             return ToolResult.ok(Persona.switched(persona))
         }

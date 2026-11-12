@@ -73,7 +73,7 @@ object ScreenFormatter {
 object ScreenSafety {
     private val paymentWords = Regex(
         """(?i)\b(upi pin|enter pin|mpin|cvv|card number|expiry|net ?banking|pay ₹|pay rs|proceed to pay|""" +
-            """confirm payment|make payment|place order|buy now|transfer money|send money|otp|one[\s-]?time password|""" +
+            """confirm payment|make payment|place order|transfer money|send money|otp|one[\s-]?time password|""" +
             """verification code|enter password|password)\b"""
     )
 

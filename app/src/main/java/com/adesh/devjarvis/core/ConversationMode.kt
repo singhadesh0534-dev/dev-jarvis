@@ -12,6 +12,8 @@ class ConversationMode @Inject constructor() {
     @Volatile var interpreter: Boolean = false
     @Volatile var liveVision: Boolean = false
     @Volatile var screenWatch: Boolean = false
+    /** What Sir said last (a tool may need to check he really asked for it). */
+    @Volatile var lastUserWords: String = ""
 
     val keepOpen: Boolean get() = interpreter || liveVision || screenWatch
 

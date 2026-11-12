@@ -30,7 +30,12 @@ object Persona {
     fun isPartner(persona: String?): Boolean = normalize(persona) == PARTNER
 
     /** Live voice for the role; JARVIS keeps the voice chosen in Settings. */
-    fun liveVoice(persona: String, chosen: String): String = if (normalize(persona) == PARTNER) "Aoede" else chosen
+    fun liveVoice(persona: String, chosen: String, hers: String = HER_VOICE): String =
+        if (normalize(persona) == PARTNER) hers.ifBlank { HER_VOICE } else chosen
+
+    /** Women's Live voices Sir can pick for the girlfriend role ("gf ki awaaz Leda karo"). */
+    val HER_VOICES = listOf("Kore", "Leda", "Aoede", "Zephyr", "Callirrhoe", "Autonoe", "Despina", "Erinome", "Laomedeia", "Achernar", "Sulafat", "Vindemiatrix")
+    const val HER_VOICE = "Kore"
 
     /** The role in a few lines, for the backup brains and their small request budget. */
     private fun short(persona: String): String = when (normalize(persona)) {
@@ -130,6 +135,34 @@ object Persona {
         }
         // "gf mode band karo" / "dost mat bano": he wants the role to stop.
         return if (STOP_IT.containsMatchIn(t)) JARVIS else role
+    }
+
+    private fun roman(said: String?): String {
+        var t = said.orEmpty().lowercase()
+        HINDI.forEach { (hindi, r) -> t = hindi.replace(t, " $r ") }
+        return t.replace(Regex("""[^\p{L}\p{M}\p{N}]+"""), " ").trim()
+    }
+
+    private val WORDS = mapOf(
+        PARTNER to Regex("""\b(?:gf|g f|girl ?friend|premika)\b"""),
+        DOST to Regex("""\b(?:dost|yaar|friend|buddy)\b"""),
+        JARVIS to Regex("""\b(?:jarvis|normal)\b"""),
+    )
+
+    /** Did Sir's words name this role at all? The model may not change the role on its own idea. */
+    fun mentions(said: String?, persona: String): Boolean = WORDS[normalize(persona)]?.containsMatchIn(roman(said)) == true
+
+    private val HALT = Regex("""\b(?:stop|ruko|ruk ja+o?|ruk|bas|bas karo|band karo|rehne do|rahne do|chhodo|mat karo)\b|रुक|बस|स्टॉप|बंद करो|रहने दो|छोड़ो|मत करो""")
+
+    private val FILLER = Regex("""\b(?:jarvis|dev|hello|please|abhi|ab|ye|yeh|sab|isko|isse|ise|kaam|arey|are|yaar|karo|kar|do|jao|ja)\b|जार्विस|अभी|अब|ये|यह|सब|इसको|इसे|काम|अरे|करो|जाओ|दो""")
+
+    /** A short "stop / ruko / bas karo": whatever JARVIS is doing on the phone must end now. */
+    fun saidStop(said: String?): Boolean {
+        val t = said.orEmpty().lowercase().trim()
+        if (t.isEmpty() || !HALT.containsMatchIn(t)) return false
+        // Only when nothing else was said: "wifi band karo" is a command, "bas karo Jarvis" is a stop.
+        val rest = FILLER.replace(HALT.replace(t, " "), " ").replace(Regex("""[^\p{L}\p{N}]+"""), "")
+        return rest.isEmpty()
     }
 
     private val SIR = Regex("""\bSir\b""")

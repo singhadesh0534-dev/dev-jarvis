@@ -181,6 +181,8 @@ class JarvisSession @Inject constructor(
     private var liveRetryAt = 0L
     /** Live restarts with the next key in this wake (bad keys at the front of the list). */
     private var liveAuthRetries = 0
+    /** Sir said "stop / ruko" in Live: no tool runs until he says something else. */
+    @Volatile private var haltTools = false
     /** The role changed in the middle of a Live conversation: start it again at once with the new voice and manner. */
     private var liveRestartForRole = false
     /** First line of the next Live session, when it is not the usual greeting. */
@@ -635,6 +637,8 @@ class JarvisSession @Inject constructor(
     }
 
     private fun ask(userText: String) {
+        modes.lastUserWords = userText
+        haltTools = false
         noteRoleRequest(userText)
         noteComplaint(userText)
         lastWake = null
@@ -759,6 +763,10 @@ class JarvisSession @Inject constructor(
         val argText = args.entries.joinToString(", ") { (k, v) -> "$k=${v.toString().trim('"')}" }
         val lineId = nextId++
         upsertLine(lineId, "⚙ $name($argText)", system = true)
+        if (haltTools) {
+            upsertLine(lineId, "✗ $name: Sir ne roka", system = true)
+            return ToolResult.fail("Sir just said STOP. Do not call any more tools. Say \"ruk gaya\" in three words and wait for his next instruction.")
+        }
         val failKey = "$name|$argText"
         if ((toolFailures[failKey] ?: 0) >= 2) {
             upsertLine(lineId, "✗ $name: same step already failed twice", system = true)
@@ -963,11 +971,12 @@ class JarvisSession @Inject constructor(
             focus.ownCommunicationMode = true
             updateMode()
 
+            val liveVoiceNow = com.adesh.devjarvis.brain.Persona.liveVoice(s.persona, s.liveVoice, s.gfVoice)
             val liveKey = keys.live.current(s.geminiApiKey)
-            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, com.adesh.devjarvis.brain.Persona.liveVoice(s.persona, s.liveVoice), brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
+            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter) { bytes, n -> conn.sendAudio(bytes, n) }
-            SessionTrace.add("LIVE start model=${s.liveModel} voice=${s.liveVoice} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
+            SessionTrace.add("LIVE start model=${s.liveModel} voice=$liveVoiceNow role=${s.persona} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
             var firstAudioLogged = false
             var userSpoke = false
             liveConn = conn
@@ -1046,6 +1055,9 @@ class JarvisSession @Inject constructor(
                             userSpoke = true
                             falseWakes = 0
                             userSaid.append(e.text)
+                            modes.lastUserWords = userSaid.toString()
+                            haltTools = com.adesh.devjarvis.brain.Persona.saidStop(userSaid.toString())
+                            if (haltTools) SessionTrace.add("STOP said: tools halted")
                             noteRoleRequest(userSaid.toString())
                             if (userLine < 0) userLine = nextId++
                             upsertLine(userLine, userSaid.toString().trim(), fromUser = true)

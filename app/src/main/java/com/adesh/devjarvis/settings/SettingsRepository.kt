@@ -98,6 +98,8 @@ data class JarvisSettings(
     val instantCommands: Boolean = true,
     /** Who JARVIS is being right now: "jarvis", "dost" or "gf" (see Persona). */
     val persona: String = "jarvis",
+    /** Live voice of the girlfriend role. */
+    val gfVoice: String = com.adesh.devjarvis.brain.Persona.HER_VOICE,
     // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
     val elevenApiKey: String = "",
     val elevenVoiceId: String = "",
@@ -206,6 +208,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_DIARY, cleaned.diaryEnabled)
             .putBoolean(K_INSTANT, cleaned.instantCommands)
             .putString(K_PERSONA, cleaned.persona)
+            .putString(K_GF_VOICE, cleaned.gfVoice)
             .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
             .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
             .putString(K_ELEVEN_MODEL, cleaned.elevenModel.trim())
@@ -274,6 +277,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             diaryEnabled = prefs.getBoolean(K_DIARY, d.diaryEnabled),
             instantCommands = prefs.getBoolean(K_INSTANT, d.instantCommands),
             persona = prefs.getString(K_PERSONA, d.persona).orEmpty().ifBlank { d.persona },
+            gfVoice = prefs.getString(K_GF_VOICE, d.gfVoice).orEmpty().ifBlank { d.gfVoice },
             elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
             elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
             elevenModel = prefs.getString(K_ELEVEN_MODEL, d.elevenModel).orEmpty(),
@@ -336,6 +340,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_DIARY = "diary_enabled"
         const val K_INSTANT = "instant_commands"
         const val K_PERSONA = "persona"
+        const val K_GF_VOICE = "gf_voice"
         const val K_ELEVEN_KEY = "eleven_api_key"
         const val K_ELEVEN_VOICE = "eleven_voice_id"
         const val K_ELEVEN_MODEL = "eleven_model"

@@ -76,9 +76,19 @@ class PersonaTest {
         ).forEach { assertEquals(it, null, Persona.requested(it)) }
     }
 
+    @Test fun roleMustBeNamedAndStopIsHeard() {
+        assertTrue(Persona.mentions("dost ban ja", Persona.DOST))
+        assertTrue(Persona.mentions("गर्लफ्रेंड जैसी बात करो", Persona.PARTNER))
+        assertTrue(!Persona.mentions("hello jarvis kya haal hai", Persona.DOST))
+        assertTrue(Persona.saidStop("stop") && Persona.saidStop("Ruko ruko") && Persona.saidStop("बस करो") && Persona.saidStop("रुक जाओ"))
+        assertTrue(!Persona.saidStop("wifi band karo") && Persona.saidStop("Jarvis bas karo ab") && !Persona.saidStop("gaana band karo") && !Persona.saidStop("") && !Persona.saidStop("gaana chalao"))
+    }
+
     @Test fun partnerGetsHerOwnVoice() {
         assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Charon"))
         assertEquals("Charon", Persona.liveVoice(Persona.DOST, "Charon"))
-        assertEquals("Aoede", Persona.liveVoice(Persona.PARTNER, "Charon"))
+        assertEquals(Persona.HER_VOICE, Persona.liveVoice(Persona.PARTNER, "Charon"))
+        assertEquals("Leda", Persona.liveVoice(Persona.PARTNER, "Charon", "Leda"))
+        assertEquals(Persona.HER_VOICE, Persona.liveVoice(Persona.PARTNER, "Charon", ""))
     }
 }
