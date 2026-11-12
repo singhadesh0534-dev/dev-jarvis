@@ -5,6 +5,7 @@ import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
+import com.adesh.devjarvis.brain.Persona
 import com.adesh.devjarvis.core.JarvisConfig
 import com.adesh.devjarvis.settings.SettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -85,18 +86,35 @@ class AndroidTts @Inject constructor(
         applySettings()
     }
 
+    /** The role the voice was last set up for; a role change by voice re-applies it before the next sentence. */
+    @Volatile private var appliedPersona = ""
+
     override fun applySettings() {
         if (!ready.isCompleted) return
         val s = settings.current
-        val voice = pickVoice(s.ttsVoiceName)
+        appliedPersona = s.persona
+        // Girlfriend role: a woman's voice at its own natural pitch, a touch slower. No such voice installed? Sir's voice stays.
+        val hers = if (Persona.isPartner(s.persona)) pickFemaleVoice() else null
+        val voice = hers ?: pickVoice(s.ttsVoiceName)
         if (voice != null) tts.voice = voice else tts.language = Locale("en", "IN")
-        tts.setPitch(s.ttsPitch)
-        tts.setSpeechRate(s.ttsRate)
+        tts.setPitch(if (hers != null) 1.0f else s.ttsPitch)
+        tts.setSpeechRate(if (hers != null) s.ttsRate * 0.96f else s.ttsRate)
+    }
+
+    private fun englishVoices(): List<Voice> = runCatching { tts.voices }.getOrNull().orEmpty()
+        .filter { it.locale.language == "en" && !it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+
+    private fun pickFemaleVoice(): Voice? {
+        val voices = englishVoices()
+        for (prefix in JarvisConfig.FEMALE_VOICE_PREFIXES) {
+            val matches = voices.filter { it.name.startsWith(prefix) }
+            (matches.firstOrNull { !it.isNetworkConnectionRequired } ?: matches.firstOrNull())?.let { return it }
+        }
+        return null
     }
 
     private fun pickVoice(preferredName: String): Voice? {
-        val voices = runCatching { tts.voices }.getOrNull().orEmpty()
-            .filter { it.locale.language == "en" && !it.features.contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED) }
+        val voices = englishVoices()
         if (voices.isEmpty()) return null
         if (preferredName.isNotBlank()) voices.firstOrNull { it.name == preferredName }?.let { return it }
         for (prefix in JarvisConfig.PREFERRED_VOICE_PREFIXES) {
@@ -123,6 +141,7 @@ class AndroidTts @Inject constructor(
                 return@launch
             }
             if (gen != generation.get()) return@launch // stop() was called meanwhile
+            if (settings.current.persona != appliedPersona) runCatching { applySettings() } // "gf ban jao" / "Jarvis ban jao" said by voice
             val id = "g$gen-${utteranceIds.incrementAndGet()}"
             val result = tts.speak(text, TextToSpeech.QUEUE_ADD, null, id)
             if (result != TextToSpeech.SUCCESS) finishedOne()

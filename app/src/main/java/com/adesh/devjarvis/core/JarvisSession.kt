@@ -647,7 +647,9 @@ class JarvisSession @Inject constructor(
                     SessionTrace.add("QUICK ${quick.tool} ok=${result.ok}")
                     if (result.ok || !device.isOnline()) {
                         val detail = result.message.lineSequence().firstOrNull().orEmpty().take(180)
-                        val line = if (result.ok) quick.say ?: "Sir, $detail" else "Sir, ye abhi nahi ho paya: $detail"
+                        val line = com.adesh.devjarvis.brain.Persona.address(
+                            if (result.ok) quick.say ?: "Sir, $detail" else "Sir, ye abhi nahi ho paya: $detail", settings.current.persona,
+                        )
                         full.append(line)
                         upsertLine(lineId, line)
                         speakPiece(line)
@@ -1189,7 +1191,8 @@ class JarvisSession @Inject constructor(
     }
 
     /** JARVIS's own line (errors, notices): shown and spoken. */
-    private fun say(text: String, detail: String? = null) {
+    private fun say(line: String, detail: String? = null) {
+        val text = com.adesh.devjarvis.brain.Persona.address(line, settings.current.persona) // "Sir" -> "jaan" / "bhai" in a role
         runCatching { focus.prepareToSpeak() }
         addLine(fromUser = false, text = text)
         detail?.let { addLine(fromUser = false, text = it, system = true) }

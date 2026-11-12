@@ -20,6 +20,19 @@ class ElevenPickerTest {
         assertEquals("m1", ElevenPicker.pickVoice("""{"voices":[{"voice_id":"m1","name":"Will","labels":{"gender":"male"}}]}"""))
     }
 
+    @Test fun girlfriendRoleGetsAWomansVoiceIndianAccentFirst() {
+        assertEquals("f1", ElevenPicker.pickVoice(voices, female = true))
+        val withIndian = """{"voices":[
+            {"voice_id":"f1","name":"Sarah","category":"premade","labels":{"gender":"female","accent":"american"}},
+            {"voice_id":"f2","name":"Anika","category":"professional","labels":{"gender":"female","accent":"indian","age":"young","descriptive":"warm"}},
+            {"voice_id":"d1","name":"Daniel","category":"premade","labels":{"gender":"male","accent":"british"}}
+        ]}"""
+        assertEquals("f2", ElevenPicker.pickVoice(withIndian, female = true))
+        assertEquals("d1", ElevenPicker.pickVoice(withIndian))
+        // Only men in the account: no pick, the built-in woman's voice is used instead.
+        assertNull(ElevenPicker.pickVoice("""{"voices":[{"voice_id":"m1","name":"Will","labels":{"gender":"male"}}]}""", female = true))
+    }
+
     @Test fun picksTheFastestModelThatSpeaksHindi() {
         val models = """[
             {"model_id":"eleven_multilingual_v2","can_do_text_to_speech":true,"languages":[{"language_id":"en"},{"language_id":"hi"}]},

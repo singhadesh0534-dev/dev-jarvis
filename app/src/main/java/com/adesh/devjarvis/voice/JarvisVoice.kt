@@ -166,12 +166,14 @@ class JarvisVoice @Inject constructor(
     /** True if the sentence was spoken in the cloud voice. */
     private fun speakCloud(gen: Int, text: String): Boolean {
         val s = settings.current
-        val (autoVoice, autoModel) = choose(keys.eleven.current(s.elevenApiKey))
-        val voice = s.elevenVoiceId.trim().ifBlank { autoVoice }
+        val choice = choose(keys.eleven.current(s.elevenApiKey))
+        // Girlfriend role: the account's best woman's voice, a little more expressive.
+        val hers = com.adesh.devjarvis.brain.Persona.isPartner(s.persona)
+        val voice = if (hers) choice.herVoice else s.elevenVoiceId.trim().ifBlank { choice.voice }
         val body = buildJsonObject {
             put("text", text)
-            put("model_id", s.elevenModel.trim().ifBlank { autoModel })
-            putJsonObject("voice_settings") { put("stability", 0.5); put("similarity_boost", 0.8) }
+            put("model_id", s.elevenModel.trim().ifBlank { choice.model })
+            putJsonObject("voice_settings") { put("stability", if (hers) 0.4 else 0.5); put("similarity_boost", 0.8) }
         }.toString().toRequestBody(JSON)
         repeat(4) {
             if (gen != generation.get()) return true // stopped: nothing more to say
@@ -233,12 +235,18 @@ class JarvisVoice @Inject constructor(
      * Sir only gives the key: the best voice and model of that account are looked up once (and remembered),
      * with the built-in defaults when the lookup fails.
      */
-    private fun choose(key: String): Pair<String, String> {
+    private class Choice(val voice: String, val herVoice: String, val model: String)
+
+    private fun choose(key: String): Choice {
         val tag = key.hashCode().toString()
         val prefs = context.getSharedPreferences("eleven_choice", Context.MODE_PRIVATE)
-        if (prefs.getString("for", "") == tag) {
-            return prefs.getString("voice", JarvisConfig.ELEVEN_VOICE_ID).orEmpty().ifBlank { JarvisConfig.ELEVEN_VOICE_ID } to
-                prefs.getString("model", JarvisConfig.ELEVEN_MODEL).orEmpty().ifBlank { JarvisConfig.ELEVEN_MODEL }
+        // "voice_f" is missing in a choice saved by an older version: look the lists up once more.
+        if (prefs.getString("for", "") == tag && prefs.contains("voice_f")) {
+            return Choice(
+                prefs.getString("voice", "").orEmpty().ifBlank { JarvisConfig.ELEVEN_VOICE_ID },
+                prefs.getString("voice_f", "").orEmpty().ifBlank { JarvisConfig.ELEVEN_FEMALE_VOICE_ID },
+                prefs.getString("model", "").orEmpty().ifBlank { JarvisConfig.ELEVEN_MODEL },
+            )
         }
         fun fetch(path: String): String? = runCatching {
             http.newCall(Request.Builder().url("${JarvisConfig.ELEVEN_BASE_URL}/$path").header("xi-api-key", key).build()).execute().use { r ->
@@ -248,11 +256,14 @@ class JarvisVoice @Inject constructor(
         val voices = fetch("voices")
         val models = fetch("models")
         val voice = ElevenPicker.pickVoice(voices) ?: JarvisConfig.ELEVEN_VOICE_ID
+        val herVoice = ElevenPicker.pickVoice(voices, female = true) ?: JarvisConfig.ELEVEN_FEMALE_VOICE_ID
         val model = ElevenPicker.pickModel(models) ?: JarvisConfig.ELEVEN_MODEL
-        SessionTrace.add("VOICE eleven chose voice=$voice model=$model (lists: ${voices != null}/${models != null})")
+        SessionTrace.add("VOICE eleven chose voice=$voice her=$herVoice model=$model (lists: ${voices != null}/${models != null})")
         // Remember only a real answer, so a failed lookup is tried again next time.
-        if (voices != null && models != null) prefs.edit().putString("for", tag).putString("voice", voice).putString("model", model).apply()
-        return voice to model
+        if (voices != null && models != null) {
+            prefs.edit().putString("for", tag).putString("voice", voice).putString("voice_f", herVoice).putString("model", model).apply()
+        }
+        return Choice(voice, herVoice, model)
     }
 
     /** Raw 24 kHz PCM, played while it downloads. */

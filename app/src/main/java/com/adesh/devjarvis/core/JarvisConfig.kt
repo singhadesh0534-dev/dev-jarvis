@@ -115,6 +115,17 @@ object JarvisConfig {
     /** Third brain: default service + where to make its free key. Any OpenAI-compatible URL works. */
     const val EXTRA_BASE_URL = "https://openrouter.ai/api/v1"
     const val OPENROUTER_KEY_URL = "https://openrouter.ai/keys"
+    /**
+     * Google TTS ki mahila English awaazein (girlfriend role ke liye), India wali pehle: wo Roman mein likhi
+     * Hindi sabse theek bolti hain.
+     */
+    val FEMALE_VOICE_PREFIXES = listOf(
+        "en-in-x-ena", "en-in-x-enc", "en-in-x-ahp",
+        "en-gb-x-gba", "en-gb-x-fis", "en-gb-x-gbc", "en-gb-x-gbg",
+        "en-us-x-sfg", "en-us-x-tpf", "en-us-x-tpc", "en-us-x-iob", "en-us-x-iog",
+        "en-au-x-aua", "en-au-x-auc",
+    )
+
     const val OPENROUTER_MODELS_URL = "https://openrouter.ai/models?max_price=0"
     const val CEREBRAS_KEY_URL = "https://cloud.cerebras.ai"
 
@@ -123,6 +134,8 @@ object JarvisConfig {
     const val ELEVEN_KEY_URL = "https://elevenlabs.io/app/settings/api-keys"
     /** "Daniel": a default (premade) British male voice every account has. Settings > ElevenLabs voice id to change. */
     const val ELEVEN_VOICE_ID = "onwK4e9ZLuTAKqWW03F9"
+    /** "Sarah": a default (premade) woman's voice every account has; used for the girlfriend role. */
+    const val ELEVEN_FEMALE_VOICE_ID = "EXAVITQu4vr4xnSDxMaL"
     /** Fast multilingual model (reads Hinglish). */
     const val ELEVEN_MODEL = "eleven_flash_v2_5"
 }

@@ -20,6 +20,27 @@ class PersonaTest {
         }
     }
 
+    @Test fun rolesSwitchOffTheBriefButlerRulesAndPartnerStaysNonExplicit() {
+        listOf(Persona.DOST, Persona.PARTNER).forEach {
+            val o = Persona.overlay(it)
+            assertTrue(o.contains("these earlier rules are OFF"))
+            assertTrue(o.contains("no filler"))
+        }
+        val her = Persona.overlay(Persona.PARTNER)
+        assertTrue(her.contains("nothing sexually explicit"))
+        assertTrue(her.contains("lifts his mood"))
+        assertTrue(her.contains("never pull him away from the real people"))
+        assertTrue(Persona.isPartner("girlfriend"))
+        assertTrue(!Persona.isPartner("dost") && !Persona.isPartner(null))
+    }
+
+    @Test fun fixedLinesChangeTheirAddressWithTheRole() {
+        assertEquals("Volume badha diya, Sir.", Persona.address("Volume badha diya, Sir.", Persona.JARVIS))
+        assertEquals("Volume badha diya, jaan.", Persona.address("Volume badha diya, Sir.", Persona.PARTNER))
+        assertEquals("Bhai, network gayab hai.", Persona.address("Sir, network gayab hai.", Persona.DOST))
+        assertEquals("Sirf ek minute, jaan.", Persona.address("Sirf ek minute, Sir.", "gf"))
+    }
+
     @Test fun partnerGetsHerOwnVoice() {
         assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Charon"))
         assertEquals("Charon", Persona.liveVoice(Persona.DOST, "Charon"))
