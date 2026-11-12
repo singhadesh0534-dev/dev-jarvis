@@ -458,7 +458,12 @@ class PhoneTools @Inject constructor(
                 val yt = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(query)}"))
                 outcome = launcher.launch(yt, "Play $query")
             }
-            return launcher.result(outcome, "playing '$query'", "Play $query")
+            return launcher.result(
+                outcome,
+                "opened the music app for '$query'. It normally starts by itself. Only if Sir says it is not playing: read_screen " +
+                    "once and tap the first result in THIS app. Do not open another app and do not search again.",
+                "Play $query",
+            )
         }
     }
 

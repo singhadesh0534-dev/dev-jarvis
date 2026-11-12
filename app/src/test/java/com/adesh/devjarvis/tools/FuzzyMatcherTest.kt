@@ -92,4 +92,11 @@ class HindiNameMatchTest {
         assertEquals("Papa", best("paapa"))
         assertEquals("Amit Kumar", best("ameet kumaar"))
     }
+
+    @Test fun misheardNamesMatchBySound() {
+        val apps = listOf("Claude", "Chrome", "YouTube", "Calculator", "Clock")
+        assertEquals("Claude", FuzzyMatcher.soundsLike("Cloud AI", apps) { it })
+        assertEquals(null, FuzzyMatcher.soundsLike("xyz", apps) { it })
+        assertEquals(null, FuzzyMatcher.soundsLike("ai", apps) { it })
+    }
 }

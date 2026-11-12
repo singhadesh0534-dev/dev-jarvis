@@ -106,6 +106,31 @@ object FuzzyMatcher {
         return a.score - b.score < 0.03 && !sameThing(a.item, b.item)
     }
 
+    private val SOUND_FILLER = setOf("ai", "app", "the", "wala", "wali")
+
+    /**
+     * How a name sounds, roughly: "Cloud AI" and "Claude" both give "kld". For names speech recognition
+     * mishears; used only when the normal match finds nothing.
+     */
+    fun soundKey(s: String): String {
+        val word = tokens(s).filter { it !in SOUND_FILLER }.joinToString("").ifEmpty { tokens(s).joinToString("") }
+        val t = word.replace("ph", "f").replace("ck", "k").replace("sh", "s").replace('c', 'k').replace('q', 'k')
+            .replace('w', 'v').replace('z', 's').replace('y', 'i')
+        val out = StringBuilder()
+        t.forEachIndexed { i, ch ->
+            val vowel = ch in "aeiou"
+            if ((i == 0 || !vowel) && out.lastOrNull() != ch) out.append(ch)
+        }
+        return out.toString()
+    }
+
+    /** The one item whose name sounds like [query]; null when none or several do. */
+    fun <T> soundsLike(query: String, items: List<T>, name: (T) -> String): T? {
+        val key = soundKey(query)
+        if (key.length < 3) return null
+        return items.filter { soundKey(name(it)) == key }.distinctBy { name(it) }.singleOrNull()
+    }
+
     fun jaroWinkler(a: String, b: String): Double {
         if (a == b) return 1.0
         if (a.isEmpty() || b.isEmpty()) return 0.0

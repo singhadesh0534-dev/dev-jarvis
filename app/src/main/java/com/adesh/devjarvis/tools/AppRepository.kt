@@ -17,6 +17,7 @@ class AppRepository @Inject constructor(@ApplicationContext private val context:
     suspend fun find(query: String): InstalledApp? = withContext(Dispatchers.IO) {
         val apps = launcherApps()
         FuzzyMatcher.rank(query, apps, threshold = 0.72) { listOf(it.label) }.firstOrNull()?.item
+            ?: FuzzyMatcher.soundsLike(query, apps) { it.label } // "Cloud AI" heard for "Claude"
     }
 
     fun isInstalled(packageName: String): Boolean =

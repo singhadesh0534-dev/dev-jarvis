@@ -565,7 +565,7 @@ object Skills {
     fun find(id: String): Skill? = byId[id.trim().lowercase().replace(' ', '_').replace('-', '_')]
 
     /** One line per core skill, then the library areas with their ids, for the tool description. */
-    fun index(): String = CORE.joinToString("; ") { "${it.id} = ${it.whenToUse}" }
+    fun index(): String = CORE.joinToString(", ") { it.id }
 
     /** Library areas only: the ids stay out of every request (smaller, faster, cheaper); search finds them by words. */
     fun areas(): String = SkillLibrary.ALL.map { it.area }.distinct().joinToString(", ")
