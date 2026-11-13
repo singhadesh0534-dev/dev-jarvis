@@ -30,11 +30,24 @@ object Persona {
     fun isPartner(persona: String?): Boolean = normalize(persona) == PARTNER
 
     /** Live voice for the role; JARVIS keeps the voice chosen in Settings. */
-    fun liveVoice(persona: String, chosen: String, hers: String = HER_VOICE): String =
-        if (normalize(persona) == PARTNER) hers.ifBlank { HER_VOICE } else chosen
+    fun liveVoice(persona: String, chosen: String, hers: String = HER_VOICE, dost: String = ""): String = when (normalize(persona)) {
+        PARTNER -> hers.ifBlank { HER_VOICE }
+        DOST -> dost.ifBlank { chosen }
+        else -> chosen
+    }
+
+    /** Men's Live voices (Gemini's own set), deep and calm first. */
+    val HIS_VOICES = listOf("Charon", "Orus", "Fenrir", "Iapetus", "Algenib", "Rasalgethi", "Alnilam", "Schedar", "Enceladus", "Umbriel", "Puck", "Achird", "Sadaltager")
+
+    /** How long replies are, chosen in Settings. */
+    fun replyStyle(style: String): String = when (style) {
+        "short" -> "Reply length: Sir wants it SHORT — one sentence whenever possible, two at most, even for questions."
+        "detailed" -> "Reply length: Sir likes DETAIL — for questions give a full, well-ordered answer (still spoken, no lists); commands stay one line."
+        else -> ""
+    }
 
     /** Women's Live voices Sir can pick for the girlfriend role ("gf ki awaaz Leda karo"). */
-    val HER_VOICES = listOf("Kore", "Leda", "Aoede", "Zephyr", "Callirrhoe", "Autonoe", "Despina", "Erinome", "Laomedeia", "Achernar", "Sulafat", "Vindemiatrix")
+    val HER_VOICES = listOf("Kore", "Leda", "Aoede", "Zephyr", "Callirrhoe", "Autonoe", "Despina", "Erinome", "Laomedeia", "Achernar", "Sulafat", "Vindemiatrix", "Gacrux", "Pulcherrima")
     const val HER_VOICE = "Kore"
 
     /** The role in a few lines, for the backup brains and their small request budget. */

@@ -111,6 +111,12 @@ class SelfTools @Inject constructor(
             { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 50..150 }?.let { s.copy(ttsPitch = it / 100f) } }),
         Item("listening_engine", "Classic ears: android (Google speech) or groq (Whisper, better Hinglish, needs a Groq key)", { it.sttEngine },
             { s, v -> v.lowercase().trim().takeIf { it == "android" || it == "groq" }?.let { s.copy(sttEngine = it) } }),
+        Item("dost_voice", "Live voice of the dost role: " + Persona.HIS_VOICES.joinToString(", "), { it.dostVoice.ifBlank { it.liveVoice } },
+            { s, v -> Persona.HIS_VOICES.firstOrNull { it.equals(v.trim(), ignoreCase = true) }?.let { s.copy(dostVoice = it) } }),
+        Item("reply_length", "How long replies are: short, normal or detailed", { it.replyStyle },
+            { s, v -> v.lowercase().trim().let { t -> when { "short" in t || "chhot" in t -> "short"; "detail" in t || "lamb" in t || "long" in t -> "detailed"; "normal" in t -> "normal"; else -> null } }?.let { s.copy(replyStyle = it) } }),
+        Item("follow_up_seconds", "Seconds to keep listening after a reply, 3 to 30", { it.followUpSeconds.toString() },
+            { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 3..30 }?.let { s.copy(followUpSeconds = it) } }),
         Item("gf_voice", "Live voice of the girlfriend role: " + Persona.HER_VOICES.joinToString(", "), { it.gfVoice },
             { s, v -> Persona.HER_VOICES.firstOrNull { it.equals(v.trim(), ignoreCase = true) }?.let { s.copy(gfVoice = it) } }),
         Item("role", "Who JARVIS is being: jarvis, dost or gf", { Persona.label(it.persona) }, { s, v -> s.copy(persona = Persona.normalize(v)) }),
@@ -145,7 +151,7 @@ class SelfTools @Inject constructor(
             "floating_bubble, boot_animation, morning_briefing, morning_briefing_time, night_summary, night_summary_time, " +
             "quiet_hours_start, quiet_hours_end, notification_alerts, important_apps, important_contacts, announce_calls, " +
             "low_battery_alert, pause_on_low_battery, habit_suggestions, diary, home_city, emergency_contacts, speech_speed, " +
-            "speech_pitch, listening_engine, gf_voice, role. API keys can never be read or changed here: Sir types them in Settings. " +
+            "speech_pitch, listening_engine, gf_voice, dost_voice, reply_length, follow_up_seconds, role. API keys can never be read or changed here: Sir types them in Settings. " +
             "The wake word itself is changed with set_wake_word.",
         params {
             string("action", "get | set", required = true, enum = listOf("get", "set"))
@@ -173,7 +179,7 @@ class SelfTools @Inject constructor(
                 if (changed.alwaysOn) ServiceController.start(context) else ServiceController.stop(context)
             }
             val note = when (item.name) {
-                "live_voice", "voice_mode", "noise_filter", "hd_voice", "gf_voice" -> " It takes effect from the next conversation."
+                "live_voice", "voice_mode", "noise_filter", "hd_voice", "gf_voice", "dost_voice" -> " It takes effect from the next conversation."
                 "role" -> " " + Persona.switched(changed.persona)
                 else -> ""
             }

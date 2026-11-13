@@ -594,7 +594,7 @@ class JarvisSession @Inject constructor(
             // Mic wake engine se wapas lo, phir recognizer ko do.
             wake.stop()
             wake.awaitStopped()
-            val deadline = System.currentTimeMillis() + modes.followUpMs(JarvisConfig.FOLLOW_UP_WINDOW_MS)
+            val deadline = System.currentTimeMillis() + modes.followUpMs(settings.current.followUpSeconds.coerceIn(3, 30) * 1_000L)
             var retriedBusy = false
             while (true) {
                 var outcome = ListenOutcome.NOTHING
@@ -1016,7 +1016,7 @@ class JarvisSession @Inject constructor(
             focus.ownCommunicationMode = true
             updateMode()
 
-            val liveVoiceNow = com.adesh.devjarvis.brain.Persona.liveVoice(s.persona, s.liveVoice, s.gfVoice)
+            val liveVoiceNow = com.adesh.devjarvis.brain.Persona.liveVoice(s.persona, s.liveVoice, s.gfVoice, s.dostVoice)
             val liveKey = keys.live.current(s.geminiApiKey)
             val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
@@ -1060,7 +1060,7 @@ class JarvisSession @Inject constructor(
                         return@launch
                     }
                     setState(JarvisState.LISTENING)
-                    delay(modes.followUpMs(JarvisConfig.FOLLOW_UP_WINDOW_MS))
+                    delay(modes.followUpMs(settings.current.followUpSeconds.coerceIn(3, 30) * 1_000L))
                     closeLive(chime = true)
                 }
             }

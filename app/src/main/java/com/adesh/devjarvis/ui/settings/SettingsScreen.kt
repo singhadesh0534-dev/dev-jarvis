@@ -125,6 +125,27 @@ fun SettingsScreen(
             viewModel.keyReport.collectAsStateWithLifecycle().value?.let { report -> Text(report, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
             Hint("Har key apne alag box mein daalo (alag-alag accounts ki). Box khaali chhod sakte ho. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
 
+            Section("ROOP & AWAAZ")
+            Hint("Teeno roop ki apni awaaz aur andaaz. Roop HUD pe awaaz se bhi badalta hai: \"dost ban jao\", \"gf ban jao\", \"Jarvis ban jao\".")
+            Text("Abhi ka roop", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(
+                listOf("jarvis" to "JARVIS", "dost" to "DOST", "gf" to "GF"),
+                com.adesh.devjarvis.brain.Persona.normalize(draft.persona),
+            ) { v -> viewModel.edit { it.copy(persona = v) } }
+            Text("JARVIS ki awaaz (Live)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(com.adesh.devjarvis.brain.Persona.HIS_VOICES.map { it to it.uppercase() }, draft.liveVoice) { v -> viewModel.edit { it.copy(liveVoice = v) } }
+            Text("DOST ki awaaz (Live)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(com.adesh.devjarvis.brain.Persona.HIS_VOICES.map { it to it.uppercase() }, draft.dostVoice) { v -> viewModel.edit { it.copy(dostVoice = v) } }
+            Text("GF ki awaaz (Live)", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(com.adesh.devjarvis.brain.Persona.HER_VOICES.map { it to it.uppercase() }, draft.gfVoice) { v -> viewModel.edit { it.copy(gfVoice = v) } }
+            Hint("Save karke agli baar bulao — nayi awaaz sunai degi. Kaun si achhi lagi, 2-3 try karke dekho.")
+            Text("Jawab ki lambai", style = MaterialTheme.typography.bodyMedium, color = Hud.Ice)
+            ChoiceRow(listOf("short" to "CHHOTA", "normal" to "NORMAL", "detailed" to "DETAIL"), draft.replyStyle) { v -> viewModel.edit { it.copy(replyStyle = v) } }
+            LabeledSlider("Follow-up sec", draft.followUpSeconds.toFloat(), 3f..30f) { v -> viewModel.edit { it.copy(followUpSeconds = v.toInt()) } }
+            Hint("Jawab ke baad JARVIS kitni der bina wake word ke sunta rahe.")
+            HudField("Wake words (comma)", draft.customWakePhrases, { v -> viewModel.edit { it.copy(customWakePhrases = v) } })
+            Hint("Khaali = \"hello dev, jarvis\". Seedhe English shabd likho, jaise: jarvis, hey jarvis, hello dev.")
+
             Section("VOICE ENGINE")
             ChoiceRow(
                 options = listOf(JarvisSettings.VOICE_LIVE to "LIVE", JarvisSettings.VOICE_CLASSIC to "CLASSIC"),
@@ -567,8 +588,12 @@ private fun TimeField(label: String, minute: Int, onChange: (Int) -> Unit) {
 }
 
 @Composable
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 private fun ChoiceRow(options: List<Pair<String, String>>, selected: String, onPick: (String) -> Unit) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    androidx.compose.foundation.layout.FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         options.forEach { (value, label) ->
             val on = selected == value
             Text(

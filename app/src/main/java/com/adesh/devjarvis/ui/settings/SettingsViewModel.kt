@@ -117,7 +117,7 @@ class SettingsViewModel @Inject constructor(
                 alwaysOn = cur.alwaysOn, setupDone = cur.setupDone,
                 // Owned by the voice-lock screen and the set_wake_word tool, not this form.
                 speakerLockEnabled = cur.speakerLockEnabled, speakerProfile = cur.speakerProfile,
-                speakerThreshold = cur.speakerThreshold, customWakePhrases = cur.customWakePhrases,
+                speakerThreshold = cur.speakerThreshold,
             )
         )
         _draft.value = repo.current
