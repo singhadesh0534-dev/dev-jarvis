@@ -38,6 +38,9 @@ class HudViewModel @Inject constructor(
     val role: StateFlow<String> = settings.settings.map { Persona.normalize(it.persona) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Persona.normalize(settings.current.persona))
 
+    /** The ROOP chip: the role is changed by voice, so just say how. */
+    fun roleHint() = session.note("Roop badalne ke liye boliye: \"dost ban jao\", \"gf ban jao\" ya \"Jarvis ban jao\".")
+
     fun refreshDevice() = session.refreshDevice()
     fun onReactorTap() = session.onReactorTap()
     fun onMicPermissionDenied() = session.onMicPermissionDenied()

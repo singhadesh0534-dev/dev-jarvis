@@ -26,6 +26,14 @@ class KeyPoolTest {
         assertEquals(3, pool.readyCount(raw))
     }
 
+    @Test fun tellsWhichBoxIsInUse() {
+        val boxes = "\nk2\n\nk4"
+        assertEquals(2, pool.currentBox(boxes))
+        pool.rest(boxes, "k2", 60_000)
+        assertEquals(4, pool.currentBox(boxes))
+        assertEquals(0, pool.currentBox(""))
+    }
+
     @Test fun singleKeyAndEmpty() {
         assertEquals("only", pool.current("only"))
         assertFalse(pool.rest("only", "only", 1_000))

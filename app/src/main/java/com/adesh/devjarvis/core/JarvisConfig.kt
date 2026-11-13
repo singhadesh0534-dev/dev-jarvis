@@ -9,6 +9,9 @@ package com.adesh.devjarvis.core
  */
 object JarvisConfig {
 
+    /** JARVIS's boss and owner — permanent, always in the prompt. */
+    const val BOSS_NAME = "Adesh Singh"
+
     // ---- Brain: Gemini (primary) ----
     const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
     /** Default free-tier Flash model. Settings > Model se badal sakte ho. */

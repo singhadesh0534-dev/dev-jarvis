@@ -87,6 +87,8 @@ data class HudUiState(
     val mode: String = "STREAM",
     /** Latest tool result shown as a card on the HUD; clears itself after a few seconds. */
     val card: HudCard? = null,
+    /** Which brain and key box answer right now, e.g. "GEMINI #2", "LIVE #1", "GROQ #3". */
+    val brainSource: String = "",
 )
 
 /** One-off things the background service must act on. */
@@ -231,6 +233,7 @@ class JarvisSession @Inject constructor(
         scope.launch { screenTools.progress.collect { line -> addLine(fromUser = false, text = line, system = true) } }
         scope.launch { wake.problem.collect(::onWakeProblem) }
         scope.launch { wake.rejected.collect { SessionTrace.add("WAKE refused $it") } }
+        scope.launch { healthLoop() }
         // Call shuru/khatam hone par turant react: beech mein JARVIS turant chup aur mic chhod de.
         focus.watchCallState { scope.launch { onCallStateChanged() } }
         scope.launch {
@@ -427,6 +430,41 @@ class JarvisSession @Inject constructor(
         if (!job.isActive) return
         job.cancel()
         speechOut.stop()
+    }
+
+    /**
+     * Every few seconds: is JARVIS really listening when he should be, and is no conversation stuck half-way?
+     * The wake engine could die quietly (mic taken by another app, the phone silencing it) and stay dead
+     * until the app was opened again — Sir spoke and nobody heard.
+     */
+    private suspend fun healthLoop() {
+        var stuckSince = 0L
+        while (true) {
+            delay(HEALTH_CHECK_MS)
+            runCatching {
+                val st = _ui.value.state
+                val idle = st == JarvisState.IDLE && !_ui.value.inConversation && !liveActive
+                if (serviceActive && idle && !lowPowerPause && models.isInstalled() && !focus.inCall() && !wake.running.value) {
+                    SessionTrace.add("MIC revived (wake engine was not running)")
+                    wake.stop()
+                    wake.awaitStopped()
+                    syncMic()
+                }
+                updateMode() // the key in use may have changed
+                // A conversation with nothing running behind it (no Live, no listening, no reply, no voice): close it.
+                val busy = liveActive || listenJob?.isActive == true || replyJob?.isActive == true ||
+                    speechOut.speaking.value || _ui.value.pendingConfirmation != null
+                if (st != JarvisState.IDLE && !busy) {
+                    if (stuckSince == 0L) stuckSince = System.currentTimeMillis()
+                    else if (System.currentTimeMillis() - stuckSince > STUCK_MS) {
+                        SessionTrace.add("STUCK in $st with nothing running: back to standby")
+                        ProblemJournal.add("STUCK", "state $st with no Live, listening or reply running")
+                        endConversation(chime = false)
+                        stuckSince = 0L
+                    }
+                } else stuckSince = 0L
+            }
+        }
     }
 
     // ---------------------------------------------------------------- wake word
@@ -929,7 +967,14 @@ class JarvisSession @Inject constructor(
             Provider.GROQ -> "FALLBACK"
             Provider.GEMINI -> "STREAM"
         }
-        _ui.update { it.copy(mode = label, fuelPercent = usage.fuel.value[provider] ?: 100) }
+        val source = when (provider) {
+            Provider.LIVE -> "LIVE #${keys.live.currentBox(s.geminiApiKey)}"
+            Provider.GEMINI -> "GEMINI #${keys.gemini.currentBox(s.geminiApiKey)}"
+            Provider.GROQ -> if (s.hasGroqKey && keys.groq.readyCount(s.groqApiKey) > 0) "GROQ #${keys.groq.currentBox(s.groqApiKey)}"
+                else if (s.hasExtraBrain) "3RD BRAIN" else "GROQ #${keys.groq.currentBox(s.groqApiKey)}"
+        }.replace(" #0", "")
+        if (source != _ui.value.brainSource) SessionTrace.add("BRAIN now $source")
+        _ui.update { it.copy(mode = label, fuelPercent = usage.fuel.value[provider] ?: 100, brainSource = source) }
     }
 
     // ---------------------------------------------------------------- roles (Jarvis / dost / gf)
@@ -1303,6 +1348,8 @@ class JarvisSession @Inject constructor(
                     "(at most 8 words), never \"Sir\", then wait for what he says.]"
             else -> LIVE_GREETING
         }
+        const val HEALTH_CHECK_MS = 8_000L
+        const val STUCK_MS = 25_000L
         const val ROLE_GREETING =
             "[He has just asked you to change to the role described above, and you have: your voice and manner are new. " +
                 "Say one short line of your own out loud in that role to show it, then wait for what he says.]"

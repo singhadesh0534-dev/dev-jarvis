@@ -206,6 +206,8 @@ class JarvisBrain @Inject constructor(
         compact: Boolean = false,
     ): String = buildString {
         append(s.systemPrompt.trim())
+        append("\n\nYour boss, owner and creator is ${JarvisConfig.BOSS_NAME} (Adesh). He built you. As JARVIS you call him " +
+            "\"Sir\"; his name is Adesh Singh whenever a name is needed (messages, forms, introductions). Never forget it.")
         append("\n\n")
         append(if (forLive) SystemPrompt.LIVE_RULES else SystemPrompt.SPEECH_FORMAT_RULES)
         if (!compact) {

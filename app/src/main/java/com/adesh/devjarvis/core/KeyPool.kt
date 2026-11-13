@@ -64,6 +64,14 @@ class KeyPool(
         return parse(raw).any { until(it) <= t }
     }
 
+    /** Box number (1-based) of the key in use now, or 0 when there is none. */
+    @Synchronized
+    fun currentBox(raw: String): Int {
+        val key = current(raw)
+        if (key.isEmpty()) return 0
+        return boxes(raw).indexOfFirst { it == key }.let { if (it >= 0) it + 1 else parse(raw).indexOf(key) + 1 }
+    }
+
     @Synchronized
     fun readyCount(raw: String): Int = now().let { t -> parse(raw).count { until(it) <= t } }
 

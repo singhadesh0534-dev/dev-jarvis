@@ -65,6 +65,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -133,7 +135,15 @@ fun HudScreen(
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             val role by viewModel.role.collectAsStateWithLifecycle()
             TopBar(onOpenSettings, onOpenActivity, onOpenMemory)
-            StatusRow(ui, role)
+            StatusRow(
+                ui, role,
+                onPower = { openSystem(context, android.content.Intent.ACTION_POWER_USAGE_SUMMARY) },
+                onNet = {
+                    openSystem(context, if (android.os.Build.VERSION.SDK_INT >= 29) android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY else android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                },
+                onBrain = onOpenSettings,
+                onRole = { viewModel.roleHint() },
+            )
             AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
             val update by viewModel.update.collectAsStateWithLifecycle()
@@ -170,7 +180,7 @@ fun HudScreen(
                 if (ui.state == JarvisState.LISTENING && ui.inConversation && ui.transcript.lastOrNull()?.fromUser == false) "FOLLOW-UP" else ui.state.label,
                 style = MaterialTheme.typography.titleMedium,
                 color = if (ui.state == JarvisState.IDLE) Hud.Dim else Hud.Cyan,
-                modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 4.dp, bottom = 8.dp),
+                modifier = Modifier.align(Alignment.CenterHorizontally).clickable { onTap() }.padding(top = 4.dp, bottom = 8.dp),
             )
 
             ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
@@ -201,17 +211,23 @@ private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpe
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 2.dp)) {
                 Box(Modifier.size(6.dp).alpha(dot).background(Hud.Green, CircleShape))
                 Text(
-                    "  NEURAL CORE ONLINE  ·  ",
+                    "  ONLINE   ",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                     color = Hud.Dim,
                 )
+                // Quiet signature: thin rule, small caps, the name a touch brighter.
+                Box(Modifier.width(14.dp).height(1.dp).background(Hud.Ice.copy(alpha = 0.35f)))
                 Text(
-                    "BUILT BY DEV",
+                    "  built by ",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, letterSpacing = 1.5.sp),
+                    color = Hud.Dim,
+                )
+                Text(
+                    "DEV",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        fontSize = 9.sp, letterSpacing = 2.5.sp,
-                        shadow = Shadow(color = Hud.Amber.copy(alpha = 0.9f), blurRadius = 10f),
+                        fontSize = 10.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Bold,
+                        brush = Brush.linearGradient(listOf(Hud.Ice, Hud.Cyan)),
                     ),
-                    color = Hud.Amber,
                 )
             }
         }
@@ -228,22 +244,25 @@ private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpe
 }
 
 @Composable
-private fun StatusRow(ui: HudUiState, role: String) {
+private fun StatusRow(
+    ui: HudUiState, role: String,
+    onPower: () -> Unit, onNet: () -> Unit, onBrain: () -> Unit, onRole: () -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         val battWarn = ui.batteryPercent in 0..19 && !ui.charging
-        Chip("PWR", if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%", battWarn, Modifier.weight(1f))
-        Chip("NET", ui.network.label, ui.network == NetworkKind.NONE, Modifier.weight(1f))
-        Chip("FUEL", "${ui.fuelPercent}%", ui.fuelPercent < 15, Modifier.weight(1f))
+        Chip("PWR", if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%", battWarn, Modifier.weight(1f), onClick = onPower)
+        Chip("NET", ui.network.label, ui.network == NetworkKind.NONE, Modifier.weight(1f), onClick = onNet)
+        Chip("BRAIN", ui.brainSource.ifBlank { "--" }, ui.fuelPercent < 15, Modifier.weight(1.4f), onClick = onBrain)
         // Changed by voice only: "dost ban jao", "gf ban jao", "Jarvis ban jao".
-        Chip("ROOP", Persona.label(role).uppercase(), false, Modifier.weight(1f), accent = role != Persona.JARVIS)
+        Chip("ROOP", Persona.label(role).uppercase(), false, Modifier.weight(1f), accent = role != Persona.JARVIS, onClick = onRole)
     }
 }
 
 @Composable
-private fun Chip(label: String, value: String, warn: Boolean, modifier: Modifier, accent: Boolean = false) {
+private fun Chip(label: String, value: String, warn: Boolean, modifier: Modifier, accent: Boolean = false, onClick: (() -> Unit)? = null) {
     val color = when {
         warn -> Hud.Amber
         accent -> Hud.Pink
@@ -251,6 +270,7 @@ private fun Chip(label: String, value: String, warn: Boolean, modifier: Modifier
     }
     Column(
         modifier
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .hudFrame(color.copy(alpha = 0.8f), corner = 7f)
             .background(Brush.verticalGradient(listOf(color.copy(alpha = 0.10f), Hud.Panel.copy(alpha = 0.35f))))
             .padding(vertical = 6.dp),
@@ -499,4 +519,8 @@ private fun Modifier.hudFrame(color: Color, corner: Float = 10f): Modifier = dra
         drawLine(color, p, Offset(p.x + d.x * c, p.y), strokeWidth = w)
         drawLine(color, p, Offset(p.x, p.y + d.y * c), strokeWidth = w)
     }
+}
+
+private fun openSystem(context: android.content.Context, action: String) {
+    runCatching { context.startActivity(android.content.Intent(action).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
