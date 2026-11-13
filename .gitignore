@@ -12,3 +12,6 @@ captures/
 # Signing keys never go in the repo (use the JARVIS_KEYSTORE_B64 GitHub secret)
 *.jks
 *.keystore
+
+# Claude Code agent worktrees (temporary)
+.claude/
