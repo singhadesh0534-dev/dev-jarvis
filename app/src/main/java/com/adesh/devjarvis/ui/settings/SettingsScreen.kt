@@ -262,6 +262,7 @@ fun SettingsScreen(
             Section("MEMORY")
             Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
             OutlinedButton(onClick = onOpenMemory) { Text("Open memory", color = Hud.Cyan) }
+            BackupBlock(viewModel)
 
             Section("EXTRAS")
             ToggleRow("Floating mini-reactor", "Doosre apps ke upar chhota reactor jab JARVIS sun/bol raha ho (\"Display over other apps\" chahiye). Tap = kholo, long-press = rok do.", draft.bubbleEnabled) { v ->
@@ -611,4 +612,25 @@ private fun LabeledSlider(label: String, value: Float, range: ClosedFloatingPoin
             modifier = Modifier.weight(1f),
         )
     }
+}
+
+/**
+ * Backup file: memories, routines, notes, diary, learned skills, recent chat, role and voice — never the API keys.
+ * After a reinstall pick the same file and everything comes back; then only the keys need typing.
+ */
+@Composable
+private fun BackupBlock(viewModel: SettingsViewModel) {
+    val report by viewModel.backupReport.collectAsStateWithLifecycle()
+    val save = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri -> if (uri != null) viewModel.exportBackup(uri) }
+    val open = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.importBackup(uri) }
+    Hint("Backup: saari yaadein, routines, notes, diary, seekhe skills, haal ki baat-cheet, roop aur awaaz ek file mein (API keys nahi). Reinstall ke baad \"Backup se wapas lao\" — sab wapas, sirf keys daalni hongi. Phone ka Google backup on ho to ye apne aap bhi wapas aata hai.")
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(onClick = { save.launch("dev-jarvis-backup.json") }) { Text("Backup file banao", color = Hud.Cyan) }
+        OutlinedButton(onClick = { open.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("Backup se wapas lao", color = Hud.Cyan) }
+    }
+    report?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
 }

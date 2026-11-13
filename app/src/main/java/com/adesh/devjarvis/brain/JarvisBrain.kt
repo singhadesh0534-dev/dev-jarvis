@@ -52,8 +52,19 @@ class JarvisBrain @Inject constructor(
     private val life: LifeStore,
     private val keys: com.adesh.devjarvis.core.KeyRing,
     private val http: okhttp3.OkHttpClient,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
+    /** The recent conversation is kept on the phone: after a restart, or the next "hello", JARVIS still knows it. */
+    private val conversationFile = java.io.File(appContext.filesDir, "conversation.txt")
+
+    init {
+        runCatching { if (conversationFile.exists()) conversation.restore(conversationFile.readText()) }
+    }
+
+    private fun saveConversation() {
+        runCatching { conversationFile.writeText(conversation.encode()) }
+    }
     /** Exchanges not yet looked at by the memory extractor. */
     private val pendingForMemory = mutableListOf<Pair<String, String>>()
 
@@ -243,7 +254,7 @@ class JarvisBrain @Inject constructor(
         if (forLive) {
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {
-                append("\n\n[Earlier in today's conversation]\n")
+                append("\n\n[Your recent conversation with Sir — continue from it; he may refer to it]\n")
                 recent.takeLast(12).forEach { append(if (it.role == Role.USER) "Sir: " else "You: ").append(it.text).append('\n') }
             }
         }
@@ -351,6 +362,7 @@ class JarvisBrain @Inject constructor(
     fun remember(userText: String, jarvisText: String) {
         if (userText.isNotBlank() && jarvisText.isNotBlank()) {
             conversation.addExchange(userText, jarvisText)
+            saveConversation()
             synchronized(pendingForMemory) { pendingForMemory += userText to jarvisText }
         }
     }
@@ -439,7 +451,18 @@ class JarvisBrain @Inject constructor(
         return null
     }
 
-    fun forgetConversation() = conversation.clear()
+    fun forgetConversation() {
+        conversation.clear()
+        saveConversation()
+    }
+
+    /** For the backup file. */
+    fun conversationText(): String = conversation.encode()
+
+    fun restoreConversation(text: String) {
+        conversation.restore(text)
+        saveConversation()
+    }
 
     private companion object {
         /** Max model<->tool round-trips per request (chained actions). */

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older. Only Sir's own data; never the settings file with the API keys, never the big voice models. -->
+<full-backup-content>
+    <include domain="database" path="jarvis.db" />
+    <include domain="database" path="jarvis.db-wal" />
+    <include domain="database" path="jarvis.db-shm" />
+    <include domain="file" path="life.json" />
+    <include domain="file" path="conversation.txt" />
+    <include domain="sharedpref" path="learned_skills.xml" />
+</full-backup-content>

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+: Google backup restores Sir's memories, routines, chat and learned skills after a reinstall.
+     API keys (encrypted settings) are never included. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="jarvis.db" />
+        <include domain="database" path="jarvis.db-wal" />
+        <include domain="database" path="jarvis.db-shm" />
+        <include domain="file" path="life.json" />
+        <include domain="file" path="conversation.txt" />
+        <include domain="sharedpref" path="learned_skills.xml" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="jarvis.db" />
+        <include domain="file" path="life.json" />
+        <include domain="file" path="conversation.txt" />
+        <include domain="sharedpref" path="learned_skills.xml" />
+    </device-transfer>
+</data-extraction-rules>

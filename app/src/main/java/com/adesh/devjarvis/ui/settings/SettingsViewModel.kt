@@ -33,7 +33,24 @@ class SettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     val updater: AppUpdater,
     private val keyChecker: com.adesh.devjarvis.core.KeyChecker,
+    private val backup: com.adesh.devjarvis.core.BackupManager,
 ) : ViewModel() {
+    /** Result of the last backup / restore, shown under the buttons. */
+    val backupReport = MutableStateFlow<String?>(null)
+
+    fun exportBackup(uri: android.net.Uri) {
+        backupReport.value = "Backup ban raha hai…"
+        viewModelScope.launch { backupReport.value = runCatching { backup.export(uri) }.getOrElse { "Backup nahi bana: ${it.message}" } }
+    }
+
+    fun importBackup(uri: android.net.Uri) {
+        backupReport.value = "Wapas la raha hoon…"
+        viewModelScope.launch {
+            backupReport.value = runCatching { backup.import(uri) }.getOrElse { "Restore nahi hua: ${it.message}" }
+            _draft.value = repo.current
+        }
+    }
+
     /** Last crash + recovered errors, for Settings > Diagnostics (no keys or personal data inside). */
     fun diagnostics(): String? = listOfNotNull(
         CrashReporter.lastCrash(context),
