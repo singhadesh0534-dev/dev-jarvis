@@ -36,4 +36,10 @@ class SkillsTest {
         val all = Skills.index() + Skills.libraryIndex()
         Skills.ALL.forEach { assertTrue(it.id, it.id in all) }
     }
+
+    @Test fun hinglishWordsFindSkillsAndEveryPlaybookCarriesTheStandard() {
+        assertTrue(Skills.search("kist kitni banegi").any { it.id == "emi_calculator" })
+        assertTrue(Skills.search("neend nahi aati").any { it.id == "sleep_better" })
+        assertTrue(Skills.playbook(Skills.ALL.first()).contains("write_skill"))
+    }
 }

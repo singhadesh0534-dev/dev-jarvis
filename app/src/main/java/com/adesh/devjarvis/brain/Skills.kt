@@ -588,8 +588,29 @@ object Skills {
     private val STOP = setOf("a", "an", "the", "to", "of", "for", "and", "or", "in", "on", "my", "me", "is", "it", "do", "how",
         "karo", "kar", "do", "de", "ka", "ki", "ke", "ko", "hai", "mujhe", "mera", "meri", "kya", "se", "me", "aur", "sir", "wants")
 
-    private fun words(text: String): Set<String> =
-        text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 1 && it !in STOP }.map { it.trimEnd('s') }.toSet()
+    /** Sir's Hinglish words -> the English words the skills are written in. */
+    private val SYNONYMS = mapOf(
+        "gaana" to "music song", "gana" to "music song", "gaane" to "music song", "paisa" to "money", "paise" to "money",
+        "kharcha" to "expense money", "bijli" to "electricity", "padhai" to "study", "naukri" to "job career",
+        "sehat" to "health", "dawai" to "medicine", "bimar" to "symptom health", "khana" to "food recipe cooking",
+        "recipe" to "cooking", "yatra" to "travel trip", "safar" to "travel trip", "train" to "train travel",
+        "dukaan" to "shop business", "dhandha" to "business", "kheti" to "farming crop", "fasal" to "crop farming",
+        "sarkari" to "government", "yojana" to "scheme government", "kanoon" to "law legal", "shikayat" to "complaint",
+        "chitthi" to "letter", "patra" to "letter", "badhai" to "wishes", "janamdin" to "birthday", "shaadi" to "wedding marriage",
+        "dost" to "friend", "papa" to "family", "mummy" to "family", "bachche" to "kids", "gussa" to "anger",
+        "dukhi" to "sad low", "tension" to "stress", "neend" to "sleep", "kasrat" to "workout fitness", "wazan" to "weight",
+        "phone" to "phone", "garam" to "heating", "battery" to "battery", "net" to "data network", "wifi" to "wifi",
+        "photo" to "photo gallery camera", "video" to "video youtube", "message" to "message whatsapp", "call" to "call",
+        "yaad" to "reminder memory", "alarm" to "alarm", "hisaab" to "calculate money", "byaj" to "interest loan",
+        "kist" to "emi loan", "bima" to "insurance", "tax" to "tax", "gaadi" to "vehicle", "bike" to "vehicle bike",
+        "mausam" to "weather", "khabar" to "news", "samachar" to "news",
+    )
+
+    private fun words(text: String): Set<String> {
+        val raw = text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 1 && it !in STOP }
+        val expanded = raw + raw.mapNotNull { SYNONYMS[it] }.flatMap { it.split(' ') }
+        return expanded.map { it.trimEnd('s') }.toSet()
+    }
 
     private val wordsOf by lazy { ALL.associate { it.id to (words(it.id.replace('_', ' ')) to words(it.whenToUse)) } }
 
@@ -610,7 +631,14 @@ object Skills {
             .take(limit).map { it.first }
     }
 
+    /** The standard every skill is carried out to, whoever wrote it. */
+    private const val STANDARD = "Standard for every step: be sure what Sir wants (ask one short question only if it truly " +
+        "matters); use his memories, contacts and habits to make it specific to him; check each tool result before the next " +
+        "step; if a step fails try one sensible other way, then stop and say exactly what is blocked; never claim something " +
+        "you did not do; finish with the result in one line plus one useful next step if there is one. If Sir corrects you, " +
+        "call write_skill with his words as lesson so this skill improves."
+
     fun playbook(skill: Skill): String =
         "Skill '${skill.id}'. Follow these steps for this request, in your own voice and Sir's language; " +
-            "do not read the steps aloud or mention the skill:\n" + skill.playbook.trimIndent().trim()
+            "do not read the steps aloud or mention the skill:\n" + skill.playbook.trimIndent().trim() + "\n" + STANDARD
 }
