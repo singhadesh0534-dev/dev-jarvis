@@ -236,7 +236,7 @@ class JarvisBrain @Inject constructor(
                 device.snapshot(),
                 s.homeCity,
                 // Live keeps this prompt for the whole conversation, so it gets the wider picture; classic re-ranks each turn.
-                memories = memory.relevant(query, limit = if (forLive) 40 else if (compact) 5 else 12).map { it.text },
+                memories = memory.relevant(query, limit = if (forLive) 20 else if (compact) 5 else 12).map { it.text },
                 notifications = notifications.topForContext(3),
                 phone = "${Build.MANUFACTURER} ${Build.MODEL}".trim() + ", Android ${Build.VERSION.RELEASE}" +
                     (if (Build.MANUFACTURER.equals("infinix", ignoreCase = true)) " with the XOS skin (Phone Master, XOS launcher, Folax assistant)" else ""),
@@ -247,6 +247,12 @@ class JarvisBrain @Inject constructor(
             append("\n\n[Sir's routines / shortcuts — when he says one of these names, carry out its steps with your tools, in order]\n")
             routines.forEach { (name, steps) -> append("- \"").append(name).append("\": ").append(steps).append('\n') }
         }
+        // Long memory: the last few days in a line or two each, so "parso wali baat" is known.
+        val diary = life.get().diary.entries.sortedByDescending { it.key }.take(if (compact) 1 else 3)
+        if (diary.isNotEmpty()) {
+            append("\n\n[Diary of the last days — what happened, use it when Sir refers back]\n")
+            diary.forEach { (day, text) -> append("- ").append(day).append(": ").append(text.take(350)).append('\n') }
+        }
         val taught = life.get().macros
         if (taught.isNotEmpty()) {
             append("\n\n[Tasks Sir taught you by showing them once — when he says a name, call run_taught with it]\n")
@@ -256,7 +262,7 @@ class JarvisBrain @Inject constructor(
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {
                 append("\n\n[Your recent conversation with Sir — continue from it; he may refer to it]\n")
-                recent.takeLast(12).forEach { append(if (it.role == Role.USER) "Sir: " else "You: ").append(it.text).append('\n') }
+                recent.takeLast(10).forEach { append(if (it.role == Role.USER) "Sir: " else "You: ").append(it.text.take(300)).append('\n') }
             }
         }
     }

@@ -58,6 +58,7 @@ class AutomationEngine @Inject constructor(
     private val notifications: NotificationStore,
     private val brain: JarvisBrain,
     private val memory: MemoryRepository,
+    private val calendar: com.adesh.devjarvis.tools.CalendarReader,
 ) {
     private var scope: CoroutineScope? = null
     private var jobs: List<Job> = emptyList()
@@ -170,6 +171,41 @@ class AutomationEngine @Inject constructor(
         fire("time", minute.toString())
         if (now.minute % 10 == 0) suggest()
         if (minute == DIARY_MINUTE) scope?.launch { runCatching { writeDiary() } }
+        scope?.launch { runCatching { meetingHeadsUp() } }
+        if (minute == 9 * 60 + 5) scope?.launch { runCatching { specialDays() } }
+    }
+
+    /** An event starts in about ten minutes: say it once, unasked (quiet hours and calls are respected by the speaker). */
+    private suspend fun meetingHeadsUp() {
+        val now = System.currentTimeMillis()
+        val titles = calendar.startingBetween(now + 9 * 60_000, now + 10 * 60_000)
+        titles.forEach { t ->
+            SessionTrace.add("AUTO heads-up event")
+            val line = "Sir, das minute mein: $t."
+            brain.noteOffer(line)
+            speaker.offer(ProactivePolicy.Kind.REMINDER, line)
+        }
+    }
+
+    /** A birthday or anniversary Sir told JARVIS about falls today: mention it once in the morning. */
+    private suspend fun specialDays() {
+        val today = LocalDate.now()
+        val names = listOf(
+            today.month.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.ENGLISH).lowercase(),
+            today.month.getDisplayName(java.time.format.TextStyle.SHORT, java.util.Locale.ENGLISH).lowercase(),
+        )
+        val day = today.dayOfMonth.toString()
+        val hits = memory.all().filter { f ->
+            val t = f.text.lowercase()
+            ("birthday" in t || "anniversary" in t || "janamdin" in t || "saalgirah" in t) &&
+                names.any { it in t } && Regex("""\b$day(st|nd|rd|th)?\b""").containsMatchIn(t)
+        }
+        hits.take(2).forEach { f ->
+            SessionTrace.add("AUTO special day")
+            val line = "Sir, aaj ek khaas din hai: ${f.text}. Wish bhejne ka draft bana doon?"
+            brain.noteOffer(line)
+            speaker.offer(ProactivePolicy.Kind.REMINDER, line)
+        }
     }
 
     // ---------------------------------------------------------------- habit suggestions

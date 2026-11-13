@@ -15,7 +15,8 @@ import kotlin.math.sqrt
 object SpeakerVerification {
 
     /** x-vectors Sir ko enroll karte waqt kitne samples chahiye. */
-    const val ENROLL_SAMPLES = 3
+    /** Six takes: a sturdier voiceprint, so other people in a crowd are told apart better. */
+    const val ENROLL_SAMPLES = 6
     /** 0 (sabko maane) .. 1 (bahut sakht). Default thoda narm taaki asli awaaz miss na ho. */
     const val DEFAULT_THRESHOLD = 0.45f
 

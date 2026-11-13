@@ -171,7 +171,7 @@ class SelfTools @Inject constructor(
                 ?: return ToolResult.fail("no setting '$name'. Settings: ${items.joinToString { it.name }}")
             val value = args.string("value") ?: return ToolResult.fail("what value? ${item.about}")
             if (item.name == "only_my_voice" && bool(value) == true && !s.speakerEnrolled) {
-                return ToolResult.fail("Sir's voice is not recorded yet. He must open JARVIS Settings > Voice lock once and say the wake word three times; then this can be turned on.")
+                return ToolResult.fail("Sir's voice is not recorded yet. He must open JARVIS Settings > Voice lock once and say the wake word six times; then this can be turned on.")
             }
             val changed = item.set(s, value) ?: return ToolResult.fail("'$value' is not valid for ${item.name}: ${item.about}")
             settings.update { item.set(it, value) ?: it }

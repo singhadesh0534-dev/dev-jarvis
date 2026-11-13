@@ -31,6 +31,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -113,7 +114,11 @@ fun HudScreen(
         if (!on || granted) viewModel.setAlwaysOn(on) else alwaysOnPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
 
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refreshDevice() }
+    var protectedBg by remember { mutableStateOf(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        viewModel.refreshDevice()
+        protectedBg = viewModel.backgroundProtected()
+    }
 
     val onTap = {
         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -134,7 +139,11 @@ fun HudScreen(
     ) {
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             val role by viewModel.role.collectAsStateWithLifecycle()
-            TopBar(onOpenSettings, onOpenActivity, onOpenMemory)
+            TopBar(onOpenSettings, onOpenActivity, onOpenMemory, onReport = {
+                val send = android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(android.content.Intent.EXTRA_TEXT, viewModel.report())
+                runCatching { context.startActivity(android.content.Intent.createChooser(send, "JARVIS report bhejo")) }
+            })
             StatusRow(
                 ui, role,
                 onPower = { openSystem(context, android.content.Intent.ACTION_POWER_USAGE_SUMMARY) },
@@ -146,6 +155,23 @@ fun HudScreen(
             )
             AlwaysOnRow(ui, onToggle = onAlwaysOnToggle)
             if (!ui.hasKey) KeyBanner(onOpenSettings)
+            if (ui.alwaysOn && !protectedBg) {
+                // XOS stops apps that are not exempt: Sir spoke and nobody heard.
+                Text(
+                    "⚠  Background protection OFF — phone JARVIS ko band kar sakta hai. Tap karke \"Unrestricted / Don't optimize\" chuno.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Hud.Amber,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 6.dp)
+                        .hudFrame(Hud.Amber.copy(alpha = 0.8f), corner = 8f)
+                        .clickable {
+                            runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.ignoreBatteryOptimization(context)) }
+                                .onFailure { runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.batteryOptimizationList()) } }
+                        }
+                        .padding(10.dp),
+                )
+            }
             val update by viewModel.update.collectAsStateWithLifecycle()
             (update as? AppUpdater.State.Available)?.let { u ->
                 Text(
@@ -192,7 +218,7 @@ fun HudScreen(
 }
 
 @Composable
-private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpenMemory: () -> Unit) {
+private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpenMemory: () -> Unit, onReport: () -> Unit) {
     val pulse = rememberInfiniteTransition(label = "online")
     val dot by pulse.animateFloat(0.25f, 1f, infiniteRepeatable(tween(900), RepeatMode.Reverse), label = "dot")
     Row(
@@ -230,6 +256,9 @@ private fun TopBar(onOpenSettings: () -> Unit, onOpenActivity: () -> Unit, onOpe
                     ),
                 )
             }
+        }
+        IconButton(onClick = onReport) {
+            Icon(Icons.Filled.Share, contentDescription = "Report", tint = Hud.Cyan)
         }
         IconButton(onClick = onOpenMemory) {
             Icon(Icons.Filled.Person, contentDescription = "Memory", tint = Hud.Cyan)

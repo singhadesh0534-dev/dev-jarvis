@@ -22,6 +22,26 @@ class CalendarReader @Inject constructor(@ApplicationContext private val context
     fun hasPermission() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED
 
+    /** Titles of timed events that start between [from] and [to]. */
+    suspend fun startingBetween(from: Long, to: Long): List<String> = withContext(Dispatchers.IO) {
+        if (!hasPermission()) return@withContext emptyList()
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
+            ContentUris.appendId(it, from)
+            ContentUris.appendId(it, to + 60_000)
+        }.build()
+        val out = mutableListOf<String>()
+        context.contentResolver.query(
+            uri, arrayOf(CalendarContract.Instances.TITLE, CalendarContract.Instances.BEGIN, CalendarContract.Instances.ALL_DAY),
+            null, null, null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                val begin = c.getLong(1)
+                if (c.getInt(2) == 0 && begin in from until to) c.getString(0)?.let { out += it }
+            }
+        }
+        out
+    }
+
     /** "10:00 AM Team call" lines between [from] and [to]. */
     suspend fun events(from: Long, to: Long): List<String> = withContext(Dispatchers.IO) {
         if (!hasPermission()) return@withContext emptyList()

@@ -41,6 +41,19 @@ class HudViewModel @Inject constructor(
     /** The ROOP chip: the role is changed by voice, so just say how. */
     fun roleHint() = session.note("Roop badalne ke liye boliye: \"dost ban jao\", \"gf ban jao\" ya \"Jarvis ban jao\".")
 
+    /** One-tap report: errors, the flight recorder and the problem journal (never keys or chat text). */
+    fun report(): String = listOfNotNull(
+        "DEV JARVIS report",
+        com.adesh.devjarvis.core.CrashReporter.lastCrash(context),
+        com.adesh.devjarvis.core.CrashReporter.recoveredLog(context),
+        com.adesh.devjarvis.core.SessionTrace.dump().takeIf { it.isNotBlank() }?.let { "FLIGHT RECORDER (latest events)\n$it" },
+        com.adesh.devjarvis.core.ProblemJournal.dump(60).takeIf { it.isNotBlank() }?.let { "PROBLEMS JARVIS NOTICED BY HIMSELF\n$it" },
+    ).joinToString("\n\n")
+
+    /** Android may stop JARVIS in the background unless he is exempt from battery optimisation. */
+    fun backgroundProtected(): Boolean =
+        context.getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) != false
+
     fun refreshDevice() = session.refreshDevice()
     fun onReactorTap() = session.onReactorTap()
     fun onMicPermissionDenied() = session.onMicPermissionDenied()
