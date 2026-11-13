@@ -447,6 +447,101 @@ class PhoneTools @Inject constructor(
         }
     }
 
+    private fun writeDirect(d: com.adesh.devjarvis.tools.SettingsRouter.Direct, on: Boolean?, value: String?): String? {
+        if (!Settings.System.canWrite(context)) return null
+        val cr = context.contentResolver
+        return runCatching {
+            when (d) {
+                com.adesh.devjarvis.tools.SettingsRouter.Direct.SCREEN_TIMEOUT -> {
+                    val ms = com.adesh.devjarvis.tools.SettingsRouter.timeoutMs(value) ?: return null
+                    Settings.System.putInt(cr, Settings.System.SCREEN_OFF_TIMEOUT, ms)
+                    "screen timeout set to ${if (ms == Int.MAX_VALUE) "never" else "${ms / 1000} seconds"}"
+                }
+                com.adesh.devjarvis.tools.SettingsRouter.Direct.FONT_SCALE -> {
+                    val scale = com.adesh.devjarvis.tools.SettingsRouter.fontScale(value) ?: return null
+                    Settings.System.putFloat(cr, Settings.System.FONT_SCALE, scale)
+                    "font size set to ${(scale * 100).roundToInt()}%"
+                }
+                else -> {
+                    val flag = on ?: return null
+                    val key = when (d) {
+                        com.adesh.devjarvis.tools.SettingsRouter.Direct.TOUCH_SOUNDS -> Settings.System.SOUND_EFFECTS_ENABLED
+                        com.adesh.devjarvis.tools.SettingsRouter.Direct.HAPTICS -> Settings.System.HAPTIC_FEEDBACK_ENABLED
+                        com.adesh.devjarvis.tools.SettingsRouter.Direct.DIAL_TONES -> Settings.System.DTMF_TONE_WHEN_DIALING
+                        else -> "lockscreen_sounds_enabled"
+                    }
+                    Settings.System.putInt(cr, key, if (flag) 1 else 0)
+                    "${d.name.lowercase().replace('_', ' ')} ${if (flag) "ON" else "OFF"}"
+                }
+            }
+        }.getOrNull()
+    }
+
+    private val phoneSetting = object : SimpleTool(
+        "phone_setting",
+        "Change or open ANY phone setting by its name — anything in the Settings app (screen timeout, font size, display " +
+            "size, refresh rate, ringtone, keyboard, language, date & time, developer options, battery percentage, app " +
+            "permissions, notifications, VPN, SIM / 5G, game mode, one-handed mode, gestures…, also names you have never " +
+            "seen). JARVIS sets it directly where Android allows, otherwise opens that setting's page or finds it with the " +
+            "Settings search, and flips the switch when you give on. The result shows the screen it reached: if the job is " +
+            "not finished, carry on there with tap / type_text / scroll by number. For Wi-Fi, Bluetooth, data, hotspot, " +
+            "location, airplane, battery saver, dark mode, DND and auto-rotate use set_toggle (faster).",
+        params {
+            string("setting", "The setting's name in plain words, e.g. \"screen timeout\", \"font size\", \"game mode\"", required = true)
+            boolean("on", "true = turn on, false = turn off (omit when it is not an on / off setting)")
+            string("value", "A value when there is one: \"2 minute\", \"bada\", \"120hz\"…")
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val name = args.requireString("setting")
+            val on = args.bool("on")
+            val value = args.string("value")
+            val route = com.adesh.devjarvis.tools.SettingsRouter.route(name)
+            if (route.forbidden) return ToolResult.fail("factory reset / erasing is never done by JARVIS. Sir must do that himself in Settings.")
+            route.direct?.let { d -> writeDirect(d, on, value)?.let { return ToolResult.ok(it) } }
+
+            val svc = JarvisAccessibilityService.get()
+            var outcome = ActivityLauncher.Outcome.NOT_FOUND
+            for (a in route.pages) {
+                outcome = launcher.launch(Intent(a), "Open $name")
+                if (outcome != ActivityLauncher.Outcome.NOT_FOUND) break
+            }
+            val viaSearch = outcome == ActivityLauncher.Outcome.NOT_FOUND
+            if (viaSearch) {
+                outcome = launcher.launch(Intent("android.settings.APP_SEARCH_SETTINGS"), "Search settings")
+                if (outcome == ActivityLauncher.Outcome.NOT_FOUND) outcome = launcher.launch(Intent(Settings.ACTION_SETTINGS), "Open settings")
+            }
+            if (svc == null || outcome != ActivityLauncher.Outcome.LAUNCHED) {
+                return launcher.result(outcome, "Settings opened for '$name'. JARVIS Accessibility is off, so Sir must finish it himself.", "Open $name")
+            }
+            kotlinx.coroutines.delay(1_200)
+            if (viaSearch) {
+                // Settings' own search: write the name, open the best result.
+                if (!svc.type(null, name.take(40))) {
+                    svc.openRow(listOf("search")); kotlinx.coroutines.delay(800); svc.type(null, name.take(40))
+                }
+                kotlinx.coroutines.delay(1_500)
+                svc.openRow(route.words)
+                kotlinx.coroutines.delay(1_000)
+            } else if (svc.setSwitch(on ?: true, route.words) == null) {
+                // The page is open; the setting may be a row on it.
+                if (svc.openRow(route.words)) kotlinx.coroutines.delay(1_000)
+            }
+            if (on != null) {
+                when (runCatching { svc.setSwitch(on, route.words) }.getOrNull()) {
+                    "changed" -> return ToolResult.ok("$name switched ${if (on) "ON" else "OFF"}")
+                    "already" -> return ToolResult.ok("$name was already ${if (on) "ON" else "OFF"}")
+                }
+            }
+            val screen = runCatching { svc.snapshot() }.getOrNull()
+            val text = screen?.let { com.adesh.devjarvis.screen.ScreenFormatter.compact(it, 50) } ?: "(screen not readable)"
+            return ToolResult.ok(
+                "Reached the settings for '$name' but the change is not made yet. Finish it now on this screen with tap / " +
+                    "type_text / scroll by number (choose the value Sir asked for), then tell Sir. Screen:\n$text",
+            )
+        }
+    }
+
     private val searchApps = listOf("youtube", "youtube_music", "google", "play_store", "maps", "spotify", "amazon", "flipkart")
 
     private val searchInApp = object : SimpleTool(
@@ -546,5 +641,6 @@ class PhoneTools @Inject constructor(
     val tools: List<JarvisTool> = listOf(
         openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setVolume,
         setBrightness, openSettings, setToggle, searchInApp, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
+        phoneSetting,
     )
 }

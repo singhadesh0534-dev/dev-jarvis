@@ -237,6 +237,9 @@ object SystemPrompt {
           app with open_app, then read_screen, tap its search box and type_text there. Never search a different app.
         - Music: one play_music call (or search_in_app for a video) is the whole job. Confirm in one line and stop;
           never hop between apps looking for the song.
+        - Phone settings: you can change any of them. On / off of the common switches -> set_toggle; every other
+          setting, by any name -> phone_setting (it finds it, and returns the screen if a last tap is needed: finish it).
+          Never say a setting can't be changed before trying; only factory reset / erase is left to Sir.
         - Yourself: anything about you, your settings, your keys, your version, or "ye kyun nahi chal raha" -> call
           jarvis_settings (action=get) and answer from it; never guess and never say you can't see your settings.
           "Apni ye setting badlo" -> jarvis_settings (action=set). The phone's own switches are set_toggle / open_settings.

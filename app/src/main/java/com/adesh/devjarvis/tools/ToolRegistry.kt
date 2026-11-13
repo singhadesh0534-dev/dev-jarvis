@@ -66,7 +66,7 @@ class ToolRegistry @Inject constructor(
             "set_toggle", "search_in_app", "open_settings", "play_music", "media_control", "device_status",
             "make_call", "send_sms", "send_whatsapp", "weather", "calculate", "get_time", "web_answer",
             "remember", "add_note", "read_notifications", "read_screen", "tap", "type_text", "scroll", "go_back", "go_home", "look",
-            "jarvis_settings", "set_persona",
+            "jarvis_settings", "set_persona", "phone_setting",
         )
     }
 
