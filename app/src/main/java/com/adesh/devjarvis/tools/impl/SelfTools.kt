@@ -121,6 +121,7 @@ class SelfTools @Inject constructor(
         flag("pause_on_low_battery", "Stop listening for the wake word below 15% battery", { it.pauseWakeOnLowBattery }) { s, v -> s.copy(pauseWakeOnLowBattery = v) },
         flag("habit_suggestions", "Offer what Sir usually does at this time", { it.suggestHabits }) { s, v -> s.copy(suggestHabits = v) },
         flag("diary", "Write a short diary entry every night", { it.diaryEnabled }) { s, v -> s.copy(diaryEnabled = v) },
+        flag("gaali_mode", "Rough talk: swear and take swearing in banter (Sir's choice)", { it.rawTalk }) { s, v -> s.copy(rawTalk = v) },
         flag("auto_memory", "Learn new things about Sir from conversations on its own", { it.autoMemory }) { s, v -> s.copy(autoMemory = v) },
         Item("home_city", "City for weather and briefings", { it.homeCity.ifBlank { "(not set)" } }, { s, v -> s.copy(homeCity = v.take(60)) }),
         Item("emergency_contacts", "Names or numbers that get the SOS message, comma separated", { it.emergencyContacts.ifBlank { "(none)" } }, { s, v -> s.copy(emergencyContacts = v.take(200)) }),
@@ -172,7 +173,7 @@ class SelfTools @Inject constructor(
             "floating_bubble, boot_animation, morning_briefing, morning_briefing_time, night_summary, night_summary_time, " +
             "quiet_hours_start, quiet_hours_end, notification_alerts, important_apps, important_contacts, announce_calls, " +
             "low_battery_alert, pause_on_low_battery, habit_suggestions, diary, home_city, emergency_contacts, speech_speed, " +
-            "speech_pitch, listening_engine, gf_voice, dost_voice, reply_length, follow_up_seconds, role. API keys can never be read or changed here: Sir types them in Settings. " +
+            "speech_pitch, listening_engine, gf_voice, dost_voice, reply_length, follow_up_seconds, role, gaali_mode. API keys can never be read or changed here: Sir types them in Settings. " +
             "The wake word itself is changed with set_wake_word.",
         params {
             string("action", "get | set", required = true, enum = listOf("get", "set"))

@@ -214,6 +214,11 @@ fun SettingsScreen(
                 Hint("Save karke agli baar bulao — nayi awaaz sunai degi. Kaun si achhi lagi, 2-3 try karke dekho.")
                 SubLabel("Jawab ki lambai")
                 ChoiceRow(listOf("short" to "CHHOTA", "normal" to "NORMAL", "detailed" to "DETAIL"), draft.replyStyle) { v -> viewModel.edit { it.copy(replyStyle = v) } }
+                ToggleRow(
+                    "Gaali mode",
+                    "JARVIS khul ke baat karta hai: aap gaali do to wo bhi mazaak mein deta hai, bura nahi maanta. Jaati / dharm wali gaali kabhi nahi.",
+                    draft.rawTalk,
+                ) { v -> viewModel.edit { it.copy(rawTalk = v) } }
                 LabeledSlider("Follow-up sec", draft.followUpSeconds.toFloat(), 3f..30f) { v -> viewModel.edit { it.copy(followUpSeconds = v.toInt()) } }
                 Hint("Jawab ke baad JARVIS kitni der bina wake word ke sunta rahe.")
                 HudField("Wake words (comma)", draft.customWakePhrases, { v -> viewModel.edit { it.copy(customWakePhrases = v) } })

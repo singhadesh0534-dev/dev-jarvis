@@ -116,6 +116,11 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
             }
             put("contents", contents)
             if (tools != null) put("tools", tools)
+            // Sir asked for the fewest restrictions: Google's adjustable filters off (its fixed rules still apply).
+            putJsonArray("safetySettings") {
+                listOf("HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT")
+                    .forEach { c -> addJsonObject { put("category", c); put("threshold", "BLOCK_NONE") } }
+            }
             putJsonObject("generationConfig") {
                 put("temperature", JarvisConfig.GEMINI_TEMPERATURE)
                 put("maxOutputTokens", JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS)
