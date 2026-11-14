@@ -2,7 +2,9 @@ package com.adesh.devjarvis.ui.hud
 
 import android.Manifest
 import android.content.pm.PackageManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
@@ -51,6 +53,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Share
@@ -108,7 +112,9 @@ import com.adesh.devjarvis.core.JarvisState
 import com.adesh.devjarvis.core.NetworkKind
 import com.adesh.devjarvis.ui.theme.BuiltByDev
 import com.adesh.devjarvis.ui.theme.Hud
+import com.adesh.devjarvis.ui.theme.HudLineIcon
 import com.adesh.devjarvis.ui.theme.HudShapes
+import com.adesh.devjarvis.ui.theme.LineIcon
 import com.adesh.devjarvis.ui.theme.HudTag
 import com.adesh.devjarvis.ui.theme.StatusDot
 import com.adesh.devjarvis.ui.theme.Wordmark
@@ -125,8 +131,14 @@ fun HudScreen(
     onOpenActivity: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenSetup: () -> Unit = onOpenSettings,
+    onOpenSkills: () -> Unit = {},
+    onOpenConnectors: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
+    val attachment by viewModel.attachment.collectAsStateWithLifecycle()
+    val research by viewModel.research.collectAsStateWithLifecycle()
+    val autoMemory by viewModel.autoMemory.collectAsStateWithLifecycle()
+    var sheetOpen by rememberSaveable { mutableStateOf(false) }
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
     val role by viewModel.role.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
@@ -144,6 +156,26 @@ fun HudScreen(
             PackageManager.PERMISSION_GRANTED
         if (!on || granted) viewModel.setAlwaysOn(on) else alwaysOnPermission.launch(Manifest.permission.RECORD_AUDIO)
     }
+
+    // The + sheet: camera, photos, files.
+    var shot by rememberSaveable { mutableStateOf<String?>(null) }
+    val takePicture = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { saved ->
+        shot?.let { if (saved) viewModel.onPhotoTaken(android.net.Uri.parse(it)) }
+        shot = null
+    }
+    val launchCamera = {
+        runCatching {
+            val target = viewModel.cameraTarget()
+            shot = target.toString()
+            takePicture.launch(target)
+        }.onFailure { viewModel.onMicPermissionDenied() }
+        Unit
+    }
+    val cameraPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) launchCamera()
+    }
+    val pickPhoto = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri -> if (uri != null) viewModel.attach(uri) }
+    val pickFile = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) viewModel.attach(uri) }
 
     var protectedBg by remember { mutableStateOf(true) }
     var missing by remember { mutableStateOf(emptyList<String>()) }
@@ -245,8 +277,67 @@ fun HudScreen(
                 ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
             }
             Transcript(ui, role, accent, Modifier.weight(if (hasChat) 1.1f else 0.35f))
-            InputBar(accent, onSend = viewModel::onTextSubmitted, onFile = viewModel::onFilePicked)
+            attachment?.let { a -> AttachmentChip(a.name, a.isImage, accent, onClear = viewModel::clearAttachment) }
+            InputBar(
+                accent,
+                hasAttachment = attachment != null,
+                research = research,
+                onSend = viewModel::send,
+                onPlus = { sheetOpen = true },
+            )
         }
+
+        val (skillCount, learnedCount) = remember(sheetOpen) { viewModel.skillCounts() }
+        AddSheet(
+            visible = sheetOpen,
+            accent = accent,
+            state = AddSheetState(research, autoMemory, skillCount, learnedCount),
+            onDismiss = { sheetOpen = false },
+            onCamera = {
+                sheetOpen = false
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) launchCamera()
+                else cameraPermission.launch(Manifest.permission.CAMERA)
+            },
+            onPhotos = {
+                sheetOpen = false
+                pickPhoto.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            },
+            onFiles = {
+                sheetOpen = false
+                pickFile.launch(FILE_TYPES)
+            },
+            onSkills = { sheetOpen = false; onOpenSkills() },
+            onConnectors = { sheetOpen = false; onOpenConnectors() },
+            onResearch = viewModel::setResearch,
+            onMemory = viewModel::setAutoMemory,
+        )
+        if (sheetOpen) BackHandler { sheetOpen = false }
+    }
+}
+
+/** What Files offers: photos, PDFs, Word, text, CSV / JSON. */
+private val FILE_TYPES = arrayOf(
+    "image/*", "application/pdf", "text/*", "application/json",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+)
+
+/** The file waiting to be sent: type a question, or just press send for "samjhao". */
+@Composable
+private fun AttachmentChip(name: String, isImage: Boolean, accent: Color, onClear: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 6.dp)
+            .glass(accent, HudShapes.Chip, tint = 1f, edge = 0.8f)
+            .padding(start = 10.dp, end = 2.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HudLineIcon(if (isImage) LineIcon.PHOTO else LineIcon.FILE, accent, size = 20.dp)
+        Column(Modifier.weight(1f).padding(start = 10.dp)) {
+            Text(name, style = MaterialTheme.typography.labelLarge, color = Hud.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Sawaal likhiye, ya seedha bhejiye — samjha dunga", style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 1)
+        }
+        IconButton(onClick = onClear) { Icon(Icons.Filled.Close, contentDescription = "Hatao", tint = Hud.Dim) }
     }
 }
 
@@ -698,18 +789,23 @@ private fun AssistantBubble(speaker: String, text: String, voiceColor: Color) {
 }
 
 @Composable
-private fun InputBar(accent: Color, onSend: (String) -> Unit, onFile: (android.net.Uri) -> Unit) {
+private fun InputBar(
+    accent: Color,
+    hasAttachment: Boolean,
+    research: Boolean,
+    onSend: (String) -> Unit,
+    onPlus: () -> Unit,
+) {
     var text by rememberSaveable { mutableStateOf("") }
-    val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) onFile(uri) }
     val send = {
-        if (text.isNotBlank()) {
+        if (text.isNotBlank() || hasAttachment) {
             onSend(text)
             text = ""
         }
     }
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
-    val ready = text.isNotBlank()
+    val ready = text.isNotBlank() || hasAttachment
     val edge by animateFloatAsState(if (focused) 1f else 0.55f, tween(250), label = "edge")
     val sendFill by animateColorAsState(if (ready) accent else Hud.Faint, tween(250), label = "send")
 
@@ -721,17 +817,21 @@ private fun InputBar(accent: Color, onSend: (String) -> Unit, onFile: (android.n
             .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        // Photo / PDF: JARVIS looks at it and explains.
-        Text(
-            "FILE",
-            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold),
-            color = accent,
-            modifier = Modifier
-                .clip(HudShapes.Pill)
-                .background(accent.copy(alpha = 0.10f), HudShapes.Pill)
-                .clickable { picker.launch(arrayOf("image/*", "application/pdf")) }
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        )
+        // + : photo, camera, file, skills, connectors, research, memory.
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .background(accent.copy(alpha = 0.12f), CircleShape)
+                .border(1.dp, accent.copy(alpha = 0.40f), CircleShape)
+                .clickable(onClick = onPlus),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Filled.Add, contentDescription = "JARVIS ko do: photo, file, skills", tint = accent)
+            if (research) {
+                Box(Modifier.align(Alignment.TopEnd).padding(7.dp).size(7.dp).background(Hud.Green, CircleShape))
+            }
+        }
         BasicTextField(
             value = text,
             onValueChange = { text = it },
@@ -745,7 +845,14 @@ private fun InputBar(accent: Color, onSend: (String) -> Unit, onFile: (android.n
             decorationBox = { inner ->
                 Box(Modifier.fillMaxWidth().heightIn(min = 40.dp), contentAlignment = Alignment.CenterStart) {
                     if (text.isEmpty()) {
-                        Text("Type to JARVIS…", style = MaterialTheme.typography.bodyLarge, color = Hud.Dim, maxLines = 1)
+                        Text(
+                            when {
+                                hasAttachment -> "Is file ke baare mein poochiye…"
+                                research -> "Research: kuch bhi poochiye…"
+                                else -> "Type to JARVIS…"
+                            },
+                            style = MaterialTheme.typography.bodyLarge, color = Hud.Dim, maxLines = 1,
+                        )
                     }
                     inner()
                 }

@@ -17,7 +17,9 @@ import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.ui.activity.ActivityLogScreen
 import com.adesh.devjarvis.ui.boot.BootScreen
 import com.adesh.devjarvis.ui.hud.HudScreen
+import com.adesh.devjarvis.ui.connectors.ConnectorsScreen
 import com.adesh.devjarvis.ui.memory.MemoryScreen
+import com.adesh.devjarvis.ui.skills.SkillsScreen
 import com.adesh.devjarvis.ui.voicelock.VoiceLockScreen
 import com.adesh.devjarvis.ui.settings.SettingsScreen
 import com.adesh.devjarvis.ui.setup.SetupScreen
@@ -58,6 +60,18 @@ class MainActivity : ComponentActivity() {
                             onOpenActivity = { nav.navigate(ROUTE_ACTIVITY) },
                             onOpenMemory = { nav.navigate(ROUTE_MEMORY) },
                             onOpenSetup = { nav.navigate(ROUTE_SETUP) },
+                            onOpenSkills = { nav.navigate(ROUTE_SKILLS) },
+                            onOpenConnectors = { nav.navigate(ROUTE_CONNECTORS) },
+                        )
+                    }
+                    composable(ROUTE_SKILLS) {
+                        SkillsScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() }, onRun = { nav.popBackStack() })
+                    }
+                    composable(ROUTE_CONNECTORS) {
+                        ConnectorsScreen(
+                            viewModel = hiltViewModel(),
+                            onBack = { nav.popBackStack() },
+                            onOpenSettings = { nav.navigate(ROUTE_SETTINGS) },
                         )
                     }
                     composable(ROUTE_ACTIVITY) {
@@ -136,5 +150,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_VOICELOCK = "voicelock"
         const val ROUTE_SETUP_FIRST = "setup_first"
         const val ROUTE_SETUP = "setup"
+        const val ROUTE_SKILLS = "skills"
+        const val ROUTE_CONNECTORS = "connectors"
     }
 }

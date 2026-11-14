@@ -106,6 +106,8 @@ data class JarvisSettings(
     val replyStyle: String = "normal",
     /** Seconds JARVIS keeps listening after a reply. */
     val followUpSeconds: Int = 8,
+    /** Learn new things about Sir from conversations on its own ("yaad rakho" always works). */
+    val autoMemory: Boolean = true,
     // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
     val elevenApiKey: String = "",
     val elevenVoiceId: String = "",
@@ -218,6 +220,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_DOST_VOICE, cleaned.dostVoice)
             .putString(K_REPLY_STYLE, cleaned.replyStyle)
             .putInt(K_FOLLOW_UP, cleaned.followUpSeconds.coerceIn(3, 30))
+            .putBoolean(K_AUTO_MEMORY, cleaned.autoMemory)
             .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
             .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
             .putString(K_ELEVEN_MODEL, cleaned.elevenModel.trim())
@@ -290,6 +293,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             dostVoice = prefs.getString(K_DOST_VOICE, d.dostVoice).orEmpty(),
             replyStyle = prefs.getString(K_REPLY_STYLE, d.replyStyle).orEmpty().ifBlank { d.replyStyle },
             followUpSeconds = prefs.getInt(K_FOLLOW_UP, d.followUpSeconds),
+            autoMemory = prefs.getBoolean(K_AUTO_MEMORY, d.autoMemory),
             elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
             elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
             elevenModel = prefs.getString(K_ELEVEN_MODEL, d.elevenModel).orEmpty(),
@@ -356,6 +360,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_DOST_VOICE = "dost_voice"
         const val K_REPLY_STYLE = "reply_style"
         const val K_FOLLOW_UP = "follow_up_seconds"
+        const val K_AUTO_MEMORY = "auto_memory"
         const val K_ELEVEN_KEY = "eleven_api_key"
         const val K_ELEVEN_VOICE = "eleven_voice_id"
         const val K_ELEVEN_MODEL = "eleven_model"

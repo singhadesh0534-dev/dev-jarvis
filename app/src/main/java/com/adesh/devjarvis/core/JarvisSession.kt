@@ -382,6 +382,22 @@ class JarvisSession @Inject constructor(
     fun note(text: String) = addLine(fromUser = false, text = text, system = true)
 
     /** Proactive line (e.g. a reminder). Spoken only if JARVIS is idle and no call is going on. */
+    /**
+     * Sir gave a file with the + button: his line shows what he gave (and asked), JARVIS's answer follows and both stay
+     * in the conversation, so "aur isme date kya hai?" works next.
+     */
+    fun fileTurn(userLine: String, work: suspend () -> String?) {
+        addLine(fromUser = true, text = userLine)
+        note("File dekh raha hoon…")
+        scope.launch {
+            val answer = runCatching { work() }.getOrNull()
+                ?: "Sir, ye file padh nahi paya — ya to khul nahi rahi, ya dimaag abhi jawab nahi de raha. Ek minute mein dobara try kijiye."
+            val line = com.adesh.devjarvis.brain.Persona.address(answer, settings.current.persona)
+            announce(line)
+            runCatching { brain.remember(userLine, line) }
+        }
+    }
+
     fun announce(text: String) {
         addLine(fromUser = false, text = text)
         if (_ui.value.state != JarvisState.IDLE || focus.inCall()) return
@@ -962,6 +978,7 @@ class JarvisSession @Inject constructor(
      */
     private fun scheduleMemoryExtraction() {
         memoryJob?.cancel()
+        if (!settings.current.autoMemory) { conversationStartedAt = 0L; return } // Sir switched auto-memory off
         val started = conversationStartedAt.takeIf { it > 0 } ?: System.currentTimeMillis()
         memoryJob = scope.launch {
             delay(15_000)
@@ -1023,6 +1040,18 @@ class JarvisSession @Inject constructor(
         SessionTrace.add("ROLE now $role live=$liveActive")
         runCatching { speechOut.applySettings() } // the phone voice follows the role
         // A Live session keeps the voice it started with: open it again so he hears the new voice right now.
+        if (liveActive && !liveClosingByUs && !liveRestartForRole) {
+            liveRestartForRole = true
+            liveConn?.close()
+        }
+    }
+
+    /** Research mode from the + menu. A running Live conversation reconnects so the new rule is in its instructions. */
+    fun setResearch(on: Boolean) {
+        if (modes.research == on) return
+        modes.research = on
+        SessionTrace.add("RESEARCH $on live=$liveActive")
+        note(if (on) "Research mode chalu — har sawaal web pe jaanch ke, detail mein." else "Research mode band.")
         if (liveActive && !liveClosingByUs && !liveRestartForRole) {
             liveRestartForRole = true
             liveConn?.close()

@@ -103,6 +103,7 @@ class SelfTools @Inject constructor(
         flag("pause_on_low_battery", "Stop listening for the wake word below 15% battery", { it.pauseWakeOnLowBattery }) { s, v -> s.copy(pauseWakeOnLowBattery = v) },
         flag("habit_suggestions", "Offer what Sir usually does at this time", { it.suggestHabits }) { s, v -> s.copy(suggestHabits = v) },
         flag("diary", "Write a short diary entry every night", { it.diaryEnabled }) { s, v -> s.copy(diaryEnabled = v) },
+        flag("auto_memory", "Learn new things about Sir from conversations on its own", { it.autoMemory }) { s, v -> s.copy(autoMemory = v) },
         Item("home_city", "City for weather and briefings", { it.homeCity.ifBlank { "(not set)" } }, { s, v -> s.copy(homeCity = v.take(60)) }),
         Item("emergency_contacts", "Names or numbers that get the SOS message, comma separated", { it.emergencyContacts.ifBlank { "(none)" } }, { s, v -> s.copy(emergencyContacts = v.take(200)) }),
         Item("speech_speed", "Classic voice speed, 50 (slow) to 200 (fast), 100 normal", { (it.ttsRate * 100).toInt().toString() },

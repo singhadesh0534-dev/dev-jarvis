@@ -112,6 +112,23 @@ for screen in Memory "Activity log"; do
   adb shell input keyevent 4; sleep 2
 done
 
+echo "=== + sheet, skills, connectors"
+PLUS='content-desc="JARVIS ko do'
+tap_node "$PLUS" && sleep 2 && check "plus sheet"
+tap_node 'text="Research"' && sleep 2
+shot 10_add_sheet
+tap_node 'text="Research"' && sleep 1
+tap_node 'text="Skills"' && sleep 3 && check "skills"
+tap_node 'text="Deep research"' && sleep 2
+shot 11_skills
+adb shell input keyevent 4; sleep 2
+tap_node "$PLUS" && sleep 2
+tap_node 'text="Connectors"' && sleep 3 && check "connectors"
+shot 12_connectors
+adb shell input swipe 540 1900 540 600 400; sleep 2; shot 13_connectors_2
+texts | head -30
+adb shell input keyevent 4; sleep 2
+
 echo "=== JARVIS flight recorder"
 adb shell run-as "$PKG" cat files/crash/trace.log 2>/dev/null | tail -n 60
 echo "=== JARVIS problem journal"

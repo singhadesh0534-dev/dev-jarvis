@@ -30,7 +30,23 @@ class InfoTools @Inject constructor(
     private val reminders: ReminderScheduler,
     // Provider breaks the JarvisBrain -> ToolRegistry -> InfoTools -> JarvisBrain cycle.
     private val brainProvider: Provider<JarvisBrain>,
+    private val documents: Provider<com.adesh.devjarvis.vision.DocumentReader>,
 ) {
+    private val askFile = object : SimpleTool(
+        "ask_file",
+        "Answer a question about the last photo / PDF / document Sir gave JARVIS with the + button (\"isme total kitna hai\", " +
+            "\"is bill ki date kya hai\", \"ise short mein samjhao\").",
+        params { string("question", "Sir's question about the file", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val reader = documents.get()
+            if (reader.last == null) return ToolResult.fail("Sir has not given a file yet: ask him to tap + and pick it")
+            val answer = reader.askLast(args.requireString("question"))
+                ?: return ToolResult.fail("could not read the file now (it may be gone, or vision is not answering)")
+            return ToolResult.ok("From ${reader.lastName}: $answer")
+        }
+    }
+
     private val webAnswer = object : SimpleTool(
         "web_answer", "Answer a question that needs current/live info from the web (news, scores, prices, 'aaj ka', latest anything).",
         params { string("query", "What Sir wants to know", required = true) },
@@ -110,5 +126,5 @@ class InfoTools @Inject constructor(
         }
     }
 
-    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer, setWakeWord)
+    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer, askFile, setWakeWord)
 }

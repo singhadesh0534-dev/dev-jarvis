@@ -53,6 +53,7 @@ class JarvisBrain @Inject constructor(
     private val keys: com.adesh.devjarvis.core.KeyRing,
     private val http: okhttp3.OkHttpClient,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
+    private val modes: com.adesh.devjarvis.core.ConversationMode,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
     /** The recent conversation is kept on the phone: after a restart, or the next "hello", JARVIS still knows it. */
@@ -229,6 +230,7 @@ class JarvisBrain @Inject constructor(
         }
         Persona.replyStyle(s.replyStyle).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         Persona.overlay(s.persona, compact).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
+        if (modes.research) append("\n\n").append(SystemPrompt.RESEARCH_MODE)
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(

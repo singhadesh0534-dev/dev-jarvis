@@ -28,7 +28,54 @@ class HudViewModel @Inject constructor(
     private val models: VoskModelManager,
     updater: AppUpdater,
     private val documents: com.adesh.devjarvis.vision.DocumentReader,
+    private val modes: com.adesh.devjarvis.core.ConversationMode,
+    private val learnedSkills: com.adesh.devjarvis.brain.LearnedSkills,
 ) : ViewModel() {
+    /** A file Sir picked with + and has not sent yet (he may type a question about it first). */
+    data class Attachment(val uri: android.net.Uri, val name: String, val isImage: Boolean)
+
+    private val _attachment = kotlinx.coroutines.flow.MutableStateFlow<Attachment?>(null)
+    val attachment: StateFlow<Attachment?> = _attachment
+
+    val research: StateFlow<Boolean> = modes.researchFlow
+    val autoMemory: StateFlow<Boolean> = settings.settings.map { it.autoMemory }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, settings.current.autoMemory)
+
+    fun skillCounts(): Pair<Int, Int> = com.adesh.devjarvis.brain.Skills.ALL.size to learnedSkills.all().size
+    fun setResearch(on: Boolean) = session.setResearch(on)
+    fun setAutoMemory(on: Boolean) {
+        settings.update { it.copy(autoMemory = on) }
+        session.note(if (on) "Memory chalu — baaton se nayi baatein khud yaad rakhunga." else "Memory band — ab sirf \"yaad rakho\" kehne par yaad rakhunga.")
+    }
+
+    /** Picked with + : held above the input until Sir sends (with or without a question). */
+    fun attach(uri: android.net.Uri) {
+        val type = context.contentResolver.getType(uri).orEmpty()
+        val name = documents.displayName(uri)
+        _attachment.value = Attachment(uri, name, type.startsWith("image/") || name.lowercase().let { n -> listOf(".jpg", ".jpeg", ".png", ".webp", ".heic").any { n.endsWith(it) } })
+    }
+
+    fun clearAttachment() { _attachment.value = null }
+
+    /** Where the camera writes its photo (shared with the camera app through the FileProvider). */
+    fun cameraTarget(): android.net.Uri {
+        val dir = java.io.File(context.cacheDir, "shots").apply { mkdirs() }
+        dir.listFiles()?.filter { System.currentTimeMillis() - it.lastModified() > 86_400_000L }?.forEach { it.delete() }
+        val file = java.io.File(dir, "shot_${System.currentTimeMillis()}.jpg")
+        return androidx.core.content.FileProvider.getUriForFile(context, "${context.packageName}.updates", file)
+    }
+
+    /** Send: with a file waiting, the text is a question about it (empty = "samjhao"). */
+    fun send(text: String) {
+        val a = _attachment.value
+        if (a == null) {
+            session.onTextSubmitted(text)
+            return
+        }
+        _attachment.value = null
+        val q = text.trim()
+        session.fileTurn("📎 ${a.name}" + if (q.isNotEmpty()) " — $q" else "") { documents.ask(a.uri, q) }
+    }
     val update: StateFlow<AppUpdater.State> = updater.state
 
     val ui: StateFlow<HudUiState> = session.ui
@@ -68,13 +115,9 @@ class HudViewModel @Inject constructor(
     fun answerConfirmation(yes: Boolean) = session.answerConfirmation(yes)
     fun dismissCard() = session.dismissCard()
 
-    /** A photo or PDF picked on the HUD: look at it and tell Sir what it is. */
-    fun onFilePicked(uri: android.net.Uri) {
-        session.note("File dekh raha hoon, Sir…")
-        viewModelScope.launch {
-            val answer = runCatching { documents.explain(uri) }.getOrNull()
-            session.announce(answer ?: "Sir, ye file padh nahi paya — ya to khul nahi rahi, ya vision abhi jawab nahi de raha. Ek minute mein dobara try kijiye.")
-        }
+    /** A camera shot: nothing to type first, JARVIS looks at it straight away. */
+    fun onPhotoTaken(uri: android.net.Uri) {
+        session.fileTurn("📷 Camera photo") { documents.ask(uri, "") }
     }
 
     /** Always-on switch on the HUD. Mic permission is checked by the screen first. */

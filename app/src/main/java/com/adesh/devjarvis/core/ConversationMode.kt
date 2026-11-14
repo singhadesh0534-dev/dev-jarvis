@@ -12,6 +12,11 @@ class ConversationMode @Inject constructor() {
     @Volatile var interpreter: Boolean = false
     @Volatile var liveVision: Boolean = false
     @Volatile var screenWatch: Boolean = false
+    /** Research mode (the + menu): every question is checked on the web and answered in depth. Until switched off. */
+    val researchFlow = kotlinx.coroutines.flow.MutableStateFlow(false)
+    var research: Boolean
+        get() = researchFlow.value
+        set(v) { researchFlow.value = v }
     /** What Sir said last (a tool may need to check he really asked for it). */
     @Volatile var lastUserWords: String = ""
 
