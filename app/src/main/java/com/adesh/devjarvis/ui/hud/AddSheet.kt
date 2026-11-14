@@ -91,8 +91,9 @@ fun BoxScope.AddSheet(
         Column(
             Modifier
                 .fillMaxWidth()
+                // solid base first: the chat behind must not show through the sheet
+                .background(Hud.Background, shape)
                 .glass(accent, shape, tint = 1.2f)
-                .background(Hud.Background.copy(alpha = 0.55f), shape)
                 // swallow taps so they don't reach the scrim
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
                 .navigationBarsPadding()
