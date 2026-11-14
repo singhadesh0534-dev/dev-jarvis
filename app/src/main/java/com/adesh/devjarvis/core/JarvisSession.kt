@@ -199,6 +199,8 @@ class JarvisSession @Inject constructor(
     private var pendingKickoff: String? = null
     /** First line of the next Live session, when it is not the usual greeting. */
     private var liveKickoff: String? = null
+    /** His last few opening lines, so the next call doesn't start the same way. */
+    private val recentGreetings = ArrayDeque<String>()
     private val liveActive: Boolean get() = liveJob?.isActive == true
     /** Set if the server refused our turn-taking config; then we connect without it. */
     private val liveConfirm = SpokenConfirmation()
@@ -1109,7 +1111,8 @@ class JarvisSession @Inject constructor(
     private fun startLive() {
         listenJob?.cancel()
         liveClosingByUs = false
-        val greeting = liveKickoff ?: greetingFor(settings.current.persona)
+        val greeting = (liveKickoff ?: Greetings.kickoff(settings.current.persona, java.time.LocalTime.now().hour, recentGreetings.toList())) +
+            if (liveKickoff != null) Greetings.avoid(recentGreetings.toList()) else ""
         liveKickoff = null
         val s = settings.current
         _ui.update { it.copy(partial = "", micLevel = 0f) }
@@ -1141,6 +1144,7 @@ class JarvisSession @Inject constructor(
             var endAfterTurn = false
             var followUp: Job? = null
             var lastWordsAt = 0L // when Sir's words last arrived from the server
+            var greetingNoted = false
 
             fun commitTurn() {
                 val u = userSaid.toString().trim()
@@ -1260,6 +1264,13 @@ class JarvisSession @Inject constructor(
                             setState(JarvisState.LISTENING)
                         }
                         LiveMessages.ServerEvent.TurnComplete -> {
+                            if (!greetingNoted) {
+                                greetingNoted = true
+                                if (userSaid.isBlank() && jarvisSaid.isNotBlank()) {
+                                    recentGreetings.addLast(jarvisSaid.toString().trim().take(80))
+                                    while (recentGreetings.size > 6) recentGreetings.removeFirst()
+                                }
+                            }
                             val asked = userSaid.toString().ifBlank { modes.lastUserWords }
                             val claimed = jarvisSaid.toString()
                             commitTurn()

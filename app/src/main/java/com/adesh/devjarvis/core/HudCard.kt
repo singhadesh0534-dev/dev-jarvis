@@ -8,6 +8,8 @@ object HudCards {
     private val SKIP = setOf(
         "get_time", "tap", "long_press", "type_text", "scroll", "swipe", "go_back", "go_home", "read_screen",
         "interpreter_mode", "live_camera", "screen_watch", "remember", "forget", "use_skill", "teach_start",
+        // these results are instructions for JARVIS himself, not something Sir should read
+        "set_persona", "jarvis_settings", "write_skill", "ask_file",
     )
     private val TITLES = mapOf(
         "get_weather" to "WEATHER", "web_answer" to "WEB", "calculate" to "CALCULATOR", "get_schedule" to "SCHEDULE",

@@ -49,7 +49,7 @@ class PersonaTest {
             assertTrue(short.contains("safety rule") && short.contains("set_persona") && short.contains("OFF"))
         }
         assertTrue(Persona.overlay(Persona.PARTNER, compact = true).contains("nothing sexually explicit"))
-        assertTrue(Persona.overlay(Persona.PARTNER).contains("How she sounds"))
+        assertTrue(Persona.overlay(Persona.PARTNER).contains("overacting"))
     }
 
     @Test fun hearsTheRoleInSirsOwnWords() {
