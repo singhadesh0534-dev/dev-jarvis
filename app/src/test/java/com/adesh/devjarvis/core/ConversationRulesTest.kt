@@ -57,3 +57,14 @@ class GoQuietTest {
         org.junit.Assert.assertFalse(ConversationRules.isEnder("kya socha aapne"))
     }
 }
+
+class WrongVoicesTest {
+    @Test fun sirSayingJarvisHearsOtherPeople() {
+        org.junit.Assert.assertTrue(ConversationRules.wrongVoices("भैया, वह एक लोगों से बात करा रहे हैं। गलत लोग हैं।"))
+        org.junit.Assert.assertTrue(ConversationRules.wrongVoices("galat awaaz mat suno"))
+        org.junit.Assert.assertTrue(ConversationRules.wrongVoices("सुन नहीं रहे हो तुम गलत बात सुनते हो 10 जगह भीड़ में"))
+        org.junit.Assert.assertTrue(ConversationRules.wrongVoices("sirf meri awaaz suno"))
+        org.junit.Assert.assertFalse(ConversationRules.wrongVoices("galat alarm laga diya"))
+        org.junit.Assert.assertFalse(ConversationRules.wrongVoices("mausam kaisa hai"))
+    }
+}

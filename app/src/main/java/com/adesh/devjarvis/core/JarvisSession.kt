@@ -219,11 +219,14 @@ class JarvisSession @Inject constructor(
             var prevRole = ""
             var prevVoice = ""
             var prevPhoneVoice = ""
+            var prevNoise = -1
             settings.settings.collect { s ->
                 val role = com.adesh.devjarvis.brain.Persona.normalize(s.persona)
                 // Only what Live itself uses reopens a Live conversation; the phone voice (pitch, speed, Google voice) is
                 // applied quietly — reconnecting for it made JARVIS ask "ab kaisi lagi?" when nothing had changed.
-                val voice = "${s.liveVoice}|${s.gfVoice}|${s.dostVoice}|${s.liveModel}|${s.liveHdAudio}|${s.noiseFilter}"
+                val voice = "${s.liveVoice}|${s.gfVoice}|${s.dostVoice}|${s.liveModel}|${s.liveHdAudio}"
+                // The noise filter is switched inside a running conversation, no reconnect needed.
+                if (s.noiseFilter != prevNoise) { liveAudio?.setNoiseLevel(s.noiseFilter); prevNoise = s.noiseFilter }
                 val phoneVoice = "${s.ttsVoiceName}|${s.ttsRate}|${s.ttsPitch}"
                 if (prevRole.isNotEmpty() && role != prevRole) onRoleChanged(role)
                 else if (prevVoice.isNotEmpty() && voice != prevVoice) onVoiceChanged()
@@ -1062,6 +1065,18 @@ class JarvisSession @Inject constructor(
         }
     }
 
+    /**
+     * Sir says JARVIS is hearing other people ("galat log", "bheed"): the crowd filter goes on at once, in the running
+     * conversation too — only a voice right at the phone gets through. Done by the app, not left to the model.
+     */
+    private fun crowdMode() {
+        if (settings.current.noiseFilter >= com.adesh.devjarvis.live.NearFieldGate.CROWD) return
+        SessionTrace.add("CROWD filter on (Sir said JARVIS hears other people)")
+        settings.update { it.copy(noiseFilter = com.adesh.devjarvis.live.NearFieldGate.CROWD) }
+        liveAudio?.setNoiseLevel(com.adesh.devjarvis.live.NearFieldGate.CROWD)
+        note("Bheed filter ON — ab sirf phone ke paas boli baat sunoonga. Settings > Shor filter se wapas badal sakte hain.")
+    }
+
     /** Research mode from the + menu. A running Live conversation reconnects so the new rule is in its instructions. */
     fun setResearch(on: Boolean) {
         if (modes.research == on) return
@@ -1205,6 +1220,7 @@ class JarvisSession @Inject constructor(
                             }
                             userSaid.append(e.text)
                             modes.lastUserWords = userSaid.toString()
+                            if (ConversationRules.wrongVoices(userSaid.toString())) crowdMode()
                             haltTools = com.adesh.devjarvis.brain.Persona.saidStop(userSaid.toString())
                             if (haltTools) SessionTrace.add("STOP said: tools halted")
                             noteRoleRequest(userSaid.toString())

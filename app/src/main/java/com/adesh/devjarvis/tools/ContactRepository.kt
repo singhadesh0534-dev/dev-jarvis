@@ -50,7 +50,8 @@ class ContactRepository @Inject constructor(@ApplicationContext private val cont
     /** Nearest saved names when nothing matched well enough, so JARVIS can ask "inme se kaun?" instead of "nahi mila". */
     suspend fun closest(query: String, limit: Int = 3): List<String> {
         if (!hasPermission()) return emptyList()
-        return FuzzyMatcher.rank(query, load(), threshold = 0.55) { listOf(it.name) }.take(limit).map { it.item.name }
+        // distinct: the same contact saved twice ("AL on demand; AL on demand") must not take two of the three places
+        return FuzzyMatcher.rank(query, load(), threshold = 0.55) { listOf(it.name) }.map { it.item.name }.distinct().take(limit)
     }
 
     /** How many contacts with a phone number JARVIS can see (0 usually means the permission or the account sync is the problem). */

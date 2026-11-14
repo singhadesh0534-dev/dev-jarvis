@@ -35,7 +35,10 @@ class LiveAudio(
     private val onMicChunk: (ByteArray, Int) -> Unit,
 ) {
     private val echoGate = EchoGate()
-    private val noiseGate = NearFieldGate.forLevel(noiseFilter)
+    @Volatile private var noiseGate = NearFieldGate.forLevel(noiseFilter)
+
+    /** Switch the noise filter while talking (e.g. to the crowd level), without reopening the conversation. */
+    fun setNoiseLevel(level: Int) { noiseGate = NearFieldGate.forLevel(level) }
     @Volatile var micLevel = 0f
         private set
     /** When Sir's voice was last heard near the phone (not JARVIS's own, not background): keeps a conversation open. */

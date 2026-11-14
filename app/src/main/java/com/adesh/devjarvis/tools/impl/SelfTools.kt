@@ -69,9 +69,17 @@ class SelfTools @Inject constructor(
     private val items: List<Item> = listOf(
         flag("always_on", "Listen for the wake word in the background", { it.alwaysOn }) { s, v -> s.copy(alwaysOn = v) },
         Item("voice_mode", "live (natural voice call) or classic (speech-to-text, then spoken reply)", { it.voiceEngine },
-            { s, v -> v.lowercase().trim().takeIf { it == JarvisSettings.VOICE_LIVE || it == JarvisSettings.VOICE_CLASSIC }?.let { s.copy(voiceEngine = it) } }),
+            { s, v ->
+                val t = v.lowercase().trim()
+                when {
+                    t == JarvisSettings.VOICE_LIVE || "live" in t || "natural" in t || "call" in t -> JarvisSettings.VOICE_LIVE
+                    t == JarvisSettings.VOICE_CLASSIC || "classic" in t || "standard" in t || "purana" in t || "eleven" in t -> JarvisSettings.VOICE_CLASSIC
+                    else -> null
+                }?.let { s.copy(voiceEngine = it) }
+            }),
         Item("live_voice", "The voice Sir hears in Live, for the role you are in now (it changes that role's own voice). Men: " +
-            Persona.HIS_VOICES.joinToString(", ") + ". Women: " + Persona.HER_VOICES.joinToString(", "), { it.liveVoice },
+            com.adesh.devjarvis.tools.VoiceChoice.described(Persona.HIS_VOICES) + ". Women: " +
+            com.adesh.devjarvis.tools.VoiceChoice.described(Persona.HER_VOICES), { it.liveVoice },
             { s, v -> com.adesh.devjarvis.tools.VoiceChoice.voiceName(v)?.let { s.copy(liveVoice = it) } }),
         Item("wake_sensitivity", "How easily the wake word triggers, 0 (only a clear call) to 100 (very easily)", { (it.wakeSensitivity * 100).toInt().toString() },
             { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 0..100 }?.let { s.copy(wakeSensitivity = it / 100f) } }),
@@ -122,13 +130,13 @@ class SelfTools @Inject constructor(
             { s, v -> com.adesh.devjarvis.tools.VoiceChoice.level(v, (s.ttsPitch * 100).toInt(), 50, 150)?.let { s.copy(ttsPitch = it / 100f) } }),
         Item("listening_engine", "Classic ears: android (Google speech) or groq (Whisper, better Hinglish, needs a Groq key)", { it.sttEngine },
             { s, v -> v.lowercase().trim().takeIf { it == "android" || it == "groq" }?.let { s.copy(sttEngine = it) } }),
-        Item("dost_voice", "Live voice of the dost role: " + Persona.HIS_VOICES.joinToString(", "), { it.dostVoice.ifBlank { it.liveVoice } },
+        Item("dost_voice", "Live voice of the dost role: " + com.adesh.devjarvis.tools.VoiceChoice.described(Persona.HIS_VOICES), { it.dostVoice.ifBlank { it.liveVoice } },
             { s, v -> Persona.HIS_VOICES.firstOrNull { it.equals(v.trim(), ignoreCase = true) }?.let { s.copy(dostVoice = it) } }),
         Item("reply_length", "How long replies are: short, normal or detailed", { it.replyStyle },
             { s, v -> v.lowercase().trim().let { t -> when { "short" in t || "chhot" in t -> "short"; "detail" in t || "lamb" in t || "long" in t -> "detailed"; "normal" in t -> "normal"; else -> null } }?.let { s.copy(replyStyle = it) } }),
         Item("follow_up_seconds", "Seconds to keep listening after a reply, 3 to 30", { it.followUpSeconds.toString() },
             { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 3..30 }?.let { s.copy(followUpSeconds = it) } }),
-        Item("gf_voice", "Live voice of the girlfriend role: " + Persona.HER_VOICES.joinToString(", "), { it.gfVoice },
+        Item("gf_voice", "Live voice of the girlfriend role: " + com.adesh.devjarvis.tools.VoiceChoice.described(Persona.HER_VOICES), { it.gfVoice },
             { s, v -> Persona.HER_VOICES.firstOrNull { it.equals(v.trim(), ignoreCase = true) }?.let { s.copy(gfVoice = it) } }),
         Item("role", "Who JARVIS is being: jarvis, dost or gf", { Persona.label(it.persona) }, { s, v -> s.copy(persona = Persona.normalize(v)) }),
     )

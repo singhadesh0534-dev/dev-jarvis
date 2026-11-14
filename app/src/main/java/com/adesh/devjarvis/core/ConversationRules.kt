@@ -33,6 +33,18 @@ object ConversationRules {
             """music|gaana|gana|video|phone|mobile|screen|nfc|cooler|geyser|bulb)\b|वाईफाई|ब्लूटूथ|टॉर्च|लाइट|पंखा|टीवी|फोन""",
     )
 
+    /** "Galat log / galat awaaz / bheed / doosron ki awaaz": JARVIS is answering other people. */
+    private val WRONG_VOICES = Regex(
+        """\b(?:galat|ghalat|wrong)\s+(?:awaa?z|aawaa?z|log|logon|baat\s+sun|voice|voices|people)|\b(?:doosr|dusr)[eio]\s+(?:log|logon|ki\s+awaa?z|ki\s+aawaa?z)|""" +
+            """\bbheed\b|\bkisi\s+aur\s+ki\s+(?:awaa?z|aawaa?z|baat)|\bmere\s+alawa|\bsirf\s+meri\s+(?:awaa?z|aawaa?z|baat)|\bother\s+people|""" +
+            """गलत\s+(?:आवाज़?|लोग|बात\s+सुन)|दूसर[ेोी]\s+(?:लोग|की\s+आवाज़?)|भीड़|किसी\s+और\s+की|मेरे\s+अलावा|सिर्फ\s+मेरी""",
+    )
+
+    fun wrongVoices(userText: String): Boolean {
+        val t = spaces.replace(punctuation.replace(userText.lowercase(), " "), " ").trim()
+        return t.isNotEmpty() && WRONG_VOICES.containsMatchIn(t)
+    }
+
     fun wantsQuiet(userText: String): Boolean {
         val t = spaces.replace(punctuation.replace(userText.lowercase(), " "), " ").trim()
         if (t.isEmpty()) return false

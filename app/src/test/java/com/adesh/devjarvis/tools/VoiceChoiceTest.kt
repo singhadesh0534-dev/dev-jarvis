@@ -26,4 +26,11 @@ class VoiceChoiceTest {
         assertEquals(150, VoiceChoice.level("+90", 100, 50, 150))
         assertNull(VoiceChoice.level("blue", 100, 50, 150))
     }
+
+    @Test fun everyVoiceHasACharacterForChoosing() {
+        (com.adesh.devjarvis.brain.Persona.HIS_VOICES + com.adesh.devjarvis.brain.Persona.HER_VOICES).forEach { v ->
+            org.junit.Assert.assertTrue(v, VoiceChoice.CHARACTER.containsKey(v))
+        }
+        org.junit.Assert.assertTrue(VoiceChoice.described(listOf("Algenib")).contains("gravelly"))
+    }
 }

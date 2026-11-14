@@ -52,8 +52,16 @@ class InfoTools @Inject constructor(
         params { string("query", "What Sir wants to know", required = true) },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
-            val answer = brainProvider.get().webAnswer(args.requireString("query"))
-            return answer?.let { ToolResult.ok(it) } ?: ToolResult.fail("web par abhi pahunch nahi paaya — Gemini key aur internet check karo")
+            val query = args.requireString("query")
+            val brain = brainProvider.get()
+            brain.webAnswer(query)?.let { return ToolResult.ok(it) }
+            // Web search busy (its own limit) or down: what JARVIS already knows still answers most questions.
+            val known = brain.complete(com.adesh.devjarvis.brain.SystemPrompt.WEB_FALLBACK, query, json = false)
+                ?: return ToolResult.fail("web search and the backup brain are both unreachable right now — tell Sir in one line and suggest a minute later")
+            return ToolResult.ok(
+                "NOT live-checked (web search busy right now), from your own knowledge: $known\n" +
+                    "If this is about today's news, live scores, prices or weather, tell Sir in a few words it may not be the latest.",
+            )
         }
     }
 

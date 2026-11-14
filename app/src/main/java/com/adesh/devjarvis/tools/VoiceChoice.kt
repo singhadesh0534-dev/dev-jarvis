@@ -10,6 +10,20 @@ object VoiceChoice {
     /** Every Live voice name, men's and women's. */
     val ALL: List<String> = Persona.HIS_VOICES + Persona.HER_VOICES
 
+    /** What each Live voice sounds like, so a disliked voice is swapped for a clearly different one. */
+    val CHARACTER: Map<String, String> = mapOf(
+        "Charon" to "calm, informative", "Orus" to "firm, deep", "Fenrir" to "excitable, energetic", "Iapetus" to "clear",
+        "Algenib" to "gravelly, heavy", "Rasalgethi" to "informative", "Alnilam" to "firm", "Schedar" to "even, steady",
+        "Enceladus" to "breathy, soft", "Umbriel" to "easy-going", "Puck" to "upbeat, young", "Achird" to "friendly",
+        "Sadaltager" to "knowledgeable",
+        "Kore" to "firm", "Leda" to "youthful", "Aoede" to "breezy", "Zephyr" to "bright", "Callirrhoe" to "easy-going",
+        "Autonoe" to "bright", "Despina" to "smooth", "Erinome" to "clear", "Laomedeia" to "upbeat", "Achernar" to "soft",
+        "Sulafat" to "warm", "Vindemiatrix" to "gentle", "Gacrux" to "mature", "Pulcherrima" to "forward",
+    )
+
+    /** "Charon (calm, informative), Orus (firm, deep), …" for a tool description. */
+    fun described(names: List<String>): String = names.joinToString(", ") { n -> CHARACTER[n]?.let { "$n ($it)" } ?: n }
+
     /** The setting that holds the voice of this role. */
     fun itemFor(role: String?): String = when (Persona.normalize(role)) {
         Persona.DOST -> "dost_voice"
