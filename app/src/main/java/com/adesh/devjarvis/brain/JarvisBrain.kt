@@ -54,6 +54,7 @@ class JarvisBrain @Inject constructor(
     private val http: okhttp3.OkHttpClient,
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val modes: com.adesh.devjarvis.core.ConversationMode,
+    private val connectorStore: com.adesh.devjarvis.connectors.ConnectorStore,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
     /** The recent conversation is kept on the phone: after a restart, or the next "hello", JARVIS still knows it. */
@@ -232,6 +233,10 @@ class JarvisBrain @Inject constructor(
         Persona.overlay(s.persona, compact).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         if (modes.research) append("\n\n").append(SystemPrompt.RESEARCH_MODE)
         if (s.rawTalk) append("\n\n").append(SystemPrompt.RAW_TALK)
+        connectorStore.all.value.takeIf { it.isNotEmpty() }?.let { list ->
+            append("\n\nSir's connected services (connectors): ").append(list.joinToString { it.name })
+                .append(". For anything in them (his mail, calendar, notes, files…) call connector_tools, then connector_call.")
+        }
         if (!Edition.isFull) append("\n").append(SystemPrompt.LITE_NOTE)
         append("\n\n")
         append(
@@ -383,9 +388,15 @@ class JarvisBrain @Inject constructor(
     }
 
     /** JARVIS ki aankhein: image + question -> short spoken answer (Gemini vision). Null if unavailable. */
+    /** Why the last [see] gave nothing, in words Sir understands (shown instead of a vague "dimaag kaam nahi kar raha"). */
+    @Volatile var lastVisionError: String = ""
+        private set
+
     suspend fun see(jpeg: ByteArray, question: String): String? {
         val s = settings.current
-        if (!s.hasGeminiKey || !device.isOnline()) return null
+        lastVisionError = ""
+        if (!s.hasGeminiKey) { lastVisionError = "Gemini key nahi daali hai"; return null }
+        if (!device.isOnline()) { lastVisionError = "internet band hai"; return null }
         val content = buildJsonObject {
             put("role", "user")
             put("parts", JsonArray(listOf(
@@ -403,9 +414,24 @@ class JarvisBrain @Inject constructor(
             val out = StringBuilder()
             geminiTurn(s, s.geminiModel, SystemPrompt.VISION, JsonArray(listOf(content)), null)
                 .collect { out.append(it.text) }
-            out.toString().trim().ifEmpty { null }
+            out.toString().trim().ifEmpty { lastVisionError = "Gemini ne khaali jawab diya"; null }
         } catch (e: BrainError) {
             if (e is BrainError.RateLimited) usage.markExhausted(Provider.GEMINI, cooldownFor(e))
+            lastVisionError = when (e) {
+                is BrainError.RateLimited -> "Gemini ki free limit abhi khatam hai (saari keys)"
+                is BrainError.InvalidKey -> "Gemini key galat ya band hai"
+                is BrainError.Blocked -> "Google ne ye photo dekhne se mana kar diya"
+                is BrainError.NoNetwork -> "network bahut dheema ya band hai"
+                is BrainError.Server -> "Gemini server error ${e.code}"
+                else -> e.javaClass.simpleName
+            }
+            com.adesh.devjarvis.core.SessionTrace.add("FILE vision failed: $lastVisionError")
+            null
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            lastVisionError = "network error (${e.javaClass.simpleName})"
+            com.adesh.devjarvis.core.SessionTrace.add("FILE vision failed: $lastVisionError")
             null
         }
     }

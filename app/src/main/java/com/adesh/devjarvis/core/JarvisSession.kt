@@ -405,14 +405,34 @@ class JarvisSession @Inject constructor(
      * Sir gave a file with the + button: his line shows what he gave (and asked), JARVIS's answer follows and both stay
      * in the conversation, so "aur isme date kya hai?" works next.
      */
-    fun fileTurn(userLine: String, work: suspend () -> String?) {
+    fun fileTurn(
+        userLine: String,
+        question: String = "",
+        image: () -> ByteArray? = { null },
+        whyFailed: () -> String = { "" },
+        work: suspend () -> String?,
+    ) {
         addLine(fromUser = true, text = userLine)
         note("File dekh raha hoon…")
         scope.launch {
             SessionTrace.add("FILE start")
-            val answer = runCatching { work() }.onFailure { SessionTrace.add("FILE error ${it.javaClass.simpleName}") }.getOrNull()
+            val got = runCatching { work() }.onFailure { SessionTrace.add("FILE error ${it.javaClass.simpleName}") }.getOrNull()
                 .also { SessionTrace.add("FILE answer ${if (it.isNullOrBlank()) "none" else "${it.length} chars"}") }
-                ?: "Sir, ye file padh nahi paya — ya to khul nahi rahi, ya dimaag abhi jawab nahi de raha. Ek minute mein dobara try kijiye."
+            if (got.isNullOrBlank()) {
+                // A Live conversation is open: let JARVIS look at it there instead (its own key and quota).
+                val img = image()
+                val conn = liveConn
+                if (img != null && conn != null && liveActive) {
+                    SessionTrace.add("FILE answered through Live instead")
+                    conn.sendVideo(img)
+                    conn.sendText("[Sir has just given you this photo (the latest frame). " +
+                        (question.ifBlank { "Look at it and explain what it is and what matters in it." }) + " Answer in short Hinglish.]")
+                    return@launch
+                }
+            }
+            val answer = got ?: whyFailed().let { why ->
+                "Sir, file ka jawab nahi aaya" + (if (why.isNotBlank()) ": $why." else ".") + " Ek minute mein dobara try kijiye."
+            }
             val line = com.adesh.devjarvis.brain.Persona.address(answer, settings.current.persona)
             announce(line)
             runCatching { brain.remember(userLine, line) }

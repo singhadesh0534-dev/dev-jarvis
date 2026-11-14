@@ -74,7 +74,7 @@ class HudViewModel @Inject constructor(
         }
         _attachment.value = null
         val q = text.trim()
-        session.fileTurn("📎 ${a.name}" + if (q.isNotEmpty()) " — $q" else "") { documents.ask(a.uri, q) }
+        session.fileTurn("📎 ${a.name}" + if (q.isNotEmpty()) " — $q" else "", q, { documents.lastJpeg }, { documents.lastError }) { documents.ask(a.uri, q) }
     }
     val update: StateFlow<AppUpdater.State> = updater.state
 
@@ -117,7 +117,7 @@ class HudViewModel @Inject constructor(
 
     /** A camera shot: nothing to type first, JARVIS looks at it straight away. */
     fun onPhotoTaken(uri: android.net.Uri) {
-        session.fileTurn("📷 Camera photo") { documents.ask(uri, "") }
+        session.fileTurn("📷 Camera photo", "", { documents.lastJpeg }, { documents.lastError }) { documents.ask(uri, "") }
     }
 
     /** Always-on switch on the HUD. Mic permission is checked by the screen first. */

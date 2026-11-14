@@ -10,6 +10,11 @@ import android.provider.Settings
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import com.adesh.devjarvis.accessibility.JarvisAccessibilityService
 import com.adesh.devjarvis.settings.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +32,48 @@ import javax.inject.Inject
 class ConnectorsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val settings: SettingsRepository,
+    private val store: com.adesh.devjarvis.connectors.ConnectorStore,
+    private val mcp: com.adesh.devjarvis.connectors.McpClient,
 ) : ViewModel() {
+    /** Sir's own connectors (MCP), shown as name + how many tools. */
+    val mine: StateFlow<List<MyConnector>> = store.all
+        .map { l -> l.map { MyConnector(it.name, runCatching { java.net.URI(it.url).host }.getOrNull() ?: it.url, it.tools) } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _message = MutableStateFlow("")
+    val message: StateFlow<String> = _message.asStateFlow()
+    private val _busy = MutableStateFlow(false)
+    val busy: StateFlow<Boolean> = _busy.asStateFlow()
+
+    /** Checks the server answers like an MCP server, then saves it. */
+    fun addConnector(name: String, url: String, token: String, done: (Boolean) -> Unit) {
+        val n = name.trim()
+        val u = url.trim()
+        if (n.isEmpty() || !u.startsWith("https://")) {
+            _message.value = "Naam aur https:// se shuru hone wala URL chahiye."
+            done(false); return
+        }
+        _busy.value = true
+        _message.value = "$n se jud raha hoon…"
+        viewModelScope.launch {
+            val c = com.adesh.devjarvis.connectors.UserConnector(n, u, token.trim())
+            val result = runCatching { mcp.listTools(c) }
+            _busy.value = false
+            result.onSuccess { tools ->
+                store.save(c.copy(tools = tools.size))
+                _message.value = "$n jud gaya — ${tools.size} kaam: " + tools.take(4).joinToString { it.name } + if (tools.size > 4) "…" else ""
+                done(true)
+            }.onFailure {
+                _message.value = "$n nahi juda: ${it.message ?: it.javaClass.simpleName}"
+                done(false)
+            }
+        }
+    }
+
+    fun removeConnector(name: String) {
+        store.remove(name)
+        _message.value = "$name hata diya."
+    }
     private val _items = MutableStateFlow(build())
     val items: StateFlow<List<Connector>> = _items.asStateFlow()
 

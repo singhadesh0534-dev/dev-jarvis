@@ -29,6 +29,12 @@ class DocumentReader @Inject constructor(
         private set
     @Volatile var lastName: String = ""
         private set
+    /** The picture last sent to the brain (so a running Live conversation can look at it instead). */
+    @Volatile var lastJpeg: ByteArray? = null
+        private set
+    /** Why the last file gave no answer. */
+    val lastError: String get() = if (lastJpeg == null && fileFailed) "file khul nahi rahi" else brain.lastVisionError
+    @Volatile private var fileFailed = false
 
     /** Spoken explanation, or null when the file could not be opened or the model did not answer. */
     suspend fun explain(uri: Uri): String? = ask(uri, "")
@@ -47,6 +53,8 @@ class DocumentReader @Inject constructor(
             return brain.complete(TEXT_SYSTEM, user, json = false)
         }
         val jpeg = withContext(Dispatchers.IO) { runCatching { toJpeg(uri) }.getOrNull() }
+        lastJpeg = jpeg
+        fileFailed = jpeg == null
         com.adesh.devjarvis.core.SessionTrace.add("FILE image ${jpeg?.size?.div(1024) ?: -1} KB")
         if (jpeg == null) return null
         return brain.see(jpeg, if (q.isEmpty()) QUESTION else "$q\n\n$RULES")
