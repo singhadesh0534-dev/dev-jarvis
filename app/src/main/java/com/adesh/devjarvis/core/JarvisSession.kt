@@ -63,7 +63,8 @@ enum class JarvisState(val label: String) {
     IDLE("STANDBY"), LISTENING("LISTENING"), THINKING("PROCESSING"), SPEAKING("SPEAKING")
 }
 
-data class TranscriptLine(val id: Long, val fromUser: Boolean, val text: String, val isSystem: Boolean = false)
+/** [role] = who was speaking (jarvis / dost / gf) when JARVIS said it, so old lines keep their own name and colour. */
+data class TranscriptLine(val id: Long, val fromUser: Boolean, val text: String, val isSystem: Boolean = false, val role: String = "")
 
 data class HudUiState(
     val state: JarvisState = JarvisState.IDLE,
@@ -1369,8 +1370,10 @@ class JarvisSession @Inject constructor(
         syncMic()
     }
 
+    private fun currentRole(): String = com.adesh.devjarvis.brain.Persona.normalize(settings.current.persona)
+
     private fun addLine(fromUser: Boolean, text: String, system: Boolean = false) {
-        val line = TranscriptLine(nextId++, fromUser, text, system)
+        val line = TranscriptLine(nextId++, fromUser, text, system, role = currentRole())
         _ui.update { it.copy(transcript = (it.transcript + line).takeLast(MAX_LINES)) }
     }
 
@@ -1380,7 +1383,7 @@ class JarvisSession @Inject constructor(
             val list = if (existing >= 0) {
                 st.transcript.toMutableList().also { it[existing] = it[existing].copy(text = text) }
             } else {
-                (st.transcript + TranscriptLine(id, fromUser = fromUser, text = text, isSystem = system)).takeLast(MAX_LINES)
+                (st.transcript + TranscriptLine(id, fromUser = fromUser, text = text, isSystem = system, role = currentRole())).takeLast(MAX_LINES)
             }
             st.copy(transcript = list)
         }

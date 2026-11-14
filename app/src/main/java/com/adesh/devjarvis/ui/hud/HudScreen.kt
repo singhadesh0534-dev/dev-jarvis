@@ -621,7 +621,11 @@ private fun Transcript(ui: HudUiState, role: String, accent: Color, modifier: Mo
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     )
                     line.fromUser -> UserBubble(line.text, accent)
-                    else -> AssistantBubble(speaker, line.text, accent)
+                    else -> {
+                        // Each line keeps the role it was spoken in.
+                        val r = line.role.ifBlank { role }
+                        AssistantBubble(Persona.label(r).uppercase(), line.text, if (r == Persona.PARTNER) Hud.Pink else Hud.Cyan)
+                    }
                 }
             }
             if (ui.partial.isNotEmpty()) {
