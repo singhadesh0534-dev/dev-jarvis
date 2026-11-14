@@ -89,3 +89,11 @@ class QuickCommandsTest {
         assertEquals("mobile_data", q("data on karo")!!.args["target"])
     }
 }
+
+class QuickVaryTest {
+    @Test fun fixedLinesComeOutDifferently() {
+        val outs = (0 until 30).map { QuickCommands.vary("Torch chalu, Sir.", kotlin.random.Random(it)) }.toSet()
+        org.junit.Assert.assertTrue(outs.size >= 3)
+        org.junit.Assert.assertTrue(outs.any { "Sir" !in it && it.endsWith(".") })
+    }
+}

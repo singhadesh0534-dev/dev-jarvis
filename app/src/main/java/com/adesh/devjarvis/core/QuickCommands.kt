@@ -25,6 +25,17 @@ object QuickCommands {
     private fun normalize(raw: String): List<String> =
         Translit.toLatin(raw).lowercase().replace(Regex("""[^\p{L}\p{N} ]"""), " ").split(' ').filter { it.isNotBlank() }
 
+    private val LEADS = listOf("", "", "", "Lo, ", "Theek hai, ", "Ok, ")
+
+    /** The same fixed line every time sounds like a machine: drop the "Sir" most times and vary the start a little. */
+    fun vary(line: String, random: kotlin.random.Random = kotlin.random.Random.Default): String {
+        var t = line
+        if (random.nextInt(3) != 0) t = t.replace(Regex(""",?\s*Sir([.!?])$"""), "$1").replace(Regex("""^Sir,\s*"""), "")
+        val lead = LEADS.random(random)
+        if (lead.isNotEmpty() && t.isNotEmpty()) t = lead + t.replaceFirstChar { it.lowercase() }
+        return t
+    }
+
     /** Honest words when the step ran but the job is not finished (settings opened, switch still needs a tap). */
     fun halfDone(tool: String): String = when (tool) {
         "set_toggle" -> "Sir, setting khol di hai, par switch main khud nahi daba paya — JARVIS Accessibility band hai. " +

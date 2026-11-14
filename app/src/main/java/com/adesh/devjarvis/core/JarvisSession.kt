@@ -775,7 +775,7 @@ class JarvisSession @Inject constructor(
                         val detail = result.message.lineSequence().firstOrNull().orEmpty().take(180)
                         // Half-done (page opened, switch not flipped) must never be spoken as "kar diya".
                         val said = when {
-                            result.done -> quick.say ?: "Sir, $detail"
+                            result.done -> quick.say?.let { QuickCommands.vary(it) } ?: "Sir, $detail"
                             result.partial -> QuickCommands.halfDone(quick.tool)
                             else -> "Sir, ye abhi nahi ho paya: $detail"
                         }
@@ -1532,6 +1532,6 @@ class JarvisSession @Inject constructor(
                 "Say one short line of your own out loud in that role to show it, then wait for what he says.]"
         const val LIVE_GREETING =
             "[Sir has just called you by name. Answer him now, out loud, with one short warm line (at most 8 words) " +
-                "such as \"Ji Sir, bataiye\" and then wait for what he says.]"
+                "of your own, and then wait for what he says.]"
     }
 }

@@ -233,6 +233,7 @@ class JarvisBrain @Inject constructor(
         Persona.overlay(s.persona, compact).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         if (modes.research) append("\n\n").append(SystemPrompt.RESEARCH_MODE)
         if (s.rawTalk) append("\n\n").append(SystemPrompt.RAW_TALK)
+        append("\n\n").append(if (compact) SystemPrompt.NATURAL_TALK.lines().take(6).joinToString("\n") else SystemPrompt.NATURAL_TALK)
         connectorStore.all.value.takeIf { it.isNotEmpty() }?.let { list ->
             append("\n\nSir's connected services (connectors): ").append(list.joinToString { it.name })
                 .append(". For anything in them (his mail, calendar, notes, files…) call connector_tools, then connector_call.")
