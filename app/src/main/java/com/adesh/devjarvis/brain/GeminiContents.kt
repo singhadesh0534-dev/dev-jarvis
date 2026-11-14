@@ -36,7 +36,7 @@ object GeminiContents {
                         put("name", call.name)
                         call.id?.let { put("id", it) }
                         putJsonObject("response") {
-                            put("ok", result.ok)
+                            put("ok", result.done)
                             put("result", result.message)
                         }
                     }

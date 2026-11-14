@@ -349,7 +349,7 @@ class JarvisBrain @Inject constructor(
                 emit(BrainEvent.ToolStarted(call.name, args))
                 val result = runTool(call.name, args)
                 emit(BrainEvent.ToolFinished(call.name, args, result))
-                messages += GroqMessages.toolResult(call.id, result.ok, result.message)
+                messages += GroqMessages.toolResult(call.id, result.done, result.message)
             }
         }
         emit(BrainEvent.Text(TOO_MANY_ROUNDS))

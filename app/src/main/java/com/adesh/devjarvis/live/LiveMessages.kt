@@ -118,7 +118,7 @@ object LiveMessages {
                         put("id", call.id)
                         put("name", call.name)
                         putJsonObject("response") {
-                            put("ok", r.ok)
+                            put("ok", r.done)
                             put("result", r.message)
                         }
                     }

@@ -855,14 +855,14 @@ class JarvisSession @Inject constructor(
             upsertLine(lineId, "? $name: Sir ki haan/naa ka intezaar", system = true)
             return result
         }
-        if (result.ok) turnToolOk++
-        if (result.ok) earcons.success() else earcons.error()
+        if (result.done) turnToolOk++
+        if (result.done) earcons.success() else earcons.error()
         if (result.endsConversation) endAfterReply = true
         // Screen tools return the whole new screen: the transcript and the log keep the first line only.
         val headline = result.message.lineSequence().firstOrNull().orEmpty().take(180)
-        upsertLine(lineId, (if (result.ok) "✓ " else "✗ ") + "$name: $headline", system = true)
-        activityLog.add(name, argText, result.ok, headline)
-        HudCards.forTool(lineId, name, result.ok, result.message)?.let(::showCard)
+        upsertLine(lineId, (if (result.done) "✓ " else "✗ ") + "$name: $headline", system = true)
+        activityLog.add(name, argText, result.done, headline) // half-done shows amber, not green
+        HudCards.forTool(lineId, name, result.done, result.message)?.let(::showCard)
         return result
     }
 

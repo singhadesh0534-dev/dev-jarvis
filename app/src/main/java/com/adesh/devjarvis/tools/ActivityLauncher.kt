@@ -63,7 +63,7 @@ class ActivityLauncher @Inject constructor(@ApplicationContext private val conte
     /** Converts an outcome into a tool result with the right message for the LLM. */
     fun result(outcome: Outcome, done: String, whatForUser: String, endsConversation: Boolean = false): ToolResult = when (outcome) {
         Outcome.LAUNCHED -> ToolResult.ok(done, endsConversation)
-        Outcome.NEEDS_TAP -> ToolResult.ok(
+        Outcome.NEEDS_TAP -> ToolResult.partial(
             "NOT opened yet: Android only lets JARVIS open apps from the background while JARVIS Accessibility is " +
                 "running" + (if (accessibilityStuck()) " (it is switched on but Android disconnected it — Sir should turn " +
                 "JARVIS off and on again in Settings > Accessibility)" else " (it is off — JARVIS Setup > Accessibility)") +

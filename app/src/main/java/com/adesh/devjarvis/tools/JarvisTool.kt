@@ -30,9 +30,15 @@ data class ToolResult(
     val endsConversation: Boolean = false,
     /** Not a failure: the tool is waiting for Sir's spoken yes/no and will be called again. */
     val awaitingConfirmation: Boolean = false,
+    /** The step ran but Sir's request is NOT finished yet (a page opened, a tap still needed): never "done". */
+    val partial: Boolean = false,
 ) {
+    /** Sir's request really happened. */
+    val done: Boolean get() = ok && !partial
+
     companion object {
         fun ok(message: String, endsConversation: Boolean = false) = ToolResult(true, message, endsConversation)
+        fun partial(message: String) = ToolResult(true, message, partial = true)
         fun fail(message: String) = ToolResult(false, message)
     }
 }

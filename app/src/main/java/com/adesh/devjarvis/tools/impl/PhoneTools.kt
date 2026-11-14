@@ -414,11 +414,13 @@ class PhoneTools @Inject constructor(
             }
             if (outcome == ActivityLauncher.Outcome.NOT_FOUND) outcome = launcher.launch(Intent(Settings.ACTION_SETTINGS), "Open settings")
             if (svc == null || outcome != ActivityLauncher.Outcome.LAUNCHED) {
-                return launcher.result(
+                val r = launcher.result(
                     outcome,
-                    "$target settings opened, but JARVIS could not flip the switch himself: Accessibility is off (JARVIS Setup). Sir must tap it.",
+                    "NOT done: $target settings opened, but JARVIS could not flip the switch himself because Accessibility is off " +
+                        "(JARVIS Setup). Tell Sir exactly that: he must tap the switch, or turn on JARVIS Accessibility once.",
                     "Open $target settings",
                 )
+                return if (r.ok) r.copy(partial = true) else r
             }
             var result: String? = null
             var openedRow = false
@@ -512,7 +514,8 @@ class PhoneTools @Inject constructor(
                 if (outcome == ActivityLauncher.Outcome.NOT_FOUND) outcome = launcher.launch(Intent(Settings.ACTION_SETTINGS), "Open settings")
             }
             if (svc == null || outcome != ActivityLauncher.Outcome.LAUNCHED) {
-                return launcher.result(outcome, "Settings opened for '$name'. JARVIS Accessibility is off, so Sir must finish it himself.", "Open $name")
+                val r = launcher.result(outcome, "NOT done: settings opened for '$name', but JARVIS Accessibility is off, so Sir must finish it himself. Tell him exactly that.", "Open $name")
+                return if (r.ok) r.copy(partial = true) else r
             }
             kotlinx.coroutines.delay(1_200)
             if (viaSearch) {
@@ -535,7 +538,7 @@ class PhoneTools @Inject constructor(
             }
             val screen = runCatching { svc.snapshot() }.getOrNull()
             val text = screen?.let { com.adesh.devjarvis.screen.ScreenFormatter.compact(it, 50) } ?: "(screen not readable)"
-            return ToolResult.ok(
+            return ToolResult.partial(
                 "Reached the settings for '$name' but the change is not made yet. Finish it now on this screen with tap / " +
                     "type_text / scroll by number (choose the value Sir asked for), then tell Sir. Screen:\n$text",
             )
