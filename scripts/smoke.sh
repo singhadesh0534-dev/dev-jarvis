@@ -17,6 +17,9 @@ adb shell pm disable-user --user 0 com.google.android.apps.nexuslauncher >/dev/n
 adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true
 sleep 12
 
+# Screenshots of every screen, published to the ci-screens branch by the workflow (for design review).
+mkdir -p screens
+shot() { adb exec-out screencap -p > "screens/$1.png" 2>/dev/null && echo "(screenshot $1)"; }
 dump() { adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1; adb shell cat /sdcard/ui.xml 2>/dev/null; }
 texts() { dump | tr '>' '\n' | grep -o 'text="[^"]\+"' | sed 's/^text="//; s/"$//'; }
 alive() { adb shell pidof "$PKG" >/dev/null 2>&1; }
@@ -57,6 +60,7 @@ type_to_jarvis() {
 }
 
 dismiss
+sleep 3; shot 01_home_start
 echo "=== HUD on start:"; texts | head -30
 check "start"
 
@@ -69,6 +73,13 @@ type_to_jarvis "5 minute ka timer lagao"
 type_to_jarvis "brightness kam karo"
 type_to_jarvis "wifi band karo"
 type_to_jarvis "EMI kitni banegi 5 lakh 10 percent 3 saal"
+
+shot 02_home_chat
+type_to_jarvis "gf ban ke baat karo" 8
+shot 03_home_gf
+type_to_jarvis "dost ban jao" 8
+shot 04_home_dost
+type_to_jarvis "Jarvis ban jao" 8
 
 echo "=== always-on switch (wake engine + model download)"
 dismiss
@@ -87,12 +98,17 @@ adb shell am start -n "$PKG/.MainActivity" --ez smoke_skip_setup true; sleep 4
 dismiss
 tap_node 'content-desc="Settings"' && sleep 4
 check "settings"
+shot 05_settings_top
+adb shell input swipe 540 1900 540 500 400; sleep 2; shot 06_settings_2
+adb shell input swipe 540 1900 540 500 400; sleep 2; shot 07_settings_3
+adb shell input swipe 540 1900 540 500 400; sleep 2; shot 08_settings_4
+adb shell input swipe 540 500 540 2200 200; adb shell input swipe 540 500 540 2200 200; adb shell input swipe 540 500 540 2200 200; sleep 2
 texts | head -40
 tap_node 'Keys check karo' && sleep 6
 texts | grep -i -E "gemini|groq|eleven|brain" | head
 adb shell input keyevent 4; sleep 2
 for screen in Memory "Activity log"; do
-  tap_node "content-desc=\"$screen\"" && sleep 3 && check "$screen" && echo "--- $screen:" && texts | head -10
+  tap_node "content-desc=\"$screen\"" && sleep 3 && check "$screen" && shot "09_$(echo "$screen" | tr ' ' '_')" && echo "--- $screen:" && texts | head -10
   adb shell input keyevent 4; sleep 2
 done
 

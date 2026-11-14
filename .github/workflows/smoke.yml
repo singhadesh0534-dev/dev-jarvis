@@ -13,6 +13,8 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -51,3 +53,20 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-boot-anim -camera-back none -camera-front none
           script: bash scripts/smoke.sh
+
+      # Every screen as a picture, on the ci-screens branch, so the design can be reviewed without a phone.
+      - name: Publish screenshots
+        if: always()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          [ -d screens ] && ls screens/*.png >/dev/null 2>&1 || { echo "no screenshots"; exit 0; }
+          cd screens
+          echo "$GITHUB_SHA" > COMMIT.txt
+          git init -q
+          git config user.name "jarvis-ci"
+          git config user.email "jarvis-ci@users.noreply.github.com"
+          git checkout -q -b ci-screens
+          git add -A
+          git commit -qm "Emulator screenshots for $GITHUB_SHA"
+          git push -fq "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" ci-screens
