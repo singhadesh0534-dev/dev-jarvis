@@ -306,7 +306,16 @@ private fun StatusStrip(
             Hairline()
             Readout("NET", ui.network.label, if (online) accent else Hud.Amber, Modifier.weight(1f), onNet)
             Hairline()
-            Readout("BRAIN", ui.brainSource.ifBlank { "--" }, if (ui.fuelPercent < 15) Hud.Amber else accent, Modifier.weight(1.3f), onBrain)
+            // The brain in use and how much of its free quota ("fuel") is left today.
+            Readout(
+                "BRAIN", ui.brainSource.ifBlank { "--" }, if (ui.fuelPercent < 15) Hud.Amber else accent, Modifier.weight(1.45f), onBrain,
+                extra = "FUEL ${ui.fuelPercent}%",
+                extraColor = when {
+                    ui.fuelPercent < 15 -> Hud.Amber
+                    ui.fuelPercent < 40 -> Hud.Ice
+                    else -> Hud.Green
+                },
+            )
             Hairline()
             Readout(
                 "ROOP", Persona.label(role).uppercase(),
@@ -350,14 +359,28 @@ private fun StatusStrip(
 }
 
 @Composable
-private fun Readout(label: String, value: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun Readout(
+    label: String, value: String, color: Color, modifier: Modifier, onClick: () -> Unit,
+    extra: String? = null, extraColor: Color = color,
+) {
     val tint by animateColorAsState(color, tween(500), label = "readout")
     Column(
         modifier
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, letterSpacing = 1.5.sp), color = Hud.Dim, maxLines = 1)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, letterSpacing = 1.5.sp), color = Hud.Dim, maxLines = 1)
+            if (extra != null) {
+                Text(
+                    "  $extra",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, letterSpacing = 0.8.sp, fontWeight = FontWeight.Bold),
+                    color = extraColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Text(
             value,
             style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Bold),
@@ -468,6 +491,12 @@ private fun StateReadout(ui: HudUiState, accent: Color, onTap: () -> Unit) {
             }
             Text(hint, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
+        Text(
+            "FUEL ${ui.fuelPercent}%  ·  PWR ${if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%"}",
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, letterSpacing = 1.5.sp),
+            color = if (ui.fuelPercent < 15) Hud.Amber else accent.copy(alpha = 0.75f),
+            modifier = Modifier.padding(top = 3.dp),
+        )
     }
 }
 
