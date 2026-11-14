@@ -40,6 +40,15 @@ class LiveConnection(
     @Volatile private var ready = false
     @Volatile private var closed = false
     private val pending = ArrayDeque<String>()
+    /** What Sir says while the session is being set up (right after "Hello Dev"). */
+    private val early = EarlySpeech()
+    /** The greeting request: sent only if Sir hasn't already started talking by the time the session is ready. */
+    private var kickoff: String? = null
+    /** Sir was already speaking when the session became ready: his words were sent and the greeting skipped. */
+    @Volatile var spokeWhileConnecting = false
+        private set
+    @Volatile var earlyChunksSent = 0
+        private set
     private var socket: WebSocket? = null
 
     fun connect() {
@@ -82,6 +91,17 @@ class LiveConnection(
             if (ev == LiveMessages.ServerEvent.SetupComplete) {
                 synchronized(pending) {
                     ready = true
+                    if (early.spoke) {
+                        // He already said what he wants: send exactly that, no greeting in front of the answer.
+                        val said = early.drain()
+                        said.forEach { socket?.send(it) }
+                        earlyChunksSent = said.size
+                        spokeWhileConnecting = true
+                    } else {
+                        early.drain()
+                        kickoff?.let { socket?.send(it) }
+                    }
+                    kickoff = null
                     while (pending.isNotEmpty()) socket?.send(pending.removeFirst())
                 }
             }
@@ -92,9 +112,27 @@ class LiveConnection(
     fun sendAudio(pcm: ByteArray, length: Int) {
         if (closed) return
         val msg = LiveMessages.audio(pcm, length, JarvisConfig.LIVE_INPUT_RATE)
-        // Audio from before the session is ready is stale (the tail of the wake word, room noise): drop it.
-        // Buffering it used to push the greeting request out of the queue, so "Hello Dev" got no answer.
-        synchronized(pending) { if (!ready) return }
+        synchronized(pending) {
+            if (!ready) {
+                // Kept apart from the text queue (so it can never push the greeting out), and sent only if it
+                // really holds Sir's request — the tail of the wake word or a quiet room is dropped.
+                early.offer(pcm, length, msg)
+                return
+            }
+        }
+        socket?.send(msg)
+    }
+
+    /** The greeting request: goes out when the session is ready, unless Sir is already talking by then. */
+    fun sendKickoff(text: String) {
+        if (closed) return
+        val msg = LiveMessages.text(text)
+        synchronized(pending) {
+            if (!ready) {
+                kickoff = msg
+                return
+            }
+        }
         socket?.send(msg)
     }
 

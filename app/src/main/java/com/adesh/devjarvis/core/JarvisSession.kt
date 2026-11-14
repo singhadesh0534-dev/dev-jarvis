@@ -1195,7 +1195,7 @@ class JarvisSession @Inject constructor(
             try {
                 conn.connect()
                 // Spoken acknowledgement in JARVIS's own Live voice, instead of silence after the chime.
-                conn.sendText(greeting)
+                conn.sendKickoff(greeting) // skipped if Sir already says his request while we connect
                 wake.awaitStopped()
                 audio.start()
                 // No greeting retry: a slow first answer plus a retry made JARVIS say his greeting twice.
@@ -1233,7 +1233,8 @@ class JarvisSession @Inject constructor(
                                 firstAudioLogged = true
                                 val ms = System.currentTimeMillis() - startedAt
                                 SessionTrace.add("LIVE first audio after $ms ms")
-                                if (ms > 5_000) ProblemJournal.add("SLOW", "Live took $ms ms to start speaking (network ${device.network()})")
+                                // When Sir spoke his request while we connected, this time includes his own words: not "slow".
+                                if (ms > 5_000 && !conn.spokeWhileConnecting) ProblemJournal.add("SLOW", "Live took $ms ms to start speaking (network ${device.network()})")
                             }
                             anyReply = true
                             followUp?.cancel()
@@ -1279,8 +1280,12 @@ class JarvisSession @Inject constructor(
                             setState(JarvisState.LISTENING)
                         }
                         is LiveMessages.ServerEvent.GoAway -> Unit // server ends the session soon; we close on Closed
-                        LiveMessages.ServerEvent.SetupComplete ->
+                        LiveMessages.ServerEvent.SetupComplete -> {
                             SessionTrace.add("LIVE connected + setup ok after ${System.currentTimeMillis() - startedAt} ms")
+                            if (conn.spokeWhileConnecting) {
+                                SessionTrace.add("LIVE Sir spoke while connecting: sent ${conn.earlyChunksSent} chunks (~${conn.earlyChunksSent / 20} s), no greeting")
+                            }
+                        }
                         is LiveMessages.ServerEvent.ToolCancelled -> Unit
                     }
                 }
