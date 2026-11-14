@@ -70,12 +70,22 @@ class SelfTools @Inject constructor(
         flag("always_on", "Listen for the wake word in the background", { it.alwaysOn }) { s, v -> s.copy(alwaysOn = v) },
         Item("voice_mode", "live (natural voice call) or classic (speech-to-text, then spoken reply)", { it.voiceEngine },
             { s, v -> v.lowercase().trim().takeIf { it == JarvisSettings.VOICE_LIVE || it == JarvisSettings.VOICE_CLASSIC }?.let { s.copy(voiceEngine = it) } }),
-        Item("live_voice", "Live voice name: Charon, Puck, Fenrir, Orus (male), Kore, Aoede, Leda, Zephyr (female)", { it.liveVoice },
-            { s, v -> v.trim().takeIf { it.matches(Regex("[A-Za-z]{3,20}")) }?.let { s.copy(liveVoice = it.lowercase().replaceFirstChar(Char::uppercase)) } }),
+        Item("live_voice", "The voice Sir hears in Live, for the role you are in now (it changes that role's own voice). Men: " +
+            Persona.HIS_VOICES.joinToString(", ") + ". Women: " + Persona.HER_VOICES.joinToString(", "), { it.liveVoice },
+            { s, v -> com.adesh.devjarvis.tools.VoiceChoice.voiceName(v)?.let { s.copy(liveVoice = it) } }),
         Item("wake_sensitivity", "How easily the wake word triggers, 0 (only a clear call) to 100 (very easily)", { (it.wakeSensitivity * 100).toInt().toString() },
             { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 0..100 }?.let { s.copy(wakeSensitivity = it / 100f) } }),
-        Item("noise_filter", "Live noise filter: 0 off, 1 normal, 2 strong (only a near, clearly louder voice gets through)", { it.noiseFilter.toString() },
-            { s, v -> (v.filter(Char::isDigit).toIntOrNull() ?: when (v.lowercase().trim()) { "off" -> 0; "normal" -> 1; "strong" -> 2; else -> null })?.takeIf { it in 0..2 }?.let { s.copy(noiseFilter = it) } }),
+        Item("noise_filter", "Live noise filter: 0 off, 1 normal, 2 strong (only a near, clearly louder voice), 3 crowd (only a voice right at the phone: use it when Sir is in a crowd, market or function and JARVIS hears other people)", { it.noiseFilter.toString() },
+            { s, v ->
+                val t = v.lowercase().trim()
+                (v.filter(Char::isDigit).toIntOrNull()?.coerceAtMost(3) ?: when {
+                    "off" in t || "band" in t -> 0
+                    "normal" in t -> 1
+                    "crowd" in t || "bheed" in t || "max" in t || "full" in t || "sabse" in t -> 3
+                    "strong" in t || "tez" in t || "zyada" in t -> 2
+                    else -> null
+                })?.takeIf { it in 0..3 }?.let { s.copy(noiseFilter = it) }
+            }),
         Item("only_my_voice", "Voice lock: wake only on Sir's own voice (he must record his voice once in Settings > Voice lock)", { onOff(it.speakerLockEnabled) + if (it.speakerEnrolled) "" else " (voice not recorded yet)" },
             { s, v -> bool(v)?.let { on -> if (on && !s.speakerEnrolled) null else s.copy(speakerLockEnabled = on) } }),
         Item("voice_lock_strictness", "How closely the voice must match, 0 (loose) to 100 (strict)", { (it.speakerThreshold * 100).toInt().toString() },
@@ -106,10 +116,10 @@ class SelfTools @Inject constructor(
         flag("auto_memory", "Learn new things about Sir from conversations on its own", { it.autoMemory }) { s, v -> s.copy(autoMemory = v) },
         Item("home_city", "City for weather and briefings", { it.homeCity.ifBlank { "(not set)" } }, { s, v -> s.copy(homeCity = v.take(60)) }),
         Item("emergency_contacts", "Names or numbers that get the SOS message, comma separated", { it.emergencyContacts.ifBlank { "(none)" } }, { s, v -> s.copy(emergencyContacts = v.take(200)) }),
-        Item("speech_speed", "Classic voice speed, 50 (slow) to 200 (fast), 100 normal", { (it.ttsRate * 100).toInt().toString() },
-            { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 50..200 }?.let { s.copy(ttsRate = it / 100f) } }),
-        Item("speech_pitch", "Classic voice pitch, 50 (deep) to 150 (high), 100 normal", { (it.ttsPitch * 100).toInt().toString() },
-            { s, v -> v.filter(Char::isDigit).toIntOrNull()?.takeIf { it in 50..150 }?.let { s.copy(ttsPitch = it / 100f) } }),
+        Item("speech_speed", "Classic (phone) voice speed only, 50 (slow) to 200 (fast), 100 normal; words like faster / slow or +10 work. Never changes the Live voice", { (it.ttsRate * 100).toInt().toString() },
+            { s, v -> com.adesh.devjarvis.tools.VoiceChoice.level(v, (s.ttsRate * 100).toInt(), 50, 200)?.let { s.copy(ttsRate = it / 100f) } }),
+        Item("speech_pitch", "Classic (phone) voice pitch only, 50 (deep) to 150 (high), 100 normal; words like high / bhaari or +10 work. Never changes the Live voice", { (it.ttsPitch * 100).toInt().toString() },
+            { s, v -> com.adesh.devjarvis.tools.VoiceChoice.level(v, (s.ttsPitch * 100).toInt(), 50, 150)?.let { s.copy(ttsPitch = it / 100f) } }),
         Item("listening_engine", "Classic ears: android (Google speech) or groq (Whisper, better Hinglish, needs a Groq key)", { it.sttEngine },
             { s, v -> v.lowercase().trim().takeIf { it == "android" || it == "groq" }?.let { s.copy(sttEngine = it) } }),
         Item("dost_voice", "Live voice of the dost role: " + Persona.HIS_VOICES.joinToString(", "), { it.dostVoice.ifBlank { it.liveVoice } },
@@ -124,6 +134,7 @@ class SelfTools @Inject constructor(
     )
 
     private val byName = items.associateBy { it.name }
+    private val VOICE_ITEMS = setOf("live_voice", "gf_voice", "dost_voice")
 
     private fun keyLine(label: String, pool: KeyPool, raw: String): String {
         val saved = pool.parse(raw).size
@@ -146,7 +157,8 @@ class SelfTools @Inject constructor(
         "Read or change JARVIS's OWN settings by voice (not the phone's settings: those are set_toggle / open_settings). " +
             "action=get with no name returns every setting with its current value, the app version, how many API keys are saved " +
             "and usable, and whether screen control is on: use it whenever Sir asks anything about you, your settings, your keys " +
-            "or why something isn't working. action=set changes one. Settings: " +
+            "or why something isn't working. action=set changes one. To change how you SOUND, set live_voice to another voice " +
+            "name (it changes the voice of the role you are in); speech_pitch / speech_speed touch only the classic phone voice. Settings: " +
             "always_on, voice_mode, live_voice, wake_sensitivity, noise_filter, only_my_voice, voice_lock_strictness, " +
             "follow_up_listening, interrupt_by_voice, full_volume_voice, hd_voice, instant_commands, sound_effects, wake_chime, " +
             "floating_bubble, boot_animation, morning_briefing, morning_briefing_time, night_summary, night_summary_time, " +
@@ -168,21 +180,41 @@ class SelfTools @Inject constructor(
                 val item = byName[name] ?: return ToolResult.fail("no setting '$name'. Settings: ${items.joinToString { it.name }}")
                 return ToolResult.ok("${item.name} = ${item.get(s)} (${item.about})")
             }
-            val item = byName[name ?: return ToolResult.fail("which setting? give its name")]
+            var item = byName[name ?: return ToolResult.fail("which setting? give its name")]
                 ?: return ToolResult.fail("no setting '$name'. Settings: ${items.joinToString { it.name }}")
             val value = args.string("value") ?: return ToolResult.fail("what value? ${item.about}")
+            // "Awaaz badlo" means the voice he hears now: each role has its own, so change the one of the current role.
+            if (item.name == "live_voice") byName[com.adesh.devjarvis.tools.VoiceChoice.itemFor(s.persona)]?.let { item = it }
             if (item.name == "only_my_voice" && bool(value) == true && !s.speakerEnrolled) {
                 return ToolResult.fail("Sir's voice is not recorded yet. He must open JARVIS Settings > Voice lock once and say the wake word six times; then this can be turned on.")
             }
             val changed = item.set(s, value) ?: return ToolResult.fail("'$value' is not valid for ${item.name}: ${item.about}")
+            val heardBefore = Persona.liveVoice(s.persona, s.liveVoice, s.gfVoice, s.dostVoice)
+            val heardAfter = Persona.liveVoice(changed.persona, changed.liveVoice, changed.gfVoice, changed.dostVoice)
+            if (item.name in VOICE_ITEMS && heardAfter == heardBefore && s.voiceEngine == JarvisSettings.VOICE_LIVE) {
+                val ownItem = com.adesh.devjarvis.tools.VoiceChoice.itemFor(s.persona)
+                if (item.name == ownItem) {
+                    return ToolResult.fail("NOTHING CHANGED: the ${Persona.label(s.persona)} role already speaks with $heardBefore. Pick a different voice " +
+                        "(${item.about.substringAfter(": ", item.about)}) — never tell Sir it sounds different when it doesn't.")
+                }
+                settings.update { item.set(it, value) ?: it }
+                return ToolResult.ok("${item.name} saved as ${item.get(changed)} for that role only. The voice Sir hears NOW (${Persona.label(s.persona)}: $heardBefore) " +
+                    "did not change. To change what he hears now, set live_voice.")
+            }
             settings.update { item.set(it, value) ?: it }
             if (item.name == "always_on") {
                 if (changed.alwaysOn) ServiceController.start(context) else ServiceController.stop(context)
             }
             val note = when (item.name) {
-                "live_voice", "gf_voice", "dost_voice", "noise_filter", "hd_voice" ->
-                    " Saved. In a Live conversation it reconnects within a second with the new setting and Sir hears it then; " +
-                        "say only that it is changing, not that he can already hear it."
+                "live_voice", "gf_voice", "dost_voice" ->
+                    " The voice Sir hears changes from $heardBefore to $heardAfter: Live reconnects within a second and he hears it then. " +
+                        "Say only that it is changing, not that he can already hear it."
+                "noise_filter", "hd_voice" ->
+                    " Saved. In a Live conversation it reconnects within a second with the new setting."
+                "speech_pitch", "speech_speed" -> if (s.voiceEngine == JarvisSettings.VOICE_LIVE) {
+                    " This only changes the phone (classic) voice used when Live is off. The Live voice Sir hears now did NOT change: " +
+                        "Live voices can't be made higher, deeper or faster — to sound different, set live_voice to another voice. Tell him exactly that."
+                } else ""
                 "voice_mode" -> " It takes effect from the next conversation."
                 "role" -> " " + Persona.switched(changed.persona)
                 else -> ""
@@ -200,9 +232,14 @@ class SelfTools @Inject constructor(
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val persona = Persona.normalize(args.requireString("persona"))
-            // Only on Sir's own words: the role must not change because the model felt like it.
+            // Only on Sir's own words: the role must not change because the model felt like it. In Live the model hears
+            // him before his words reach the phone as text, so give them a moment to arrive before saying no.
             if (persona != Persona.normalize(settings.current.persona) && !Persona.mentions(modes.lastUserWords, persona)) {
-                return ToolResult.fail("Sir did not ask for the ${Persona.label(persona)} role just now. Stay exactly as you are and answer what he said.")
+                val until = System.currentTimeMillis() + 2_500
+                while (System.currentTimeMillis() < until && !Persona.mentions(modes.lastUserWords, persona)) kotlinx.coroutines.delay(150)
+                if (!Persona.mentions(modes.lastUserWords, persona)) {
+                    return ToolResult.fail("Sir did not ask for the ${Persona.label(persona)} role just now. Stay exactly as you are and answer what he said.")
+                }
             }
             settings.update { it.copy(persona = persona) }
             return ToolResult.ok(Persona.switched(persona))

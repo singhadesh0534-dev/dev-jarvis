@@ -38,3 +38,22 @@ class ConversationRulesTest {
         assertFalse(ConversationRules.isEnder("What's the weather?"))
     }
 }
+
+class GoQuietTest {
+    @Test fun sirSendingJarvisToSleepEndsTheConversation() {
+        org.junit.Assert.assertTrue(ConversationRules.isEnder("Switch off kar lo, galat awaaz mat suno."))
+        org.junit.Assert.assertTrue(ConversationRules.isEnder("chup ho jao"))
+        org.junit.Assert.assertTrue(ConversationRules.isEnder("ab so jao Jarvis"))
+        org.junit.Assert.assertTrue(ConversationRules.isEnder("सो जाओ"))
+        org.junit.Assert.assertTrue(ConversationRules.isEnder("switch off kar lo"))
+        org.junit.Assert.assertTrue(ConversationRules.isEnder("band karo"))
+    }
+
+    @Test fun switchingThingsOffIsNotSleep() {
+        org.junit.Assert.assertFalse(ConversationRules.isEnder("wifi band karo"))
+        org.junit.Assert.assertFalse(ConversationRules.isEnder("TV switch off karo"))
+        org.junit.Assert.assertFalse(ConversationRules.isEnder("torch off kar do"))
+        org.junit.Assert.assertFalse(ConversationRules.isEnder("Rahul ko bolo wo so jaaye"))
+        org.junit.Assert.assertFalse(ConversationRules.isEnder("kya socha aapne"))
+    }
+}

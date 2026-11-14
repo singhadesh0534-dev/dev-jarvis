@@ -61,10 +61,13 @@ class NearFieldGate(
         const val OFF = 0
         const val NORMAL = 1
         const val STRONG = 2
+        /** Crowd / market / function: only a voice right at the phone (mouth a hand-width away) gets through. */
+        const val CROWD = 3
 
         fun forLevel(level: Int): NearFieldGate? = when (level) {
             OFF -> null
             STRONG -> NearFieldGate(ratio = 3.0f, absMin = 0.08f, attackChunks = 3)
+            CROWD -> NearFieldGate(ratio = 4.2f, absMin = 0.15f, attackChunks = 3, hangChunks = 12)
             else -> NearFieldGate()
         }
     }

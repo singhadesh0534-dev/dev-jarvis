@@ -218,13 +218,19 @@ class JarvisSession @Inject constructor(
             var prevSpeakerKey = ""
             var prevRole = ""
             var prevVoice = ""
+            var prevPhoneVoice = ""
             settings.settings.collect { s ->
                 val role = com.adesh.devjarvis.brain.Persona.normalize(s.persona)
-                val voice = "${s.liveVoice}|${s.gfVoice}|${s.dostVoice}|${s.liveModel}|${s.liveHdAudio}|${s.noiseFilter}|${s.ttsVoiceName}|${s.ttsRate}|${s.ttsPitch}"
+                // Only what Live itself uses reopens a Live conversation; the phone voice (pitch, speed, Google voice) is
+                // applied quietly — reconnecting for it made JARVIS ask "ab kaisi lagi?" when nothing had changed.
+                val voice = "${s.liveVoice}|${s.gfVoice}|${s.dostVoice}|${s.liveModel}|${s.liveHdAudio}|${s.noiseFilter}"
+                val phoneVoice = "${s.ttsVoiceName}|${s.ttsRate}|${s.ttsPitch}"
                 if (prevRole.isNotEmpty() && role != prevRole) onRoleChanged(role)
                 else if (prevVoice.isNotEmpty() && voice != prevVoice) onVoiceChanged()
+                else if (prevPhoneVoice.isNotEmpty() && phoneVoice != prevPhoneVoice) runCatching { speechOut.applySettings() }
                 prevRole = role
                 prevVoice = voice
+                prevPhoneVoice = phoneVoice
                 wake.sensitivity = s.wakeSensitivity
                 wake.speakerLock = s.speakerLockEnabled
                 wake.speakerProfile = SpeakerVerification.decode(s.speakerProfile)
@@ -233,7 +239,7 @@ class JarvisSession @Inject constructor(
                     .ifEmpty { JarvisConfig.WAKE_PHRASES }
                 _ui.update { it.copy(hasKey = s.hasGeminiKey || s.hasGroqKey || s.hasExtraBrain) }
                 // Speaker-lock changes need the wake engine rebuilt (it picks the recognizer type at start).
-                val speakerKey = "${s.speakerLockEnabled}|${s.speakerProfile.length}|${s.speakerThreshold}|${s.customWakePhrases}"
+                val speakerKey = "${s.speakerLockEnabled}|${s.speakerProfile.isNotEmpty()}|${s.speakerThreshold}|${s.customWakePhrases}"
                 if (speakerKey != prevSpeakerKey && prevSpeakerKey.isNotEmpty()) wake.stop()
                 prevSpeakerKey = speakerKey
                 syncMic()
@@ -247,6 +253,14 @@ class JarvisSession @Inject constructor(
         scope.launch { screenTools.progress.collect { line -> addLine(fromUser = false, text = line, system = true) } }
         scope.launch { wake.problem.collect(::onWakeProblem) }
         scope.launch { wake.rejected.collect { SessionTrace.add("WAKE refused $it") } }
+        scope.launch { wake.speakerNotes.collect { SessionTrace.add("WAKE $it") } }
+        // The voiceprint learns from Sir's real wakes and is kept (no engine restart: only its presence matters there).
+        scope.launch {
+            wake.learnedProfile.collect { v ->
+                wake.speakerProfile = v
+                settings.update { it.copy(speakerProfile = SpeakerVerification.encode(v)) }
+            }
+        }
         scope.launch { healthLoop() }
         // Call shuru/khatam hone par turant react: beech mein JARVIS turant chup aur mic chhod de.
         focus.watchCallState { scope.launch { onCallStateChanged() } }

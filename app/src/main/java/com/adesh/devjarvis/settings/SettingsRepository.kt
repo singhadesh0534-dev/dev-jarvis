@@ -207,7 +207,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putInt(K_NIGHT_MIN, cleaned.nightSummaryMinute.coerceIn(0, 1439))
             .putString(K_SOS_CONTACTS, cleaned.emergencyContacts.trim())
             .putBoolean(K_ANNOUNCE_CALLS, cleaned.announceCalls)
-            .putInt(K_NOISE_FILTER, cleaned.noiseFilter.coerceIn(0, 2))
+            .putInt(K_NOISE_FILTER, cleaned.noiseFilter.coerceIn(0, 3))
             .putBoolean(K_FULL_VOICE, cleaned.fullVoiceVolume)
             .putString(K_EXTRA_KEY, cleaned.extraApiKey.trim())
             .putString(K_EXTRA_URL, cleaned.extraBaseUrl.trim().ifBlank { JarvisConfig.EXTRA_BASE_URL })

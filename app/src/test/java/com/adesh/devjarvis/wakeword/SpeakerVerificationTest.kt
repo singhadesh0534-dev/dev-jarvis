@@ -52,4 +52,26 @@ class SpeakerVerificationTest {
         assertNull(SpeakerVerification.decode(""))
         assertNull(SpeakerVerification.decode("1,2,3")) // too short to be a real profile
     }
+
+    @Test fun blendMovesThePrintTowardSirsRealVoice() {
+        val profile = floatArrayOf(1f, 0f)
+        val sample = floatArrayOf(0f, 1f)
+        val before = SpeakerVerification.cosine(profile, sample)
+        val after = SpeakerVerification.cosine(SpeakerVerification.blend(profile, sample, 0.15f), sample)
+        assertTrue(after > before)
+        assertTrue(SpeakerVerification.cosine(SpeakerVerification.blend(profile, sample, 0.05f), profile) > 0.99f)
+    }
+
+    @Test fun thirdCallInTheWindowIsAccepted() {
+        val i = SpeakerVerification.Insistence(windowMs = 45_000, needed = 2)
+        assertFalse(i.shouldAccept(0))
+        i.refused(0)
+        assertFalse(i.shouldAccept(5_000))
+        i.refused(5_000)
+        assertTrue(i.shouldAccept(10_000))
+        i.clear()
+        assertFalse(i.shouldAccept(10_000))
+        i.refused(0); i.refused(1_000)
+        assertFalse(i.shouldAccept(60_000)) // too long ago: a fresh start
+    }
 }

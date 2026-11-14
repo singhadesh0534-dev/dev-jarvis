@@ -159,7 +159,7 @@ object Persona {
     private val WORDS = mapOf(
         PARTNER to Regex("""\b(?:gf|g f|girl ?friend|premika)\b"""),
         DOST to Regex("""\b(?:dost|yaar|friend|buddy)\b"""),
-        JARVIS to Regex("""\b(?:jarvis|normal)\b"""),
+        JARVIS to Regex("""\b(?:jarvis|normal|asli|original)\b"""),
     )
 
     /** Did Sir's words name this role at all? The model may not change the role on its own idea. */

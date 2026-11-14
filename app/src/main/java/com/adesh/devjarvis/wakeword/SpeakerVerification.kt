@@ -51,6 +51,35 @@ object SpeakerVerification {
     fun matches(enrolled: FloatArray, candidate: FloatArray, threshold: Float): Boolean =
         cosine(enrolled, candidate) >= threshold
 
+    /**
+     * Move the voiceprint a little toward this sample (both made unit length first). Sir's voice, mic and room change;
+     * a print that learns from his real wakes keeps matching him instead of drifting into "not Sir's voice".
+     */
+    fun blend(profile: FloatArray, sample: FloatArray, weight: Float): FloatArray {
+        if (profile.size != sample.size || profile.isEmpty()) return profile
+        fun unit(v: FloatArray): FloatArray {
+            val n = sqrt(v.sumOf { (it * it).toDouble() }).toFloat()
+            return if (n == 0f) v else FloatArray(v.size) { v[it] / n }
+        }
+        val a = unit(profile)
+        val b = unit(sample)
+        val w = weight.coerceIn(0f, 1f)
+        return unit(FloatArray(a.size) { (1 - w) * a[it] + w * b[it] })
+    }
+
+    /**
+     * "Sir insisted": the voice check refused his wake word twice in the last [windowMs] and he says it again.
+     * A stranger in a crowd does not call "Hello Dev" three times in a row; Sir does when he is not being heard.
+     * Not used while the phone itself plays a video / song (that could say the word again and again).
+     */
+    class Insistence(private val windowMs: Long = 45_000, private val needed: Int = 2) {
+        private val refusals = ArrayDeque<Long>()
+        fun refused(now: Long) { refusals.addLast(now); trim(now) }
+        fun shouldAccept(now: Long): Boolean { trim(now); return refusals.size >= needed }
+        fun clear() = refusals.clear()
+        private fun trim(now: Long) { while (refusals.isNotEmpty() && now - refusals.first() > windowMs) refusals.removeFirst() }
+    }
+
     /** Profile ko text mein save/load karna. */
     fun encode(vector: FloatArray): String = vector.joinToString(",")
     fun decode(text: String?): FloatArray? {

@@ -243,10 +243,10 @@ fun SettingsScreen(
                 CardDivider()
                 SubLabel("Shor filter (Live)")
                 ChoiceRow(
-                    options = listOf("0" to "OFF", "1" to "NORMAL", "2" to "STRONG"),
+                    options = listOf("0" to "OFF", "1" to "NORMAL", "2" to "STRONG", "3" to "BHEED"),
                     selected = draft.noiseFilter.toString(),
                 ) { v -> viewModel.edit { it.copy(noiseFilter = v.toIntOrNull() ?: 1) } }
-                Hint("Sirf paas ki, shor se saaf tez awaaz JARVIS tak jaati hai — door ki baatein, TV, gaadi, music nahi. Bahut shor (DJ, bike) mein STRONG karo aur phone ke paas bolo. Agar JARVIS aapki awaaz hi na sune to NORMAL / OFF.")
+                Hint("Sirf paas ki, shor se saaf tez awaaz JARVIS tak jaati hai — door ki baatein, TV, gaadi, music nahi. Bahut shor (DJ, bike) mein STRONG; bheed / market / function mein BHEED — tab sirf phone ke bilkul paas boli baat jaati hai. Agar JARVIS aapki awaaz hi na sune to NORMAL / OFF.")
                 HudField("Live model", draft.liveModel, { v -> viewModel.edit { it.copy(liveModel = v) } })
                 HudField("Live voice", draft.liveVoice, { v -> viewModel.edit { it.copy(liveVoice = v) } })
                 Hint("Voices: Charon (deep, calm — default), Orus (firm), Fenrir, Puck, Kore, Aoede.")

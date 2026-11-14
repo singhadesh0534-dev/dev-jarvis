@@ -92,6 +92,12 @@ class WakeWordEngine @Inject constructor(
     @Volatile var speakerLock: Boolean = false
     @Volatile var speakerProfile: FloatArray? = null
     @Volatile var speakerThreshold: Float = SpeakerVerification.DEFAULT_THRESHOLD
+    /** A better voiceprint learned from Sir's real wakes: the session saves it. */
+    val learnedProfile = MutableSharedFlow<FloatArray>(extraBufferCapacity = 2)
+    /** Wakes let through after Sir insisted (for the flight recorder). */
+    val speakerNotes = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    private val insistence = SpeakerVerification.Insistence()
+
     /** Last speaker-check result for the HUD: "you" / "not you" / "". */
     private val _lastSpeaker = MutableStateFlow("")
     val lastSpeaker: StateFlow<String> = _lastSpeaker.asStateFlow()
@@ -254,18 +260,40 @@ class WakeWordEngine @Inject constructor(
                         val profile = speakerProfile
                         val candidate = SpeakerVerification.parseVector(raw)
                         if (profile != null && candidate != null) {
-                            val ok = SpeakerVerification.matches(profile, candidate, speakerThreshold)
-                            _lastSpeaker.value = if (ok) "you ✓" else "not you"
-                            if (!ok) { // someone else — ignore the wake
-                                rejected.tryEmit("'${heard.text}' not Sir's voice (match ${"%.2f".format(SpeakerVerification.cosine(profile, candidate))}, needs $speakerThreshold)")
-                                rec.reset(); continue
+                            val score = SpeakerVerification.cosine(profile, candidate)
+                            val ok = score >= speakerThreshold
+                            when {
+                                ok -> {
+                                    // His real voice: let the print follow it a little (mic, room and cold change).
+                                    learnedProfile.tryEmit(SpeakerVerification.blend(profile, candidate, LEARN_RATE))
+                                    insistence.clear()
+                                }
+                                !overMedia && insistence.shouldAccept(now) -> {
+                                    // Third call in 45 s: that is Sir not being heard, not a stranger.
+                                    speakerNotes.tryEmit("'${heard.text}' accepted on the 3rd call in 45 s (match ${"%.2f".format(score)}, needs $speakerThreshold)")
+                                    if (score >= speakerThreshold * 0.5f) learnedProfile.tryEmit(SpeakerVerification.blend(profile, candidate, INSIST_LEARN_RATE))
+                                    insistence.clear()
+                                }
+                                else -> { // someone else — ignore the wake
+                                    if (!overMedia) insistence.refused(now)
+                                    _lastSpeaker.value = "not you"
+                                    rejected.tryEmit("'${heard.text}' not Sir's voice (match ${"%.2f".format(score)}, needs $speakerThreshold)")
+                                    rec.reset(); continue
+                                }
                             }
+                            _lastSpeaker.value = "you ✓"
                         }
                         // No voiceprint came out of this utterance. With the lock on, or over the phone's own video /
                         // music, an unverified "Jarvis" does not wake him (Sir says it once more, a little longer).
                         if ((profile == null || candidate == null) && (overMedia || (speakerLock && profile != null))) {
-                            rejected.tryEmit("'${heard.text}' voice could not be checked")
-                            rec.reset(); continue
+                            if (!overMedia && insistence.shouldAccept(now)) {
+                                speakerNotes.tryEmit("'${heard.text}' accepted on the 3rd call in 45 s (voice could not be checked)")
+                                insistence.clear()
+                            } else {
+                                if (!overMedia) insistence.refused(now)
+                                rejected.tryEmit("'${heard.text}' voice could not be checked")
+                                rec.reset(); continue
+                            }
                         }
                     }
                     rec.reset()
@@ -337,6 +365,9 @@ class WakeWordEngine @Inject constructor(
     }
 
     private companion object {
+        /** How far one verified wake moves Sir's voiceprint; more when he had to insist. */
+        const val LEARN_RATE = 0.05f
+        const val INSIST_LEARN_RATE = 0.15f
         const val TAG = "JarvisWake"
         const val SAMPLE_RATE = 16_000
         const val COOLDOWN_MS = 1_500L
