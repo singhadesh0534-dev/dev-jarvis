@@ -124,6 +124,7 @@ fun HudScreen(
     onOpenSettings: () -> Unit,
     onOpenActivity: () -> Unit,
     onOpenMemory: () -> Unit,
+    onOpenSetup: () -> Unit = onOpenSettings,
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
@@ -145,9 +146,11 @@ fun HudScreen(
     }
 
     var protectedBg by remember { mutableStateOf(true) }
+    var missing by remember { mutableStateOf(emptyList<String>()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
         viewModel.refreshDevice()
         protectedBg = viewModel.backgroundProtected()
+        missing = runCatching { viewModel.missingAccess() }.getOrDefault(emptyList())
     }
 
     val onTap = {
@@ -193,6 +196,13 @@ fun HudScreen(
             // One line for whatever needs attention, most important first (not a stack of big boxes).
             val alerts = buildList {
                 if (!ui.hasKey) add(Alert("KEY", "Gemini API key nahi hai — tap karke daaliye", Hud.Amber, onOpenSettings))
+                if (missing.isNotEmpty()) add(
+                    Alert(
+                        "ACCESS",
+                        "${missing.first()}" + (if (missing.size > 1) " +${missing.size - 1}" else "") + " off — iske bina kaam adhoore. Tap karke do",
+                        Hud.Amber, onOpenSetup,
+                    ),
+                )
                 if (ui.alwaysOn && !protectedBg) add(
                     Alert("PROTECT", "Background protection OFF — tap karke \"Unrestricted\" chuno", Hud.Amber) {
                         runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.ignoreBatteryOptimization(context)) }

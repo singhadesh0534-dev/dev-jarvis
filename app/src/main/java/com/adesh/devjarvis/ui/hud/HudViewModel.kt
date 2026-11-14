@@ -50,6 +50,13 @@ class HudViewModel @Inject constructor(
         com.adesh.devjarvis.core.ProblemJournal.dump(60).takeIf { it.isNotBlank() }?.let { "PROBLEMS JARVIS NOTICED BY HIMSELF\n$it" },
     ).joinToString("\n\n")
 
+    /** Permissions JARVIS needs to actually do things, that are still off (names for the home alert). */
+    fun missingAccess(): List<String> = buildList {
+        if (!com.adesh.devjarvis.accessibility.JarvisAccessibilityService.isConnected) add("Accessibility")
+        if (!android.provider.Settings.System.canWrite(context)) add("Modify system settings")
+        if (!androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)) add("Notification access")
+    }
+
     /** Android may stop JARVIS in the background unless he is exempt from battery optimisation. */
     fun backgroundProtected(): Boolean =
         context.getSystemService(android.os.PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) != false

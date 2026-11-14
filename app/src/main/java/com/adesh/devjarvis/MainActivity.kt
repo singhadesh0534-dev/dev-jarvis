@@ -57,6 +57,7 @@ class MainActivity : ComponentActivity() {
                             onOpenSettings = { nav.navigate(ROUTE_SETTINGS) },
                             onOpenActivity = { nav.navigate(ROUTE_ACTIVITY) },
                             onOpenMemory = { nav.navigate(ROUTE_MEMORY) },
+                            onOpenSetup = { nav.navigate(ROUTE_SETUP) },
                         )
                     }
                     composable(ROUTE_ACTIVITY) {
