@@ -212,7 +212,9 @@ fun HudScreen(
                 Modifier.fillMaxWidth().weight(reactorWeight),
                 contentAlignment = Alignment.Center,
             ) {
-                val side = minOf(maxWidth * 0.86f, maxHeight, 360.dp)
+                // Reactor and its state line belong together: centred as one group, no gap between them.
+                val side = minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 ArcReactor(
                     state = ui.state,
                     micLevel = ui.micLevel,
@@ -224,8 +226,9 @@ fun HudScreen(
                     accent = accent,
                     modifier = Modifier.size(side),
                 )
+                StateReadout(ui, accent, onTap)
+                }
             }
-            StateReadout(ui, accent, onTap)
 
             Column(Modifier.fillMaxWidth().animateContentSize()) {
                 ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
@@ -605,7 +608,8 @@ private fun Transcript(ui: HudUiState, role: String, accent: Color, modifier: Mo
             contentPadding = PaddingValues(horizontal = 2.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            items(ui.transcript, key = { it.id }) { line ->
+            // Tool steps ("⚙ / ✓ / ✗ set_toggle: …") are for the Activity log, not the conversation.
+            items(ui.transcript.filterNot { it.isSystem && it.text.firstOrNull() in TOOL_MARKS }, key = { it.id }) { line ->
                 when {
                     line.isSystem -> Text(
                         line.text,
@@ -751,6 +755,8 @@ private fun InputBar(accent: Color, onSend: (String) -> Unit, onFile: (android.n
         }
     }
 }
+
+private val TOOL_MARKS = setOf('⚙', '✓', '✗', '?')
 
 private fun openSystem(context: android.content.Context, action: String) {
     runCatching { context.startActivity(android.content.Intent(action).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }

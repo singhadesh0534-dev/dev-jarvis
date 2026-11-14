@@ -632,16 +632,33 @@ private fun VoicePicker(voices: List<VoiceInfo>, current: String, onPick: (Strin
 
 @Composable
 private fun Hint(text: String) {
-    Text(text, style = MaterialTheme.typography.bodySmall, color = Hud.Dim)
+    // Two lines, tap for the rest: the explanations were walls of text between the controls.
+    var open by remember { mutableStateOf(false) }
+    val long = text.length > 110
+    Text(
+        text,
+        style = MaterialTheme.typography.bodySmall,
+        color = Hud.Dim,
+        maxLines = if (open || !long) Int.MAX_VALUE else 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = if (long) Modifier.clickable { open = !open } else Modifier,
+    )
 }
 
 /** Clear button that opens a URL in the browser (e.g. "Get free Gemini key"). */
 @Composable
 private fun OpenLinkButton(text: String, url: String) {
     val context = LocalContext.current
-    HudButton("$text  ↗", onClick = {
-        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
-    })
+    // A light link, not another big button.
+    Text(
+        "$text  ↗",
+        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
+        color = Hud.Cyan,
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+            .padding(vertical = 6.dp, horizontal = 2.dp),
+    )
 }
 
 @Composable
