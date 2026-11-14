@@ -242,7 +242,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             geminiApiKey = prefs.getString(K_GEMINI, d.geminiApiKey).orEmpty(),
             groqApiKey = prefs.getString(K_GROQ, d.groqApiKey).orEmpty(),
             geminiModel = prefs.getString(K_MODEL, d.geminiModel).orEmpty().ifBlank { d.geminiModel },
-            systemPrompt = prefs.getString(K_PROMPT, d.systemPrompt).orEmpty().ifBlank { d.systemPrompt },
+            // An untouched old default becomes the newer personality; a personality Sir edited himself is kept.
+            systemPrompt = prefs.getString(K_PROMPT, d.systemPrompt).orEmpty()
+                .let { if (it.isBlank() || SystemPrompt.isOldDefault(it)) d.systemPrompt else it },
             sttLanguage = prefs.getString(K_STT_LANG, d.sttLanguage).orEmpty().ifBlank { d.sttLanguage },
             ttsVoiceName = prefs.getString(K_VOICE, d.ttsVoiceName).orEmpty(),
             ttsPitch = prefs.getFloat(K_PITCH, d.ttsPitch),
