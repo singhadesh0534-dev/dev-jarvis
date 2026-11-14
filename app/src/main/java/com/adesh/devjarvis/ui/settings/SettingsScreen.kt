@@ -8,6 +8,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -517,9 +518,9 @@ private fun ControlCard(
     Column(
         modifier
             .fillMaxWidth()
-            .glass(accent, HudShapes.Panel, tint = 0.7f, edge = 0.75f)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .glass(accent, HudShapes.Panel, tint = 0.55f, edge = 0.5f)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(
@@ -681,7 +682,12 @@ private fun KeySlots(label: String, value: String, rejected: Set<String>, count:
         val saved = pool.boxes(value)
         androidx.compose.runtime.mutableStateListOf<String>().apply { repeat(maxOf(count, saved.size)) { add(saved.getOrElse(it) { "" }) } }
     }
+    // Show the filled boxes plus one empty one; "+ aur key" opens the next. Five empty boxes per service
+    // made this card three screens long.
+    val filled = slots.indexOfLast { it.isNotBlank() } + 1
+    var shown by remember { mutableStateOf(maxOf(1, minOf(slots.size, filled + 1))) }
     slots.forEachIndexed { index, key ->
+        if (index >= shown) return@forEachIndexed
         // Red only when the service REJECTED this key; a key that is just at its limit stays normal.
         val wrong = key.isNotBlank() && com.adesh.devjarvis.core.BadKeys.fingerprint(key) in rejected
         SecretField(
@@ -692,6 +698,14 @@ private fun KeySlots(label: String, value: String, rejected: Set<String>, count:
                 slots[index] = v.filterNot { it.isWhitespace() }
                 onChange(pool.store(slots))
             },
+        )
+    }
+    if (shown < slots.size) {
+        Text(
+            "+ aur $label jodo (${slots.size - shown} baaki)",
+            style = MaterialTheme.typography.labelMedium,
+            color = Hud.Cyan,
+            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { shown++ }.padding(vertical = 6.dp, horizontal = 4.dp),
         )
     }
 }

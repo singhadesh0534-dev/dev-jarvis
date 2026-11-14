@@ -148,13 +148,6 @@ fun ArcReactor(
         // Outer HUD gauges — both fill upward from the bottom.
         gauge(c, r * 0.97f, startDeg = 125f, sweepDeg = 110f, fraction = batteryPercent / 100f, color = batteryColor, fillFromEnd = false, width = 2.5.dp.toPx())
         gauge(c, r * 0.97f, startDeg = -55f, sweepDeg = 110f, fraction = fuelPercent / 100f, color = fuelColor, fillFromEnd = true, width = 2.5.dp.toPx())
-        val battText = if (batteryPercent < 0) "PWR --" else "PWR $batteryPercent%" + if (charging) "+" else ""
-        val fuelText = "FUEL $fuelPercent%"
-        val bt = textMeasurer.measure(battText, labelStyle.copy(color = batteryColor.copy(alpha = 0.85f)))
-        val ft = textMeasurer.measure(fuelText, labelStyle.copy(color = fuelColor.copy(alpha = 0.85f)))
-        drawText(bt, topLeft = Offset(c.x - r * 0.97f + 4f, c.y + r * 0.62f))
-        drawText(ft, topLeft = Offset(c.x + r * 0.97f - ft.size.width - 4f, c.y + r * 0.62f))
-
         // Hairline outer ring.
         drawCircle(tone.copy(alpha = 0.16f), radius = r * 0.905f, center = c, style = Stroke(hair))
 
@@ -268,22 +261,9 @@ fun ArcReactor(
         )
         drawCircle(tone.copy(alpha = 0.35f), radius = r * 0.42f, center = c, style = Stroke(hair))
 
-        // Inner triangle, turning slowly.
+        // Inner hairline ring, turning slowly (the triangle looked cheap).
         rotate(-angle * 0.4f, c) {
-            val tr = r * 0.31f
-            triangle.reset()
-            for (k in 0 until 3) {
-                val a = (-90f + k * 120f) * PI.toFloat() / 180f
-                val x = c.x + cos(a) * tr
-                val y = c.y + sin(a) * tr
-                if (k == 0) triangle.moveTo(x, y) else triangle.lineTo(x, y)
-            }
-            triangle.close()
-            drawPath(
-                triangle,
-                color = tone.copy(alpha = 0.40f + 0.35f * e),
-                style = Stroke(width = 1.5.dp.toPx(), join = StrokeJoin.Round),
-            )
+            drawArc(tone.copy(alpha = 0.45f + 0.3f * e), 0f, 300f, false, Offset(c.x - r * 0.32f, c.y - r * 0.32f), Size(r * 0.64f, r * 0.64f), style = Stroke(width = 1.2.dp.toPx(), cap = StrokeCap.Round))
         }
 
         // Core

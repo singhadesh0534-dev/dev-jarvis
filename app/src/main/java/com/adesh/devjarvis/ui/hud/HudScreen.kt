@@ -71,6 +71,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -174,7 +179,7 @@ fun HudScreen(
                     runCatching { context.startActivity(android.content.Intent.createChooser(send, "JARVIS report bhejo")) }
                 },
             )
-            TelemetryRow(
+            StatusStrip(
                 ui, role, accent,
                 onPower = { openSystem(context, android.content.Intent.ACTION_POWER_USAGE_SUMMARY) },
                 onNet = {
@@ -182,44 +187,32 @@ fun HudScreen(
                 },
                 onBrain = onOpenSettings,
                 onRole = { viewModel.roleHint() },
+                onToggle = onAlwaysOnToggle,
             )
-            WakeStrip(ui, accent, onToggle = onAlwaysOnToggle)
 
+            // One line for whatever needs attention, most important first (not a stack of big boxes).
+            val alerts = buildList {
+                if (!ui.hasKey) add(Alert("KEY", "Gemini API key nahi hai — tap karke daaliye", Hud.Amber, onOpenSettings))
+                if (ui.alwaysOn && !protectedBg) add(
+                    Alert("PROTECT", "Background protection OFF — tap karke \"Unrestricted\" chuno", Hud.Amber) {
+                        runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.ignoreBatteryOptimization(context)) }
+                            .onFailure { runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.batteryOptimizationList()) } }
+                    },
+                )
+                (update as? AppUpdater.State.Available)?.let { u -> add(Alert("UPDATE", "Naya version ${u.versionName} — tap karke install", Hud.Cyan, onOpenSettings)) }
+            }
             Column(Modifier.fillMaxWidth().animateContentSize()) {
-                if (!ui.hasKey) {
-                    HudBanner(
-                        tag = "KEY",
-                        text = "Gemini API key nahi hai — tap karke Settings mein daaliye.",
-                        color = Hud.Amber,
-                        onClick = onOpenSettings,
-                    )
-                }
-                if (ui.alwaysOn && !protectedBg) {
-                    // XOS stops apps that are not exempt: Sir spoke and nobody heard.
-                    HudBanner(
-                        tag = "PROTECT",
-                        text = "Background protection OFF — phone JARVIS ko band kar sakta hai. Tap karke \"Unrestricted / Don't optimize\" chuno.",
-                        color = Hud.Amber,
-                        onClick = {
-                            runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.ignoreBatteryOptimization(context)) }
-                                .onFailure { runCatching { context.startActivity(com.adesh.devjarvis.ui.setup.SetupIntents.batteryOptimizationList()) } }
-                        },
-                    )
-                }
-                (update as? AppUpdater.State.Available)?.let { u ->
-                    HudBanner(
-                        tag = "UPDATE",
-                        text = "Naya JARVIS ${u.versionName} available — Settings > Updates",
-                        color = Hud.Cyan,
-                        onClick = onOpenSettings,
-                    )
-                }
+                alerts.firstOrNull()?.let { AlertLine(it, more = alerts.size - 1) }
             }
 
-            Box(
-                Modifier.fillMaxWidth().weight(1.2f, fill = false).padding(top = 4.dp),
+            // The reactor is the hero: as big as the space allows, smaller once a conversation needs the room.
+            val hasChat = ui.transcript.any { !it.isSystem } || ui.partial.isNotEmpty()
+            val reactorWeight by animateFloatAsState(if (hasChat) 0.9f else 1.7f, tween(500), label = "reactorWeight")
+            BoxWithConstraints(
+                Modifier.fillMaxWidth().weight(reactorWeight),
                 contentAlignment = Alignment.Center,
             ) {
+                val side = minOf(maxWidth * 0.86f, maxHeight, 360.dp)
                 ArcReactor(
                     state = ui.state,
                     micLevel = ui.micLevel,
@@ -229,16 +222,16 @@ fun HudScreen(
                     fuelPercent = ui.fuelPercent,
                     onTap = onTap,
                     accent = accent,
-                    modifier = Modifier.widthIn(max = 340.dp).fillMaxWidth(0.84f).aspectRatio(1f),
+                    modifier = Modifier.size(side),
                 )
             }
-            StateReadout(ui, speechLevel, accent, onTap)
+            StateReadout(ui, accent, onTap)
 
             Column(Modifier.fillMaxWidth().animateContentSize()) {
                 ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
                 ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
             }
-            Transcript(ui, role, accent, Modifier.weight(1f))
+            Transcript(ui, role, accent, Modifier.weight(if (hasChat) 1.1f else 0.35f))
             InputBar(accent, onSend = viewModel::onTextSubmitted, onFile = viewModel::onFilePicked)
         }
     }
@@ -255,7 +248,7 @@ private fun TopBar(
     val pulse = rememberInfiniteTransition(label = "online")
     val dot by pulse.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "dot")
     Row(
-        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
@@ -272,15 +265,12 @@ private fun TopBar(
                 BuiltByDev()
             }
         }
-        // Quick actions in one glass pill.
-        Row(
-            Modifier.glass(accent, HudShapes.Pill, tint = 0.6f, edge = 0.7f).padding(horizontal = 2.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TopIcon(onReport) { Icon(Icons.Filled.Share, contentDescription = "Report", tint = accent, modifier = Modifier.size(19.dp)) }
-            TopIcon(onOpenMemory) { Icon(Icons.Filled.Person, contentDescription = "Memory", tint = accent, modifier = Modifier.size(20.dp)) }
-            TopIcon(onOpenActivity) { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Activity log", tint = accent, modifier = Modifier.size(20.dp)) }
-            TopIcon(onOpenSettings) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = accent, modifier = Modifier.size(20.dp)) }
+        // Quick actions: light icons, no box around them.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TopIcon(onReport) { Icon(Icons.Filled.Share, contentDescription = "Report", tint = accent.copy(alpha = 0.85f), modifier = Modifier.size(20.dp)) }
+            TopIcon(onOpenMemory) { Icon(Icons.Filled.Person, contentDescription = "Memory", tint = accent.copy(alpha = 0.85f), modifier = Modifier.size(21.dp)) }
+            TopIcon(onOpenActivity) { Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Activity log", tint = accent.copy(alpha = 0.85f), modifier = Modifier.size(21.dp)) }
+            TopIcon(onOpenSettings) { Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = accent, modifier = Modifier.size(22.dp)) }
         }
     }
 }
@@ -290,162 +280,125 @@ private fun TopIcon(onClick: () -> Unit, icon: @Composable () -> Unit) {
     IconButton(onClick = onClick, modifier = Modifier.size(40.dp)) { icon() }
 }
 
-@Composable
-private fun TelemetryRow(
-    ui: HudUiState, role: String, accent: Color,
-    onPower: () -> Unit, onNet: () -> Unit, onBrain: () -> Unit, onRole: () -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth().padding(bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        val battWarn = ui.batteryPercent in 0..19 && !ui.charging
-        val online = ui.network != NetworkKind.NONE
-        Chip(
-            label = if (ui.charging) "PWR +" else "PWR",
-            value = if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%",
-            color = if (battWarn) Hud.Amber else accent,
-            meter = if (ui.batteryPercent < 0) 0f else ui.batteryPercent / 100f,
-            modifier = Modifier.weight(1f),
-            onClick = onPower,
-        )
-        Chip(
-            label = "NET",
-            value = ui.network.label,
-            color = if (online) accent else Hud.Amber,
-            meter = if (online) 1f else 0f,
-            modifier = Modifier.weight(1.1f),
-            onClick = onNet,
-        )
-        Chip(
-            label = "BRAIN",
-            value = ui.brainSource.ifBlank { "--" },
-            color = if (ui.fuelPercent < 15) Hud.Amber else accent,
-            meter = ui.fuelPercent / 100f,
-            modifier = Modifier.weight(1.35f),
-            onClick = onBrain,
-        )
-        // Changed by voice only: "dost ban jao", "gf ban jao", "Jarvis ban jao".
-        Chip(
-            label = "ROOP",
-            value = Persona.label(role).uppercase(),
-            color = when (role) {
-                Persona.PARTNER -> Hud.Pink
-                Persona.DOST -> Hud.Ice
-                else -> accent
-            },
-            meter = null,
-            segments = Persona.ALL.indexOf(role).coerceAtLeast(0),
-            modifier = Modifier.weight(1f),
-            onClick = onRole,
-        )
-    }
-}
+/** Something that needs Sir's attention, shown as one slim line. */
+private class Alert(val tag: String, val text: String, val color: Color, val action: () -> Unit)
 
 /**
- * Telemetry chip: tiny label, the value, and a 2dp meter underneath.
- * [segments] (0..2) lights one of three segments instead — used for the role.
+ * Everything about the system in ONE glass strip: four readouts (each taps to its page) and the wake-word switch.
+ * Replaces five separate boxes that ate a third of the screen.
  */
 @Composable
-private fun Chip(
-    label: String,
-    value: String,
-    color: Color,
-    meter: Float?,
-    modifier: Modifier,
-    segments: Int = -1,
-    onClick: () -> Unit,
+private fun StatusStrip(
+    ui: HudUiState, role: String, accent: Color,
+    onPower: () -> Unit, onNet: () -> Unit, onBrain: () -> Unit, onRole: () -> Unit,
+    onToggle: (Boolean) -> Unit,
 ) {
-    val tint by animateColorAsState(color, tween(500), label = "chip")
-    val fill by animateFloatAsState((meter ?: 0f).coerceIn(0f, 1f), tween(700), label = "meter")
+    val battWarn = ui.batteryPercent in 0..19 && !ui.charging
+    val online = ui.network != NetworkKind.NONE
     Column(
-        modifier
-            .glass(tint, HudShapes.Chip, tint = 1f, edge = 0.8f)
-            .clickable(onClick = onClick)
-            .padding(start = 8.dp, end = 6.dp, top = 7.dp, bottom = 8.dp),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, letterSpacing = 1.5.sp),
-            color = Hud.Dim,
-            maxLines = 1,
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, letterSpacing = 1.sp, fontWeight = FontWeight.Bold),
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(top = 3.dp, bottom = 6.dp),
-        )
-        if (segments >= 0) {
-            Row(Modifier.fillMaxWidth().height(2.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                for (i in 0 until 3) {
-                    Box(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .background(if (i == segments) tint else Hud.Faint, RoundedCornerShape(1.dp)),
-                    )
-                }
-            }
-        } else {
-            Box(Modifier.fillMaxWidth().height(2.dp).background(Hud.Faint, RoundedCornerShape(1.dp))) {
-                Box(
-                    Modifier
-                        .fillMaxWidth(fill)
-                        .fillMaxHeight()
-                        .background(Brush.horizontalGradient(listOf(tint.copy(alpha = 0.5f), tint)), RoundedCornerShape(1.dp)),
-                )
-            }
-        }
-    }
-}
-
-/** "Hello Dev" always-on control. The Switch stays the only checkable thing on the HUD. */
-@Composable
-private fun WakeStrip(ui: HudUiState, accent: Color, onToggle: (Boolean) -> Unit) {
-    val tone by animateColorAsState(if (ui.alwaysOn) accent else Hud.Dim, tween(500), label = "wake")
-    Row(
         Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
-            .glass(tone, HudShapes.Chip, tint = if (ui.alwaysOn) 1f else 0.4f, edge = if (ui.alwaysOn) 0.9f else 0.6f)
-            .padding(start = 12.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .glass(accent, HudShapes.Card, tint = 0.7f, edge = 0.55f),
     ) {
-        WakeRadar(on = ui.alwaysOn, color = tone)
-        Column(Modifier.weight(1f).padding(start = 12.dp, end = 8.dp)) {
-            Text(
-                if (ui.alwaysOn) "ALWAYS LISTENING" else "WAKE WORD OFF",
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp, letterSpacing = 1.8.sp),
-                color = tone,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
+            Readout("PWR", if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%" + if (ui.charging) "⚡" else "", if (battWarn) Hud.Amber else accent, Modifier.weight(1f), onPower)
+            Hairline()
+            Readout("NET", ui.network.label, if (online) accent else Hud.Amber, Modifier.weight(1f), onNet)
+            Hairline()
+            Readout("BRAIN", ui.brainSource.ifBlank { "--" }, if (ui.fuelPercent < 15) Hud.Amber else accent, Modifier.weight(1.3f), onBrain)
+            Hairline()
+            Readout(
+                "ROOP", Persona.label(role).uppercase(),
+                when (role) { Persona.PARTNER -> Hud.Pink; Persona.DOST -> Hud.Ice; else -> accent },
+                Modifier.weight(1f), onRole,
             )
+        }
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Hud.Line.copy(alpha = 0.6f)))
+        val tone by animateColorAsState(if (ui.alwaysOn) accent else Hud.Dim, tween(500), label = "wake")
+        Row(
+            Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            WakeRadar(on = ui.alwaysOn, color = tone)
             val sub = ui.wakeNotice
                 ?: if (ui.alwaysOn && ui.wakeHeard.isNotBlank()) "heard: ${ui.wakeHeard}" else null
-                ?: if (ui.alwaysOn) "\"Hello Dev\" boliye — screen off bhi chalega" else "Off — sirf tap se baat"
+                ?: if (ui.alwaysOn) "\"Hello Dev\" boliye — screen off bhi" else "Wake word off — reactor tap karke baat"
             Text(
                 sub,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (ui.wakeNotice != null) Hud.Amber else Hud.Dim,
+                color = if (ui.wakeNotice != null) Hud.Amber else if (ui.alwaysOn) Hud.Ice.copy(alpha = 0.85f) else Hud.Dim,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f).padding(start = 10.dp, end = 8.dp),
+            )
+            Switch(
+                checked = ui.alwaysOn,
+                onCheckedChange = onToggle,
+                modifier = Modifier.graphicsLayer { scaleX = 0.82f; scaleY = 0.82f },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Hud.Background,
+                    checkedTrackColor = accent,
+                    checkedBorderColor = accent,
+                    uncheckedThumbColor = Hud.Dim,
+                    uncheckedTrackColor = Hud.Panel,
+                    uncheckedBorderColor = Hud.Line,
+                ),
             )
         }
-        Switch(
-            checked = ui.alwaysOn,
-            onCheckedChange = onToggle,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = Hud.Background,
-                checkedTrackColor = accent,
-                checkedBorderColor = accent,
-                uncheckedThumbColor = Hud.Dim,
-                uncheckedTrackColor = Hud.Panel,
-                uncheckedBorderColor = Hud.Line,
-            ),
+    }
+}
+
+@Composable
+private fun Readout(label: String, value: String, color: Color, modifier: Modifier, onClick: () -> Unit) {
+    val tint by animateColorAsState(color, tween(500), label = "readout")
+    Column(
+        modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, letterSpacing = 1.5.sp), color = Hud.Dim, maxLines = 1)
+        Text(
+            value,
+            style = MaterialTheme.typography.labelMedium.copy(fontSize = 12.sp, letterSpacing = 0.5.sp, fontWeight = FontWeight.Bold),
+            color = tint,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 3.dp),
         )
+    }
+}
+
+@Composable
+private fun Hairline() {
+    Box(Modifier.width(1.dp).fillMaxHeight().padding(vertical = 10.dp).background(Hud.Line.copy(alpha = 0.7f)))
+}
+
+/** One slim line: tag, message, "+n" when more are waiting, chevron. Tap = fix it. */
+@Composable
+private fun AlertLine(alert: Alert, more: Int) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(bottom = 6.dp)
+            .clip(HudShapes.Chip)
+            .background(alert.color.copy(alpha = 0.10f), HudShapes.Chip)
+            .border(1.dp, alert.color.copy(alpha = 0.35f), HudShapes.Chip)
+            .clickable(onClick = alert.action)
+            .padding(start = 10.dp, end = 10.dp, top = 8.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        HudTag(alert.tag, alert.color)
+        Text(
+            alert.text,
+            style = MaterialTheme.typography.bodySmall,
+            color = Hud.White.copy(alpha = 0.9f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
+        )
+        if (more > 0) Text("+$more", style = MaterialTheme.typography.labelSmall, color = alert.color, modifier = Modifier.padding(end = 6.dp))
+        Text("›", style = MaterialTheme.typography.titleMedium, color = alert.color)
     }
 }
 
@@ -474,123 +427,47 @@ private fun WakeRadar(on: Boolean, color: Color) {
     }
 }
 
-/** Live state under the reactor: name, a tiny level meter on both sides, and what a tap does now. */
+/** Live state under the reactor: its name and what a tap does now. */
 @Composable
-private fun StateReadout(ui: HudUiState, speechLevel: Float, accent: Color, onTap: () -> Unit) {
+private fun StateReadout(ui: HudUiState, accent: Color, onTap: () -> Unit) {
     val followUp = ui.state == JarvisState.LISTENING && ui.inConversation && ui.transcript.lastOrNull()?.fromUser == false
     val label = if (followUp) "FOLLOW-UP" else ui.state.label
     val color by animateColorAsState(
         when (ui.state) {
-            JarvisState.IDLE -> Hud.Dim
+            JarvisState.IDLE -> Hud.Ice.copy(alpha = 0.55f)
             JarvisState.THINKING -> Hud.Ice
             else -> accent
         },
         tween(450),
         label = "stateColor",
     )
-    val level = when (ui.state) {
-        JarvisState.LISTENING -> ui.micLevel
-        JarvisState.SPEAKING -> speechLevel
-        JarvisState.THINKING -> 0.45f
-        JarvisState.IDLE -> 0.06f
-    }
     val hint = when (ui.state) {
         JarvisState.IDLE -> if (ui.alwaysOn) "\"Hello Dev\" boliye ya reactor tap kijiye" else "Reactor tap kijiye aur boliye"
-        JarvisState.LISTENING -> if (followUp) "Boliye, Sir — sun raha hoon · tap = band" else "Sun raha hoon · tap = band"
+        JarvisState.LISTENING -> if (followUp) "Boliye — sun raha hoon" else "Sun raha hoon · tap = band"
         JarvisState.THINKING -> "Soch raha hoon · tap = roko"
-        JarvisState.SPEAKING -> "Bol raha hoon · tap = beech mein roko"
+        JarvisState.SPEAKING -> "Bol raha hoon · tap = roko"
     }
     Column(
         Modifier
             .fillMaxWidth()
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null,
-                onClick = onTap,
-            )
-            .padding(top = 4.dp, bottom = 8.dp),
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap)
+            .padding(top = 2.dp, bottom = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            LevelBars(level, ui.state != JarvisState.IDLE, color, mirrored = true)
-            Crossfade(targetState = label, animationSpec = tween(250), label = "stateLabel") { text ->
-                Text(
-                    text,
-                    style = MaterialTheme.typography.titleMedium.copy(letterSpacing = 4.sp, fontWeight = FontWeight.Bold),
-                    color = color,
-                    maxLines = 1,
-                    modifier = Modifier.padding(horizontal = 12.dp),
-                )
-            }
-            LevelBars(level, ui.state != JarvisState.IDLE, color, mirrored = false)
-        }
-        Row(
-            Modifier.padding(top = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-        ) {
-            if (ui.mode.isNotBlank()) HudTag(ui.mode.uppercase(), if (ui.mode.equals("FALLBACK", ignoreCase = true)) Hud.Amber else Hud.Dim)
+        Crossfade(targetState = label, animationSpec = tween(250), label = "stateLabel") { text ->
             Text(
-                hint,
-                style = MaterialTheme.typography.bodySmall,
-                color = Hud.Dim,
+                text,
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = 13.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Bold),
+                color = color,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
             )
         }
-    }
-}
-
-/** Five little bars that move with the voice level; flat and quiet in standby. */
-@Composable
-private fun LevelBars(level: Float, live: Boolean, color: Color, mirrored: Boolean) {
-    val smooth by animateFloatAsState(level.coerceIn(0f, 1f), spring(stiffness = Spring.StiffnessMedium), label = "bars")
-    val t = rememberInfiniteTransition(label = "bars")
-    val phase by t.animateFloat(0f, 6.2832f, infiniteRepeatable(tween(1400, easing = LinearEasing)), label = "phase")
-    Canvas(Modifier.size(width = 34.dp, height = 16.dp)) {
-        val n = 5
-        val gap = size.width / n
-        for (i in 0 until n) {
-            val idx = if (mirrored) n - 1 - i else i
-            val wobble = if (live) 0.55f + 0.45f * sin(phase + idx * 1.1f) else 0.5f
-            val falloff = 1f - idx * 0.14f
-            val h = size.height * (0.12f + 0.88f * smooth * wobble * falloff).coerceIn(0.12f, 1f)
-            val x = gap * i + gap / 2f
-            drawLine(
-                color.copy(alpha = 0.35f + 0.6f * falloff * if (live) 1f else 0.4f),
-                Offset(x, (size.height - h) / 2f),
-                Offset(x, (size.height + h) / 2f),
-                strokeWidth = 2.dp.toPx(),
-                cap = StrokeCap.Round,
-            )
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (ui.mode.equals("FALLBACK", ignoreCase = true) || ui.mode.equals("LIVE", ignoreCase = true)) {
+                HudTag(ui.mode.uppercase(), if (ui.mode.equals("FALLBACK", ignoreCase = true)) Hud.Amber else accent, Modifier.padding(end = 8.dp))
+            }
+            Text(hint, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-    }
-}
-
-/** Warning / info strip: coloured edge, a tag, the message, and a chevron that says "tap me". */
-@Composable
-private fun HudBanner(tag: String, text: String, color: Color, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(bottom = 8.dp)
-            .glass(color, HudShapes.Chip, tint = 1.4f)
-            .clickable(onClick = onClick)
-            .drawBehind { drawRect(color, size = Size(3.dp.toPx(), size.height)) }
-            .padding(start = 14.dp, end = 12.dp, top = 10.dp, bottom = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        HudTag(tag, color)
-        Text(
-            text,
-            style = MaterialTheme.typography.bodySmall,
-            color = Hud.White.copy(alpha = 0.92f),
-            maxLines = 3,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
-        )
-        Text("›", style = MaterialTheme.typography.titleLarge, color = color)
     }
 }
 
@@ -680,43 +557,35 @@ private fun Transcript(ui: HudUiState, role: String, accent: Color, modifier: Mo
         if (count > 0) listState.animateScrollToItem(count - 1)
     }
     val speaker = Persona.label(role).uppercase()
+    // No box: messages float over the HUD and fade out at the top edge.
     Box(
         modifier
             .fillMaxWidth()
-            .cornerTicks(accent.copy(alpha = 0.55f), length = 10f)
-            .glass(accent, HudShapes.Panel, tint = 0.5f, edge = 0.6f),
-    ) {
-        if (ui.transcript.isEmpty() && ui.partial.isEmpty()) {
-            Column(
-                Modifier.align(Alignment.Center).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("COMMS READY", style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 3.sp), color = accent.copy(alpha = 0.7f))
-                Text(
-                    "Boliye ya neeche likhiye — baat-cheet yahan dikhegi.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Hud.Dim,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 6.dp),
+            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+            .drawWithContent {
+                drawContent()
+                drawRect(
+                    Brush.verticalGradient(0f to Color.Transparent, 0.14f to Color.Black, 1f to Color.Black),
+                    blendMode = BlendMode.DstIn,
                 )
-            }
-        }
+            },
+    ) {
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(horizontal = 2.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(ui.transcript, key = { it.id }) { line ->
                 when {
                     line.isSystem -> Text(
-                        "▸ " + line.text,
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = Hud.Dim,
-                        maxLines = 2,
+                        line.text,
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                        color = Hud.Dim.copy(alpha = 0.85f),
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                     )
                     line.fromUser -> UserBubble(line.text, accent)
                     else -> AssistantBubble(speaker, line.text, accent)

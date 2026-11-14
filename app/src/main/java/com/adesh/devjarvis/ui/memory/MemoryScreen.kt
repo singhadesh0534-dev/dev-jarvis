@@ -142,7 +142,8 @@ fun MemoryScreen(viewModel: MemoryViewModel, onBack: () -> Unit) {
         ) {
             item(key = "import_hint") {
                 Text(
-                    importStatus ?: "IMPORT: koi .txt / .json / .zip file chuno (jaise Claude export ki memories-000.zip). PASTE: text seedha chipkao — jaise Claude / ChatGPT se poochho \"mere baare mein jo bhi jaante ho sab list karo\" aur uska jawab yahan daal do. OTP / password / bank wali cheezein kabhi save nahi hoti.",
+                    // Short by default: the full how-to was a wall of text on every visit.
+                    importStatus ?: "IMPORT = file se, PASTE = kisi AI ka jawab chipkao. OTP / password / bank kabhi save nahi hota.",
                     style = MaterialTheme.typography.bodySmall,
                     color = if (importStatus != null) Hud.Cyan else Hud.Dim,
                     modifier = Modifier
