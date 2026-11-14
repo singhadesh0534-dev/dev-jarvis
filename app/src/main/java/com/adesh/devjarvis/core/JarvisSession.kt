@@ -390,7 +390,9 @@ class JarvisSession @Inject constructor(
         addLine(fromUser = true, text = userLine)
         note("File dekh raha hoon…")
         scope.launch {
-            val answer = runCatching { work() }.getOrNull()
+            SessionTrace.add("FILE start")
+            val answer = runCatching { work() }.onFailure { SessionTrace.add("FILE error ${it.javaClass.simpleName}") }.getOrNull()
+                .also { SessionTrace.add("FILE answer ${if (it.isNullOrBlank()) "none" else "${it.length} chars"}") }
                 ?: "Sir, ye file padh nahi paya — ya to khul nahi rahi, ya dimaag abhi jawab nahi de raha. Ek minute mein dobara try kijiye."
             val line = com.adesh.devjarvis.brain.Persona.address(answer, settings.current.persona)
             announce(line)

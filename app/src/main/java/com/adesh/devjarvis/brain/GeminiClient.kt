@@ -99,6 +99,9 @@ class GeminiClient @Inject constructor(private val http: OkHttpClient) {
                     } catch (e: IOException) {
                         throw mapIoError(e)
                     }
+                    // The answer is complete: close the channel, or awaitClose below waits forever and the caller
+                    // never learns the reply ended (photos, web answers and tool calls used to hang on this).
+                    channel.close()
                     return@launch
                 }
             }

@@ -34,7 +34,10 @@ class DocumentReader @Inject constructor(
     suspend fun explain(uri: Uri): String? = ask(uri, "")
 
     /** Sir's question about this file (blank = explain it). */
-    suspend fun ask(uri: Uri, question: String): String? {
+    suspend fun ask(uri: Uri, question: String): String? =
+        kotlinx.coroutines.withTimeoutOrNull(90_000) { askNow(uri, question) }
+
+    private suspend fun askNow(uri: Uri, question: String): String? {
         last = uri
         lastName = displayName(uri)
         val q = question.trim()
@@ -43,7 +46,9 @@ class DocumentReader @Inject constructor(
                 (if (q.isEmpty()) TEXT_QUESTION else "Sir ka sawaal: $q\nSirf file se jawab do, Hinglish mein, chhota aur saaf.")
             return brain.complete(TEXT_SYSTEM, user, json = false)
         }
-        val jpeg = withContext(Dispatchers.IO) { runCatching { toJpeg(uri) }.getOrNull() } ?: return null
+        val jpeg = withContext(Dispatchers.IO) { runCatching { toJpeg(uri) }.getOrNull() }
+        com.adesh.devjarvis.core.SessionTrace.add("FILE image ${jpeg?.size?.div(1024) ?: -1} KB")
+        if (jpeg == null) return null
         return brain.see(jpeg, if (q.isEmpty()) QUESTION else "$q\n\n$RULES")
     }
 
@@ -92,8 +97,34 @@ class DocumentReader @Inject constructor(
         return bitmap?.let { b -> ImageUtil.toJpeg(b, maxSide = 1600, quality = 80).also { b.recycle() } }
     }
 
-    private fun image(uri: Uri): Bitmap? = context.contentResolver.openInputStream(uri)?.use { input ->
-        BitmapFactory.decodeStream(input, null, BitmapFactory.Options().apply { inSampleSize = 2 })
+    /**
+     * Phone cameras take 50-200 MP photos: read the size first and decode only as big as needed (~2000 px), so it is
+     * fast and never runs out of memory; then turn it upright from the camera's EXIF note.
+     */
+    private fun image(uri: Uri): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
+        val longest = maxOf(bounds.outWidth, bounds.outHeight)
+        if (longest <= 0) return null
+        var sample = 1
+        while (longest / (sample * 2) >= 2000) sample *= 2
+        val bmp = context.contentResolver.openInputStream(uri)?.use { input ->
+            BitmapFactory.decodeStream(input, null, BitmapFactory.Options().apply { inSampleSize = sample })
+        } ?: return null
+        val degrees = runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                when (android.media.ExifInterface(input).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)) {
+                    android.media.ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                    android.media.ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                    android.media.ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                    else -> 0f
+                }
+            }
+        }.getOrNull() ?: 0f
+        if (degrees == 0f) return bmp
+        val upright = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, android.graphics.Matrix().apply { postRotate(degrees) }, true)
+        if (upright !== bmp) bmp.recycle()
+        return upright
     }
 
     /** First two pages, one under the other, on white. */

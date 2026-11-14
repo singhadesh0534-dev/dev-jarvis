@@ -78,6 +78,7 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
                     throw mapIo(e)
                 }
             }
+            channel.close() // the answer is complete: let the flow end (awaitClose would otherwise wait forever)
         }
         awaitClose { call.get()?.cancel(); reader.cancel() }
     }
