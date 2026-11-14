@@ -32,6 +32,8 @@ class LiveAudio(
     private val hd: Boolean,
     /** [NearFieldGate] level: 0 off, 1 normal, 2 strong. */
     noiseFilter: Int = NearFieldGate.NORMAL,
+    /** Opens a speech detector (Silero) for this conversation; null result = loudness alone decides, as before. */
+    private val speechModel: () -> SileroSpeech.Stream? = { null },
     private val onMicChunk: (ByteArray, Int) -> Unit,
 ) {
     private val echoGate = EchoGate()
@@ -126,12 +128,14 @@ class LiveAudio(
             val effects = mutableListOf<AudioEffect>()
             if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(rec.audioSessionId)?.let { it.enabled = true; effects += it }
             if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(rec.audioSessionId)?.let { it.enabled = true; effects += it }
+            val speech = runCatching { speechModel() }.getOrNull() // loaded on this mic thread, closed with it
             try {
                 if (rec.state != AudioRecord.STATE_INITIALIZED) return@Thread
                 rec.startRecording()
                 val samples = ShortArray(rate / 20) // 50 ms
                 val bytes = ByteArray(samples.size * 2)
                 val preRoll = ArrayDeque<ByteArray>() // last ~250 ms before the noise gate opened
+                var passing = false // the last chunk went to the server as voice
                 var headphones = false
                 var chunkNo = 0
                 while (micRunning) {
@@ -152,8 +156,14 @@ class LiveAudio(
                         java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
                         preRoll.clear()
                     } else if (gate != null) {
-                        val wasOpen = gate.isOpen
-                        if (gate.offer(micLevel)) {
+                        // Near AND human speech: loud enough (the gate) and really a voice (Silero), not a fan,
+                        // traffic, TV music, a clap or dishes. Without the model, loudness alone decides.
+                        val loud = gate.offer(micLevel)
+                        val isSpeech = speech?.offer(samples, n) ?: true
+                        val open = loud && isSpeech
+                        val wasOpen = passing
+                        passing = open
+                        if (open) {
                             if (!isPlaying()) lastVoiceAt = System.currentTimeMillis()
                             if (!wasOpen) { // send the start of the word too
                                 preRoll.forEach { onMicChunk(it, it.size) }
@@ -166,10 +176,13 @@ class LiveAudio(
                             java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
                         }
                     }
-                    if (gate == null && !isPlaying() && micLevel >= VOICE_LEVEL) lastVoiceAt = System.currentTimeMillis()
+                    if (gate == null && !isPlaying() && micLevel >= VOICE_LEVEL && (speech?.offer(samples, n) ?: true)) {
+                        lastVoiceAt = System.currentTimeMillis()
+                    }
                     onMicChunk(bytes, n * 2)
                 }
             } finally {
+                runCatching { speech?.close() }
                 runCatching { rec.stop() }
                 rec.release()
                 effects.forEach { runCatching { it.release() } }

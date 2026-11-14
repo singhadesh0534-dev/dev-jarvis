@@ -109,6 +109,7 @@ sealed interface SessionSignal {
  */
 @Singleton
 class JarvisSession @Inject constructor(
+    private val silero: com.adesh.devjarvis.live.SileroSpeech,
     private val keys: KeyRing,
     private val brain: JarvisBrain,
     private val speechIn: SpeechInput,
@@ -1146,7 +1147,7 @@ class JarvisSession @Inject constructor(
             val liveKey = keys.live.current(s.geminiApiKey)
             val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
             liveUsedPatientVad = !liveVadRejected
-            val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter) { bytes, n -> conn.sendAudio(bytes, n) }
+            val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter, speechModel = { silero.open() }) { bytes, n -> conn.sendAudio(bytes, n) }
             SessionTrace.add("LIVE start model=${s.liveModel} voice=$liveVoiceNow role=${s.persona} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
             var firstAudioLogged = false
             var userSpoke = false
