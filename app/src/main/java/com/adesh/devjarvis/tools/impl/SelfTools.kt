@@ -179,7 +179,10 @@ class SelfTools @Inject constructor(
                 if (changed.alwaysOn) ServiceController.start(context) else ServiceController.stop(context)
             }
             val note = when (item.name) {
-                "live_voice", "voice_mode", "noise_filter", "hd_voice", "gf_voice", "dost_voice" -> " It takes effect from the next conversation."
+                "live_voice", "gf_voice", "dost_voice", "noise_filter", "hd_voice" ->
+                    " Saved. In a Live conversation it reconnects within a second with the new setting and Sir hears it then; " +
+                        "say only that it is changing, not that he can already hear it."
+                "voice_mode" -> " It takes effect from the next conversation."
                 "role" -> " " + Persona.switched(changed.persona)
                 else -> ""
             }

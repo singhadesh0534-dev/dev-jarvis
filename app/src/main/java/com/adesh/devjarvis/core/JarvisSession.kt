@@ -183,10 +183,19 @@ class JarvisSession @Inject constructor(
     private var liveRetryAt = 0L
     /** Live restarts with the next key in this wake (bad keys at the front of the list). */
     private var liveAuthRetries = 0
+    /** Tools that succeeded since Sir's last request (to catch "ho gaya" with nothing done). */
+    @Volatile private var turnToolOk = 0
+    /** The app itself did what Sir asked this turn (e.g. changed the role), so "ho gaya" is true without a tool. */
+    @Volatile private var appActedThisTurn = false
+    /** The false-claim correction was already sent for this request (only once). */
+    @Volatile private var claimChecked = false
+
     /** Sir said "stop / ruko" in Live: no tool runs until he says something else. */
     @Volatile private var haltTools = false
     /** The role changed in the middle of a Live conversation: start it again at once with the new voice and manner. */
     private var liveRestartForRole = false
+    /** Kickoff for a reconnect caused by something other than a role change. */
+    private var pendingKickoff: String? = null
     /** First line of the next Live session, when it is not the usual greeting. */
     private var liveKickoff: String? = null
     private val liveActive: Boolean get() = liveJob?.isActive == true
@@ -207,10 +216,14 @@ class JarvisSession @Inject constructor(
         scope.launch {
             var prevSpeakerKey = ""
             var prevRole = ""
+            var prevVoice = ""
             settings.settings.collect { s ->
                 val role = com.adesh.devjarvis.brain.Persona.normalize(s.persona)
+                val voice = "${s.liveVoice}|${s.gfVoice}|${s.dostVoice}|${s.liveModel}|${s.liveHdAudio}|${s.noiseFilter}|${s.ttsVoiceName}|${s.ttsRate}|${s.ttsPitch}"
                 if (prevRole.isNotEmpty() && role != prevRole) onRoleChanged(role)
+                else if (prevVoice.isNotEmpty() && voice != prevVoice) onVoiceChanged()
                 prevRole = role
+                prevVoice = voice
                 wake.sensitivity = s.wakeSensitivity
                 wake.speakerLock = s.speakerLockEnabled
                 wake.speakerProfile = SpeakerVerification.decode(s.speakerProfile)
@@ -674,14 +687,18 @@ class JarvisSession @Inject constructor(
         }
     }
 
-    private fun ask(userText: String) {
-        modes.lastUserWords = userText
-        haltTools = false
-        noteRoleRequest(userText)
-        noteComplaint(userText)
+    private fun ask(userText: String, retryOf: String? = null) {
+        if (retryOf == null) {
+            turnToolOk = 0
+            appActedThisTurn = false
+            modes.lastUserWords = userText
+            haltTools = false
+            noteRoleRequest(userText)
+            noteComplaint(userText)
+        }
         lastWake = null
         interrupt()
-        addLine(fromUser = true, text = userText)
+        if (retryOf == null) addLine(fromUser = true, text = userText)
         val firstLineId = nextId++
         setState(JarvisState.THINKING)
         endAfterReply = false
@@ -760,7 +777,15 @@ class JarvisSession @Inject constructor(
                 if (full.isNotBlank()) lastJarvisSaid = full.toString()
                 if (full.isBlank()) say("Sir, is baar mere paas koi jawab nahi aaya. Ek baar phir poochiye.")
                 speechOut.awaitIdle()
-                afterReply(userText)
+                // "Ho gaya" with no tool run = nothing happened. Make the brain do it (or admit it), once.
+                val request = retryOf ?: userText
+                if (retryOf == null && ClaimGuard.falseClaim(request, full.toString(), turnToolOk, appActedThisTurn)) {
+                    SessionTrace.add("FALSE_CLAIM caught (classic): retrying with a tool")
+                    ProblemJournal.add("FALSE_CLAIM", "said done with no tool: '${full.toString().take(80)}' for '${request.take(60)}'")
+                    ask(ClaimGuard.CORRECTION + " Sir's request was: \"$request\"", retryOf = request)
+                    return@launch
+                }
+                afterReply(request)
             } catch (e: CancellationException) {
                 // Barge-in: jitna bola, utna yaad rakho.
                 brain.remember(userText, full.toString())
@@ -829,6 +854,7 @@ class JarvisSession @Inject constructor(
             upsertLine(lineId, "? $name: Sir ki haan/naa ka intezaar", system = true)
             return result
         }
+        if (result.ok) turnToolOk++
         if (result.ok) earcons.success() else earcons.error()
         if (result.endsConversation) endAfterReply = true
         // Screen tools return the whole new screen: the transcript and the log keep the first line only.
@@ -984,6 +1010,7 @@ class JarvisSession @Inject constructor(
         val want = com.adesh.devjarvis.brain.Persona.requested(said) ?: return
         if (want == com.adesh.devjarvis.brain.Persona.normalize(settings.current.persona)) return
         SessionTrace.add("ROLE asked -> $want")
+        appActedThisTurn = true
         settings.update { it.copy(persona = want) }
     }
 
@@ -993,6 +1020,17 @@ class JarvisSession @Inject constructor(
         // A Live session keeps the voice it started with: open it again so he hears the new voice right now.
         if (liveActive && !liveClosingByUs && !liveRestartForRole) {
             liveRestartForRole = true
+            liveConn?.close()
+        }
+    }
+
+    /** A voice / Live setting changed: the phone voice at once, and a running Live conversation reconnects with it. */
+    private fun onVoiceChanged() {
+        SessionTrace.add("VOICE settings changed live=$liveActive")
+        runCatching { speechOut.applySettings() }
+        if (liveActive && !liveClosingByUs && !liveRestartForRole) {
+            liveRestartForRole = true
+            pendingKickoff = VOICE_GREETING
             liveConn?.close()
         }
     }
@@ -1092,6 +1130,11 @@ class JarvisSession @Inject constructor(
                             liveConfirm.onUserSaid(e.text)
                             userSpoke = true
                             falseWakes = 0
+                            if (userSaid.isEmpty()) { // a new request starts
+                                turnToolOk = 0
+                                appActedThisTurn = false
+                                claimChecked = false
+                            }
                             userSaid.append(e.text)
                             modes.lastUserWords = userSaid.toString()
                             haltTools = com.adesh.devjarvis.brain.Persona.saidStop(userSaid.toString())
@@ -1132,8 +1175,17 @@ class JarvisSession @Inject constructor(
                             setState(JarvisState.LISTENING)
                         }
                         LiveMessages.ServerEvent.TurnComplete -> {
+                            val asked = userSaid.toString().ifBlank { modes.lastUserWords }
+                            val claimed = jarvisSaid.toString()
                             commitTurn()
-                            armFollowUp()
+                            if (!claimChecked && ClaimGuard.falseClaim(asked, claimed, turnToolOk, appActedThisTurn)) {
+                                // He said it is done but nothing ran: make him do it now (or admit it), once.
+                                claimChecked = true
+                                SessionTrace.add("FALSE_CLAIM caught (live): asking for the tool")
+                                ProblemJournal.add("FALSE_CLAIM", "said done with no tool: '${claimed.take(80)}' for '${asked.take(60)}'")
+                                conn.sendText(ClaimGuard.CORRECTION)
+                            }
+                            armFollowUp() // his corrected answer cancels it; silence still closes the conversation
                         }
                         is LiveMessages.ServerEvent.ToolCalls -> {
                             anyReply = true
@@ -1195,7 +1247,8 @@ class JarvisSession @Inject constructor(
             // "gf ban jao" / "Jarvis ban jao" in the middle of a conversation: same conversation, new voice and manner.
             liveRestartForRole = false
             if (_ui.value.inConversation) {
-                liveKickoff = ROLE_GREETING
+                liveKickoff = pendingKickoff ?: ROLE_GREETING
+                pendingKickoff = null
                 startLive()
                 return
             }
@@ -1350,6 +1403,8 @@ class JarvisSession @Inject constructor(
         }
         const val HEALTH_CHECK_MS = 8_000L
         const val STUCK_MS = 25_000L
+        const val VOICE_GREETING =
+            "[Your voice has just been changed, as Sir asked, and this is the new one. Say one short line now so he hears it, then wait.]"
         const val ROLE_GREETING =
             "[He has just asked you to change to the role described above, and you have: your voice and manner are new. " +
                 "Say one short line of your own out loud in that role to show it, then wait for what he says.]"
