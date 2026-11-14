@@ -287,7 +287,8 @@ fun HudScreen(
             )
         }
 
-        val (skillCount, learnedCount) = remember(sheetOpen) { viewModel.skillCounts() }
+        // Counted only when the sheet opens: nothing extra on the main thread while the HUD starts.
+        val (skillCount, learnedCount) = remember(sheetOpen) { if (sheetOpen) viewModel.skillCounts() else 0 to 0 }
         AddSheet(
             visible = sheetOpen,
             accent = accent,
