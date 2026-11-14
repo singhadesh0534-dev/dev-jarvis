@@ -38,6 +38,9 @@ class LiveAudio(
     private val noiseGate = NearFieldGate.forLevel(noiseFilter)
     @Volatile var micLevel = 0f
         private set
+    /** When Sir's voice was last heard near the phone (not JARVIS's own, not background): keeps a conversation open. */
+    @Volatile var lastVoiceAt = 0L
+        private set
     @Volatile var outLevel = 0f
         private set
 
@@ -148,6 +151,7 @@ class LiveAudio(
                     } else if (gate != null) {
                         val wasOpen = gate.isOpen
                         if (gate.offer(micLevel)) {
+                            if (!isPlaying()) lastVoiceAt = System.currentTimeMillis()
                             if (!wasOpen) { // send the start of the word too
                                 preRoll.forEach { onMicChunk(it, it.size) }
                                 preRoll.clear()
@@ -159,6 +163,7 @@ class LiveAudio(
                             java.util.Arrays.fill(bytes, 0, n * 2, 0.toByte())
                         }
                     }
+                    if (gate == null && !isPlaying() && micLevel >= VOICE_LEVEL) lastVoiceAt = System.currentTimeMillis()
                     onMicChunk(bytes, n * 2)
                 }
             } finally {
@@ -245,4 +250,9 @@ class LiveAudio(
             it.type == AudioDeviceInfo.TYPE_WIRED_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES ||
                 it.type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP
         }
+
+    private companion object {
+        /** Without the noise filter: a level this loud counts as Sir talking (RMS ~320). */
+        const val VOICE_LEVEL = 0.08f
+    }
 }

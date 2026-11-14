@@ -59,10 +59,11 @@ object LiveMessages {
                     // Wait for a real pause before answering, and don't treat small noises as Sir speaking.
                     putJsonObject("realtimeInputConfig") {
                         putJsonObject("automaticActivityDetection") {
-                            put("startOfSpeechSensitivity", "START_SENSITIVITY_LOW")
+                            // HIGH: a soft-spoken start still counts (background is already muted on the phone by NearFieldGate)
+                            put("startOfSpeechSensitivity", "START_SENSITIVITY_HIGH")
                             put("endOfSpeechSensitivity", "END_SENSITIVITY_LOW")
                             put("prefixPaddingMs", 200)
-                            put("silenceDurationMs", 900)
+                            put("silenceDurationMs", 1200) // a short pause to think is not the end of Sir's sentence
                         }
                     }
                 }

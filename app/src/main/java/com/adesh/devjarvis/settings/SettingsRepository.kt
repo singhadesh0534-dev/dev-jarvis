@@ -105,7 +105,7 @@ data class JarvisSettings(
     /** "short" | "normal" | "detailed". */
     val replyStyle: String = "normal",
     /** Seconds JARVIS keeps listening after a reply. */
-    val followUpSeconds: Int = 8,
+    val followUpSeconds: Int = 12,
     /** Learn new things about Sir from conversations on its own ("yaad rakho" always works). */
     val autoMemory: Boolean = true,
     // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
@@ -219,7 +219,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_GF_VOICE, cleaned.gfVoice)
             .putString(K_DOST_VOICE, cleaned.dostVoice)
             .putString(K_REPLY_STYLE, cleaned.replyStyle)
-            .putInt(K_FOLLOW_UP, cleaned.followUpSeconds.coerceIn(3, 30))
+            .putInt(K_FOLLOW_UP_V2, cleaned.followUpSeconds.coerceIn(3, 30))
             .putBoolean(K_AUTO_MEMORY, cleaned.autoMemory)
             .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
             .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
@@ -292,7 +292,9 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             gfVoice = prefs.getString(K_GF_VOICE, d.gfVoice).orEmpty().ifBlank { d.gfVoice },
             dostVoice = prefs.getString(K_DOST_VOICE, d.dostVoice).orEmpty(),
             replyStyle = prefs.getString(K_REPLY_STYLE, d.replyStyle).orEmpty().ifBlank { d.replyStyle },
-            followUpSeconds = prefs.getInt(K_FOLLOW_UP, d.followUpSeconds),
+            // v2 key: the old default of 8 s was too short for thinking before answering; it becomes 12 once.
+            followUpSeconds = if (prefs.contains(K_FOLLOW_UP_V2)) prefs.getInt(K_FOLLOW_UP_V2, d.followUpSeconds)
+            else prefs.getInt(K_FOLLOW_UP, d.followUpSeconds).let { if (it == 8) d.followUpSeconds else it },
             autoMemory = prefs.getBoolean(K_AUTO_MEMORY, d.autoMemory),
             elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
             elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
@@ -360,6 +362,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_DOST_VOICE = "dost_voice"
         const val K_REPLY_STYLE = "reply_style"
         const val K_FOLLOW_UP = "follow_up_seconds"
+        const val K_FOLLOW_UP_V2 = "follow_up_seconds_v2"
         const val K_AUTO_MEMORY = "auto_memory"
         const val K_ELEVEN_KEY = "eleven_api_key"
         const val K_ELEVEN_VOICE = "eleven_voice_id"

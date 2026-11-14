@@ -1111,6 +1111,7 @@ class JarvisSession @Inject constructor(
             var jarvisLine = -1L
             var endAfterTurn = false
             var followUp: Job? = null
+            var lastWordsAt = 0L // when Sir's words last arrived from the server
 
             fun commitTurn() {
                 val u = userSaid.toString().trim()
@@ -1124,7 +1125,12 @@ class JarvisSession @Inject constructor(
                 speakingText = ""
             }
 
-            /** After JARVIS finishes speaking, keep listening ~8 s; silence -> close. */
+            /**
+             * After JARVIS finishes speaking, keep listening; close only after that much SILENCE. While Sir is talking
+             * (his voice near the phone, or his words arriving) the clock starts again, so he is never cut off mid-sentence
+             * and does not have to say "Hello Dev" again. A steady noise can't hold it open for ever: 45 s at most
+             * without a single word understood.
+             */
             fun armFollowUp() {
                 followUp?.cancel()
                 followUp = launch {
@@ -1134,7 +1140,18 @@ class JarvisSession @Inject constructor(
                         return@launch
                     }
                     setState(JarvisState.LISTENING)
-                    delay(modes.followUpMs(settings.current.followUpSeconds.coerceIn(3, 30) * 1_000L))
+                    val armedAt = System.currentTimeMillis()
+                    val silenceMs = modes.followUpMs(settings.current.followUpSeconds.coerceIn(3, 30) * 1_000L)
+                    while (true) {
+                        delay(250)
+                        val now = System.currentTimeMillis()
+                        val lastSign = maxOf(armedAt, audio.lastVoiceAt, lastWordsAt)
+                        if (now - lastSign >= silenceMs) break
+                        if (now - maxOf(armedAt, lastWordsAt) >= silenceMs + 45_000) {
+                            SessionTrace.add("LIVE follow-up: voice-like sound for 45 s but no words, closing")
+                            break
+                        }
+                    }
                     closeLive(chime = true)
                 }
             }
@@ -1162,6 +1179,7 @@ class JarvisSession @Inject constructor(
                     }
                     when (val e = (ev as LiveConnection.Event.Server).event) {
                         is LiveMessages.ServerEvent.InputText -> {
+                            lastWordsAt = System.currentTimeMillis()
                             followUp?.cancel()
                             liveConfirm.onUserSaid(e.text)
                             userSpoke = true
