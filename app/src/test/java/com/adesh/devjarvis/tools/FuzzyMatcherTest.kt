@@ -100,3 +100,12 @@ class HindiNameMatchTest {
         assertEquals(null, FuzzyMatcher.soundsLike("ai", apps) { it })
     }
 }
+
+class FirstNameMatchTest {
+    @Test fun sameFirstNameBeatsALookAlike() {
+        val near = FuzzyMatcher.score("Mohan Talim", "Mohan Sharma")
+        val lookAlike = FuzzyMatcher.score("Mohan Talim", "Rohan Volmo")
+        org.junit.Assert.assertTrue("near=$near", near >= 0.68)
+        org.junit.Assert.assertTrue(near > lookAlike)
+    }
+}

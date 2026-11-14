@@ -83,6 +83,10 @@ object FuzzyMatcher {
         if (qt.all { it in ct }) return if (qt.size == ct.size) 0.97 else 0.92
         if (qt.all { w -> ct.any { it in aliasesOf(w, groups) } }) return 0.88
         if (q.length >= 3 && (c.startsWith(q) || ct.any { it.startsWith(q) })) return 0.84
+        // One whole word in common ("Mohan Talim" vs "Mohan Sharma"): the recogniser often gets the first name right
+        // and garbles the surname. A real candidate (calls are confirmed anyway), better than a random look-alike.
+        val shared = qt.count { w -> w.length >= 3 && ct.any { it == w } }
+        if (shared > 0) return max(0.70 + 0.10 * shared / qt.size, 0.8 * qt.map { w -> ct.maxOf { jaroWinkler(w, it) } }.average())
 
         // Typos: best Jaro-Winkler per query token, averaged.
         val perToken = qt.map { w -> ct.maxOf { max(jaroWinkler(w, it), aliasesOf(w, groups).maxOf { a -> jaroWinkler(a, it) }) } }

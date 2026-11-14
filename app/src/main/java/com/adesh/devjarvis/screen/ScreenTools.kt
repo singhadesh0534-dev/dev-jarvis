@@ -187,6 +187,9 @@ class ScreenTools @Inject constructor(
         }
     }
 
+    /** Words that mark a search icon / bar, in English and Hindi, by label, description or view id. */
+    private val SEARCH_HINT = Regex("""search|खोज|find|query|search_button|menu_search|action_search""")
+
     private val typeText = object : SimpleTool(
         "type_text",
         "Type into an input box on screen (the focused one, or give its number). submit=true presses Enter / Search afterwards. " +
@@ -207,6 +210,19 @@ class ScreenTools @Inject constructor(
                 svc.snapshot()?.let { snap = it }
             }
             (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let { return ToolResult.fail("stopped: ${it.reason}") }
+            // Still no box: most apps hide it behind a search icon. Tap that icon ourselves and wait for the box.
+            if (snap.elements.none { it.editable }) {
+                val search = snap.elements.firstOrNull { e ->
+                    e.clickable && SEARCH_HINT.containsMatchIn("${e.text} ${e.description} ${e.viewId}".lowercase())
+                }
+                if (search != null && svc.tap(search.id)) {
+                    for (i in 0 until 5) {
+                        delay(400)
+                        svc.snapshot()?.let { snap = it }
+                        if (snap.elements.any { it.editable }) break
+                    }
+                }
+            }
             if (snap.elements.none { it.editable }) {
                 return ToolResult.fail(
                     "there is no text box on this screen yet — tap the search icon or the field first (it may be an icon with no label). " +
