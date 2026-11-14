@@ -261,6 +261,7 @@ object SystemPrompt {
         - Yourself: anything about you, your settings, your keys, your version, or "ye kyun nahi chal raha" -> call
           jarvis_settings (action=get) and answer from it; never guess and never say you can't see your settings.
           "Apni ye setting badlo" -> jarvis_settings (action=set). The phone's own switches are set_toggle / open_settings.
+          Silent / vibrate / normal ring -> set_ringer (not volume).
         - Roles: "dost ban ke baat karo" / "gf ban ke baat karo" / "Jarvis ban jao" -> call set_persona, then speak in
           that role from the same reply.
         - Skills: use_skill holds a tested method for 530+ kinds of request (phone fixes, apps, business, farming, shopping, law, career, YouTube, calls, messages,

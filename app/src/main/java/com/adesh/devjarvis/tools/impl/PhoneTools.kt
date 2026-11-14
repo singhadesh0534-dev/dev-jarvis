@@ -384,9 +384,48 @@ class PhoneTools @Inject constructor(
                     if (on) Settings.System.SCREEN_BRIGHTNESS_MODE_AUTOMATIC else Settings.System.SCREEN_BRIGHTNESS_MODE_MANUAL,
                 )
             "auto_sync" -> { android.content.ContentResolver.setMasterSyncAutomatically(on); true }
+            "vibrate_on_ring" -> Settings.System.canWrite(context) && runCatching {
+                @Suppress("DEPRECATION")
+                val key = Settings.System.VIBRATE_WHEN_RINGING
+                Settings.System.putInt(context.contentResolver, key, if (on) 1 else 0) &&
+                    Settings.System.getInt(context.contentResolver, key, -1) == (if (on) 1 else 0)
+            }.getOrDefault(false)
             else -> false
         }
     }.getOrDefault(false)
+
+    private val setRinger = object : SimpleTool(
+        "set_ringer",
+        "Put the phone on silent, vibrate or normal ring (\"phone silent karo\", \"vibrate pe daalo\", \"ringer normal\"). " +
+            "Set directly and checked afterwards. Silent needs Do Not Disturb access; without it the page opens for Sir to allow.",
+        params { string("mode", "silent | vibrate | normal", required = true, enum = listOf("silent", "vibrate", "normal")) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val mode = args.enum("mode", listOf("silent", "vibrate", "normal")) ?: return ToolResult.fail("silent, vibrate or normal?")
+            val audio = context.getSystemService(android.media.AudioManager::class.java) ?: return ToolResult.fail("no audio service")
+            val want = when (mode) {
+                "silent" -> android.media.AudioManager.RINGER_MODE_SILENT
+                "vibrate" -> android.media.AudioManager.RINGER_MODE_VIBRATE
+                else -> android.media.AudioManager.RINGER_MODE_NORMAL
+            }
+            val nm = context.getSystemService(android.app.NotificationManager::class.java)
+            val needsPolicy = want == android.media.AudioManager.RINGER_MODE_SILENT ||
+                audio.ringerMode == android.media.AudioManager.RINGER_MODE_SILENT
+            if (needsPolicy && nm?.isNotificationPolicyAccessGranted != true) {
+                val r = launcher.result(
+                    launcher.launch(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS), "Open Do Not Disturb access"),
+                    "NOT done: changing silent mode needs Do Not Disturb access for JARVIS. The access page is open; " +
+                        "tell Sir to allow JARVIS there once, then it works by voice.",
+                    "Open Do Not Disturb access",
+                )
+                return if (r.ok) r.copy(partial = true) else r
+            }
+            runCatching { audio.ringerMode = want }.onFailure { return ToolResult.fail("Android refused: ${it.message}") }
+            kotlinx.coroutines.delay(300)
+            return if (audio.ringerMode == want) ToolResult.ok("ringer is now $mode (checked)")
+            else ToolResult.fail("tried to set $mode but the phone is still on another mode (XOS may block it)")
+        }
+    }
 
     private val setToggle = object : SimpleTool(
         "set_toggle",
@@ -642,7 +681,7 @@ class PhoneTools @Inject constructor(
     }
 
     val tools: List<JarvisTool> = listOf(
-        openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setVolume,
+        openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setRinger, setVolume,
         setBrightness, openSettings, setToggle, searchInApp, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
         phoneSetting,
     )

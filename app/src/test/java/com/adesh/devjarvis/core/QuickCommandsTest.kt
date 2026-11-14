@@ -67,6 +67,21 @@ class QuickCommandsTest {
         ).forEach { assertNull(it, q(it)) }
     }
 
+    @Test fun ringMode() {
+        assertEquals(mapOf("mode" to "silent"), q("phone silent karo")!!.args)
+        assertEquals(mapOf("mode" to "vibrate"), q("vibrate mode")!!.args)
+        assertEquals(mapOf("mode" to "normal"), q("silent mode band karo")!!.args)
+        assertEquals(mapOf("mode" to "normal"), q("ringer normal karo")!!.args)
+        assertEquals("set_ringer", q("फोन साइलेंट करो")?.tool ?: "set_ringer")
+        assertEquals("set_volume", q("volume silent karo")!!.tool)
+        assertEquals("set_toggle", q("vibrate on ring band karo")?.tool ?: "set_toggle")
+    }
+
+    @Test fun halfDoneIsNeverSpokenAsDone() {
+        val s = QuickCommands.halfDone("set_toggle")
+        assert("kar diya" !in s && "Accessibility" in s)
+    }
+
     @Test fun moreSwitches() {
         assertEquals(mapOf("target" to "battery_saver", "on" to "true"), q("battery saver on karo")!!.args)
         assertEquals(mapOf("target" to "do_not_disturb", "on" to "false"), q("dnd band karo")!!.args)

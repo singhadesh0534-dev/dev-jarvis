@@ -25,6 +25,14 @@ object QuickCommands {
     private fun normalize(raw: String): List<String> =
         Translit.toLatin(raw).lowercase().replace(Regex("""[^\p{L}\p{N} ]"""), " ").split(' ').filter { it.isNotBlank() }
 
+    /** Honest words when the step ran but the job is not finished (settings opened, switch still needs a tap). */
+    fun halfDone(tool: String): String = when (tool) {
+        "set_toggle" -> "Sir, setting khol di hai, par switch main khud nahi daba paya — JARVIS Accessibility band hai. " +
+            "Abhi ek tap aap kar dijiye, aur Setup mein Accessibility ek baar chalu kar dijiye, phir ye main khud karunga."
+        "set_ringer" -> "Sir, silent ke liye Do Not Disturb ki permission chahiye. Page khol diya hai, JARVIS ko allow kar dijiye."
+        else -> "Sir, abhi poora nahi hua — screen pe ek tap aapko karna hoga."
+    }
+
     fun match(raw: String): Quick? {
         val all = normalize(raw)
         if (all.isEmpty() || all.size > 8) return null
@@ -80,6 +88,18 @@ object QuickCommands {
         }
         if (target != null && (on || off) && w.size <= 5) {
             return Quick("set_toggle", mapOf("target" to target.first, "on" to on.toString()), "${target.second} ${if (on) "chalu" else "band"} kar diya, Sir.")
+        }
+        // ---- ring mode: "phone silent karo", "vibrate mode", "silent mode band karo", "ringer normal karo"
+        if (!any("volume", "video", "gaana", "gana", "music", "notification") && w.size <= 4) {
+            val vibrate = any("vibrate", "vibration", "vibrator", "vibret") && !any("ring", "ringing")
+            val silent = any("silent", "saillent", "salient")
+            val normal = !any("vibrate", "vibration") && (any("ringer", "ring", "general") && any("normal", "general", "loud", "on", "chalu", "mode")) || (any("normal") && any("mode"))
+            when {
+                (vibrate || silent) && off -> return Quick("set_ringer", mapOf("mode" to "normal"), "Ringer normal kar diya, Sir.")
+                vibrate -> return Quick("set_ringer", mapOf("mode" to "vibrate"), "Phone vibrate pe kar diya, Sir.")
+                silent -> return Quick("set_ringer", mapOf("mode" to "silent"), "Phone silent kar diya, Sir.")
+                normal -> return Quick("set_ringer", mapOf("mode" to "normal"), "Ringer normal kar diya, Sir.")
+            }
         }
         // ---- volume
         if (any("volume", "awaaz", "awaz", "awaj", "sound")) {

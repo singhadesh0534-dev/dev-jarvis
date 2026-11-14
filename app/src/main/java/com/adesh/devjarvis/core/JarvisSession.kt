@@ -713,12 +713,16 @@ class JarvisSession @Inject constructor(
                 val quick = if (settings.current.instantCommands) QuickCommands.match(userText) else null
                 if (quick != null) {
                     val result = runTool(quick.tool, JsonObject(quick.args.mapValues { kotlinx.serialization.json.JsonPrimitive(it.value) }))
-                    SessionTrace.add("QUICK ${quick.tool} ok=${result.ok}")
+                    SessionTrace.add("QUICK ${quick.tool} ok=${result.ok} done=${result.done}")
                     if (result.ok || !device.isOnline()) {
                         val detail = result.message.lineSequence().firstOrNull().orEmpty().take(180)
-                        val line = com.adesh.devjarvis.brain.Persona.address(
-                            if (result.ok) quick.say ?: "Sir, $detail" else "Sir, ye abhi nahi ho paya: $detail", settings.current.persona,
-                        )
+                        // Half-done (page opened, switch not flipped) must never be spoken as "kar diya".
+                        val said = when {
+                            result.done -> quick.say ?: "Sir, $detail"
+                            result.partial -> QuickCommands.halfDone(quick.tool)
+                            else -> "Sir, ye abhi nahi ho paya: $detail"
+                        }
+                        val line = com.adesh.devjarvis.brain.Persona.address(said, settings.current.persona)
                         full.append(line)
                         upsertLine(lineId, line)
                         speakPiece(line)
