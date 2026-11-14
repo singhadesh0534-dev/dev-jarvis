@@ -57,7 +57,7 @@ data class SkillRow(val id: String, val area: String, val whenToUse: String, val
             mine = mine,
         )
 
-        const val MINE = "khud seekhi"
+        const val MINE = "mere"
         const val ALL = "sab"
     }
 }
@@ -66,6 +66,11 @@ data class SkillRow(val id: String, val area: String, val whenToUse: String, val
 @Composable
 fun SkillsScreen(viewModel: SkillsViewModel, onBack: () -> Unit, onRun: () -> Unit) {
     val rows by viewModel.rows.collectAsStateWithLifecycle()
+    val message by viewModel.message.collectAsStateWithLifecycle()
+    var adding by remember { mutableStateOf(false) }
+    val picker = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument(),
+    ) { uri -> if (uri != null) viewModel.importFile(uri) }
     var query by rememberSaveable { mutableStateOf("") }
     var area by rememberSaveable { mutableStateOf(SkillRow.ALL) }
     var open by remember { mutableStateOf<String?>(null) }
@@ -84,7 +89,19 @@ fun SkillsScreen(viewModel: SkillsViewModel, onBack: () -> Unit, onRun: () -> Un
             .hudBackdrop(glowY = 0f)
             .safeDrawingPadding(),
     ) {
-        ScreenHeader("SKILLS", "${rows.size} kaam aate hain · $mine khud seekhe · tap karke dekho", onBack)
+        ScreenHeader("SKILLS", "${rows.size} kaam aate hain · $mine aapke / khud seekhe", onBack) {
+            Action("+ JODO", Hud.Cyan) { adding = true }
+            Action("IMPORT", Hud.Cyan) { picker.launch(arrayOf("application/zip", "application/x-zip-compressed", "text/*", "application/json", "application/octet-stream")) }
+        }
+        if (message.isNotEmpty()) {
+            Text(
+                message,
+                style = MaterialTheme.typography.bodySmall,
+                color = Hud.Green,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable { viewModel.clearMessage() },
+            )
+        }
+        if (adding) AddSkillDialog(onDismiss = { adding = false }) { n, w, st -> if (viewModel.addManual(n, w, st)) adding = false }
 
         // Search
         Box(
@@ -212,4 +229,50 @@ private fun Action(text: String, color: androidx.compose.ui.graphics.Color, onCl
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     )
+}
+
+/** Sir writes his own skill: a name, when JARVIS should use it, and the steps (one per line). */
+@Composable
+private fun AddSkillDialog(onDismiss: () -> Unit, onSave: (String, String, String) -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var whenToUse by remember { mutableStateOf("") }
+    var steps by remember { mutableStateOf("") }
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Hud.Panel,
+        title = { Text("NAYI SKILL", style = MaterialTheme.typography.titleMedium, color = Hud.Ice) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Field("Naam (jaise: Gym plan)", name, single = true) { name = it }
+                Field("Kab use kare (jaise: jab main workout ka bolun)", whenToUse, single = true) { whenToUse = it }
+                Field("Steps — har line mein ek step", steps, single = false) { steps = it }
+            }
+        },
+        confirmButton = { Action("SAVE", Hud.Cyan) { onSave(name, whenToUse, steps) } },
+        dismissButton = { Action("CANCEL", Hud.Dim, onDismiss) },
+    )
+}
+
+@Composable
+private fun Field(hint: String, value: String, single: Boolean, onChange: (String) -> Unit) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .glass(Hud.Cyan, HudShapes.Chip, tint = 0.6f, edge = 0.6f)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+    ) {
+        BasicTextField(
+            value = value,
+            onValueChange = onChange,
+            singleLine = single,
+            minLines = if (single) 1 else 4,
+            textStyle = MaterialTheme.typography.bodyMedium.copy(color = Hud.White),
+            cursorBrush = SolidColor(Hud.Cyan),
+            modifier = Modifier.fillMaxWidth(),
+            decorationBox = { inner ->
+                if (value.isEmpty()) Text(hint, style = MaterialTheme.typography.bodyMedium, color = Hud.Dim)
+                inner()
+            },
+        )
+    }
 }
