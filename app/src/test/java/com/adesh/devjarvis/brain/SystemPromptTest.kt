@@ -36,4 +36,11 @@ class SystemPromptTest {
         assertFalse(SystemPrompt.isOldDefault(old + "\n- Always call me Boss."))
         assertFalse(SystemPrompt.isOldDefault(SystemPrompt.DEFAULT))
     }
+
+    @Test fun rolesGetTheirOwnIdentityNotTheButler() {
+        val gf = SystemPrompt.roleIdentity("gf")
+        assertTrue("his girlfriend" in gf && "never say the word \"Sir\"" in gf && "customer care" in gf)
+        assertTrue("closest friend" in SystemPrompt.roleIdentity("dost"))
+        assertFalse("maaf kijiye, Sir" in SystemPrompt.BEHAVIOR.lowercase().replace("\"", ""))
+    }
 }

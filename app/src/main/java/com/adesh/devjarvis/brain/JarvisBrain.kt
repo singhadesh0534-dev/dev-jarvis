@@ -218,15 +218,22 @@ class JarvisBrain @Inject constructor(
         /** Backup brains have a small request budget: personality + format rules + context only. */
         compact: Boolean = false,
     ): String = buildString {
-        append(s.systemPrompt.trim())
-        append("\n\nYour boss, owner and creator is ${JarvisConfig.BOSS_NAME} (Adesh). He built you. As JARVIS you call him " +
-            "\"Sir\"; his name is Adesh Singh whenever a name is needed (messages, forms, introductions). Never forget it.")
+        // In the dost / gf role the JARVIS identity (butler, "Sir", his edited personality) is left out completely:
+        // with it underneath, the role kept slipping into "Maaf kijiye, Sir" and "aapki kya madad kar sakti hoon".
+        val inRole = Persona.normalize(s.persona) != Persona.JARVIS
+        if (!inRole) {
+            append(s.systemPrompt.trim())
+            append("\n\nYour boss, owner and creator is ${JarvisConfig.BOSS_NAME} (Adesh). He built you. As JARVIS you call him " +
+                "\"Sir\"; his name is Adesh Singh whenever a name is needed (messages, forms, introductions). Never forget it.")
+        } else {
+            append(SystemPrompt.roleIdentity(s.persona))
+        }
         append("\n\n")
         append(if (forLive) SystemPrompt.LIVE_RULES else SystemPrompt.SPEECH_FORMAT_RULES)
         if (!compact) {
-            append("\n\n").append(SystemPrompt.CHARACTER)
+            if (!inRole) append("\n\n").append(SystemPrompt.CHARACTER)
             append("\n\n").append(SystemPrompt.BEHAVIOR)
-        } else {
+        } else if (!inRole) {
             append("\n\n").append(SystemPrompt.CHARACTER_SHORT)
         }
         Persona.replyStyle(s.replyStyle).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
