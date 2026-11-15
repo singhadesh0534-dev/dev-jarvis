@@ -108,6 +108,9 @@ data class JarvisSettings(
     val followUpSeconds: Int = 12,
     /** Learn new things about Sir from conversations on its own ("yaad rakho" always works). */
     val autoMemory: Boolean = true,
+    /** Supabase sync: project URL and key (the key is a secret: encrypted here, never in backups). */
+    val supabaseUrl: String = "",
+    val supabaseKey: String = "",
     /** Gaali mode: JARVIS talks rough and swears back in banter, when Sir does. */
     val rawTalk: Boolean = true,
     // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
@@ -223,6 +226,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_REPLY_STYLE, cleaned.replyStyle)
             .putInt(K_FOLLOW_UP_V2, cleaned.followUpSeconds.coerceIn(3, 30))
             .putBoolean(K_AUTO_MEMORY, cleaned.autoMemory)
+            .putString(K_SUPABASE_URL, cleaned.supabaseUrl.trim().trimEnd('/'))
+            .putString(K_SUPABASE_KEY, cleaned.supabaseKey.trim())
             .putBoolean(K_RAW_TALK, cleaned.rawTalk)
             .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
             .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
@@ -301,6 +306,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             followUpSeconds = if (prefs.contains(K_FOLLOW_UP_V2)) prefs.getInt(K_FOLLOW_UP_V2, d.followUpSeconds)
             else prefs.getInt(K_FOLLOW_UP, d.followUpSeconds).let { if (it == 8) d.followUpSeconds else it },
             autoMemory = prefs.getBoolean(K_AUTO_MEMORY, d.autoMemory),
+            supabaseUrl = prefs.getString(K_SUPABASE_URL, "").orEmpty(),
+            supabaseKey = prefs.getString(K_SUPABASE_KEY, "").orEmpty(),
             rawTalk = prefs.getBoolean(K_RAW_TALK, d.rawTalk),
             elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
             elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
@@ -370,6 +377,8 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_FOLLOW_UP = "follow_up_seconds"
         const val K_FOLLOW_UP_V2 = "follow_up_seconds_v2"
         const val K_AUTO_MEMORY = "auto_memory"
+        const val K_SUPABASE_URL = "supabase_url"
+        const val K_SUPABASE_KEY = "supabase_key"
         const val K_RAW_TALK = "raw_talk"
         const val K_ELEVEN_KEY = "eleven_api_key"
         const val K_ELEVEN_VOICE = "eleven_voice_id"

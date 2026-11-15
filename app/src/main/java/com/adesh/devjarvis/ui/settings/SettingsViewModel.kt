@@ -34,6 +34,7 @@ class SettingsViewModel @Inject constructor(
     val updater: AppUpdater,
     private val keyChecker: com.adesh.devjarvis.core.KeyChecker,
     private val backup: com.adesh.devjarvis.core.BackupManager,
+    private val supabase: com.adesh.devjarvis.cloud.SupabaseSync,
 ) : ViewModel() {
     /** Result of the last backup / restore, shown under the buttons. */
     val backupReport = MutableStateFlow<String?>(null)
@@ -41,6 +42,25 @@ class SettingsViewModel @Inject constructor(
     fun exportBackup(uri: android.net.Uri) {
         backupReport.value = "Backup ban raha hai…"
         viewModelScope.launch { backupReport.value = runCatching { backup.export(uri) }.getOrElse { "Backup nahi bana: ${it.message}" } }
+    }
+
+    /** Supabase: the URL / key being edited are saved first, then used. */
+    fun supabasePush() {
+        save()
+        backupReport.value = "Supabase pe bhej raha hoon…"
+        viewModelScope.launch { backupReport.value = runCatching { supabase.push() }.getOrElse { "Supabase pe nahi gaya: ${it.message ?: it.javaClass.simpleName}" } }
+    }
+
+    fun supabasePull() {
+        save()
+        backupReport.value = "Supabase se la raha hoon…"
+        viewModelScope.launch { backupReport.value = runCatching { supabase.pull() }.getOrElse { "Supabase se nahi aaya: ${it.message ?: it.javaClass.simpleName}" } }
+    }
+
+    fun copySupabaseSql() {
+        val cm = context.getSystemService(android.content.ClipboardManager::class.java)
+        cm?.setPrimaryClip(android.content.ClipData.newPlainText("Supabase setup", com.adesh.devjarvis.cloud.SupabaseRest.SETUP_SQL))
+        backupReport.value = "Setup SQL copy ho gaya — Supabase > SQL Editor mein paste karke Run dabaiye."
     }
 
     fun importBackup(uri: android.net.Uri) {

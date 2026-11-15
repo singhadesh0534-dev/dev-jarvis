@@ -978,5 +978,18 @@ private fun BackupBlock(viewModel: SettingsViewModel) {
         HudButton("Backup file banao", { save.launch("dev-jarvis-backup.json") })
         HudButton("Backup se wapas lao", { open.launch(arrayOf("application/json", "text/plain", "*/*")) })
     }
+    // Supabase: the same backup, in Sir's own online database.
+    val draft by viewModel.draft.collectAsStateWithLifecycle()
+    SubLabel("Supabase sync (online backup)")
+    Hint("Apna Supabase project banao (supabase.com, free). Pehle \"Setup SQL copy\" dabake Supabase > SQL Editor mein Run karo. Phir Project URL aur anon key yahan daalo. Har baat-cheet ke baad yaadein, notes, skills apne aap wahan save hongi. API keys kabhi nahi jaati.")
+    HudField("Supabase Project URL (https://…supabase.co)", draft.supabaseUrl, { v -> viewModel.edit { it.copy(supabaseUrl = v) } })
+    SecretField("Supabase anon key", draft.supabaseKey) { v -> viewModel.edit { it.copy(supabaseKey = v) } }
+    ActionRow {
+        HudButton("Setup SQL copy", { viewModel.copySupabaseSql() })
+        HudButton("Abhi sync karo", { viewModel.supabasePush() })
+    }
+    ActionRow {
+        HudButton("Supabase se wapas lao", { viewModel.supabasePull() })
+    }
     report?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
 }

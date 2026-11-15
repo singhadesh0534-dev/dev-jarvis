@@ -40,6 +40,18 @@ class BackupManager @Inject constructor(
     private val json = Json { ignoreUnknownKeys = true; isLenient = true }
 
     suspend fun export(uri: Uri): String = withContext(Dispatchers.IO) {
+        val body = snapshot()
+        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(body.toByteArray()) } ?: error("could not write the file")
+        "${memory.all().size} yaadein, ${learned.all().size} seekhe skills aur baaki sab file mein save ho gaya."
+    }
+
+    suspend fun import(uri: Uri): String = withContext(Dispatchers.IO) {
+        val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: error("could not read the file")
+        restore(text)
+    }
+
+    /** Everything worth keeping as one JSON text (never API keys or tokens). Also what goes to Supabase. */
+    suspend fun snapshot(): String = withContext(Dispatchers.IO) {
         val facts = memory.all()
         val s = settings.current
         val body = buildJsonObject {
@@ -57,18 +69,19 @@ class BackupManager @Inject constructor(
                 put("noiseFilter", s.noiseFilter); put("wakeSensitivity", s.wakeSensitivity.toDouble()); put("systemPrompt", s.systemPrompt)
             })
         }.toString()
-        context.contentResolver.openOutputStream(uri, "wt")?.use { it.write(body.toByteArray()) } ?: error("could not write the file")
-        "${facts.size} yaadein, ${learned.all().size} seekhe skills aur baaki sab file mein save ho gaya."
+        body
     }
 
-    suspend fun import(uri: Uri): String = withContext(Dispatchers.IO) {
-        val text = context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() } ?: error("could not read the file")
+    /** Bring a snapshot back (memories already on the phone are not added twice). */
+    suspend fun restore(text: String): String = withContext(Dispatchers.IO) {
         val o = json.parseToJsonElement(text) as JsonObject
+        val known = memory.all().map { it.text.trim().lowercase() }.toMutableSet()
         require((o["app"] as? JsonPrimitive)?.contentOrNull == "dev-jarvis") { "ye Dev Jarvis ki backup file nahi hai" }
         var added = 0
         (o["facts"] as? JsonArray).orEmpty().forEach { e ->
             val f = e as? JsonObject ?: return@forEach
             val t = f["text"]?.jsonPrimitive?.contentOrNull ?: return@forEach
+            if (!known.add(t.trim().lowercase())) return@forEach
             memory.add(t, f["cat"]?.jsonPrimitive?.contentOrNull ?: "other"); added++
         }
         o["life"]?.jsonPrimitive?.contentOrNull?.let { raw -> LifeCodec.decode(raw).let { d -> life.update { d } } }
