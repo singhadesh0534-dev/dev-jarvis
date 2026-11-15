@@ -311,7 +311,10 @@ class JarvisBrain @Inject constructor(
             } catch (e: BrainError) {
                 if (e is BrainError.RateLimited) usage.markExhausted(Provider.GEMINI, cooldownFor(e))
                 // Switch only if nothing was said or done yet — never repeat an action on the backup.
-                val switchable = e is BrainError.RateLimited || (e is BrainError.Server && e.code >= 500)
+                // A timeout while the phone is online is Gemini being slow or unreachable, not "no internet":
+                // the backup brain (another server) often answers. Really offline stays an error.
+                val switchable = e is BrainError.RateLimited || (e is BrainError.Server && e.code >= 500) ||
+                    (e is BrainError.NoNetwork && device.isOnline())
                 if (switchable && !spokeAnything && round == 0) throw Fallback(e)
                 throw e
             }

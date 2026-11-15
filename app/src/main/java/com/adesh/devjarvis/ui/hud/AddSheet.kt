@@ -194,7 +194,7 @@ private fun SwitchRow(icon: LineIcon, title: String, detail: String, on: Boolean
         }
         Switch(
             checked = on,
-            onCheckedChange = onChange,
+            onCheckedChange = null, // the whole row is the button: one tap, one change
             modifier = Modifier.graphicsLayer { scaleX = 0.82f; scaleY = 0.82f },
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Hud.Background,

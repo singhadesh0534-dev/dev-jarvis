@@ -549,9 +549,13 @@ class JarvisSession @Inject constructor(
     private var wakeQuietUntil = 0L
 
     private fun noteFalseWake() {
+        // One empty wake is usually Sir himself (he paused, or wasn't heard): never lock him out for it. Only repeated
+        // empty wakes in a row (a TV, chatter) earn a short deaf period — it used to be 8 s after the first, 16 s after
+        // the second, and his next "Hello Dev" was ignored.
         falseWakes = (falseWakes + 1).coerceAtMost(5)
-        wakeQuietUntil = System.currentTimeMillis() + falseWakes * 8_000L
-        SessionTrace.add("WAKE quiet for ${falseWakes * 8}s after $falseWakes empty wake(s)")
+        val quietMs = (falseWakes - 2).coerceAtLeast(0) * 5_000L
+        wakeQuietUntil = System.currentTimeMillis() + quietMs
+        SessionTrace.add("WAKE empty #$falseWakes" + if (quietMs > 0) ", quiet for ${quietMs / 1000}s" else "")
     }
 
     /** Same tool with the same arguments failing again and again in one conversation: stop the loop. */
@@ -700,6 +704,7 @@ class JarvisSession @Inject constructor(
                 _ui.update { it.copy(partial = "", micLevel = 0f) }
                 when (outcome) {
                     ListenOutcome.HEARD -> {
+                        falseWakes = 0
                         ask(heardText)
                         return@launch
                     }
