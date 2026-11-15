@@ -44,7 +44,8 @@ object JarvisConfig {
     /** Approx free daily Live minutes for the fuel gauge — check your AI Studio rate-limit page. */
     const val LIVE_DAILY_MINUTES_BUDGET = 60
     /** After a non-quota Live failure, use Classic mode for this long before trying Live again. */
-    const val LIVE_RETRY_AFTER_MS = 10 * 60_000L
+    /** After a Live failure that isn't a limit or a bad key: try Live again this soon (was 10 min of classic mode). */
+    const val LIVE_RETRY_AFTER_MS = 90_000L
 
     // ---- Backup brain + better Hinglish ears: Groq (free tier) ----
     const val GROQ_BASE_URL = "https://api.groq.com/openai/v1"

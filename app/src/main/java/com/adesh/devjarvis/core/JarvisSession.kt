@@ -185,6 +185,8 @@ class JarvisSession @Inject constructor(
     private var liveRetryAt = 0L
     /** Live restarts with the next key in this wake (bad keys at the front of the list). */
     private var liveAuthRetries = 0
+    /** Key switches after a limit inside one conversation (bounded, reset on the next wake). */
+    private var liveQuotaHops = 0
     /** Tools that succeeded since Sir's last request (to catch "ho gaya" with nothing done). */
     @Volatile private var turnToolOk = 0
     /** The app itself did what Sir asked this turn (e.g. changed the role), so "ho gaya" is true without a tool. */
@@ -639,6 +641,7 @@ class JarvisSession @Inject constructor(
         focus.acquire()
         _ui.update { it.copy(inConversation = true) }
         liveAuthRetries = 0
+        liveQuotaHops = 0
         // A call / "bye" in the last conversation set this; left set, every new Live session closed the moment it opened.
         endAfterReply = false
         if (shouldUseLive(settings.current)) startLive() else startListening(followUp = false)
@@ -1042,7 +1045,9 @@ class JarvisSession @Inject constructor(
 
     private fun shouldUseLive(s: JarvisSettings): Boolean =
         s.voiceEngine == JarvisSettings.VOICE_LIVE && s.hasGeminiKey && device.isOnline() &&
-            !usage.isExhausted(Provider.LIVE) && System.currentTimeMillis() >= liveRetryAt
+            // Any Live key ready = Live. (A whole-day block after one key's limit kept Sir in slow classic mode
+            // while his other keys had plenty left.)
+            keys.live.readyCount(s.geminiApiKey) > 0 && System.currentTimeMillis() >= liveRetryAt
 
     /** HUD chip + fuel gauge follow whichever engine is (or would be) doing the work. */
     private fun updateMode() {
@@ -1386,11 +1391,23 @@ class JarvisSession @Inject constructor(
         }
         when (kind) {
             LiveMessages.CloseKind.QUOTA -> {
-                // This key's Live minutes are over: rest it. Another key ready? Carry on in Live on the next wake.
+                // This key hit its limit. A per-minute limit clears in a minute or two (it used to rest the key for 6 h,
+                // so a few busy minutes pushed Sir into slow classic mode); a daily one rests it till tomorrow.
+                // Another key ready? Switch to it at once, inside the same conversation — no "Hello Dev" again.
                 val s = settings.current
-                val another = keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), 6 * 3_600_000L)
-                SessionTrace.add("KEY live rotated, ready=${keys.live.readyCount(s.geminiApiKey)}")
-                if (!another) usage.markExhausted(Provider.LIVE)
+                val daily = Regex("""day|daily|per.?day""").containsMatchIn(detail.lowercase())
+                val rest = if (daily) 12 * 3_600_000L else 2 * 60_000L
+                val another = keys.live.rest(s.geminiApiKey, keys.live.current(s.geminiApiKey), rest)
+                SessionTrace.add("KEY live rotated (${if (daily) "daily" else "short"} limit), ready=${keys.live.readyCount(s.geminiApiKey)}")
+                if (!another) {
+                    usage.markExhausted(Provider.LIVE, System.currentTimeMillis() + rest)
+                } else if (_ui.value.inConversation && liveQuotaHops < 6) {
+                    liveQuotaHops++
+                    liveKickoff = if (anyReply) QUOTA_CONTINUE else null
+                    SessionTrace.add("LIVE switching to the next key now (hop $liveQuotaHops)")
+                    startLive()
+                    return
+                }
             }
             LiveMessages.CloseKind.AUTH -> {
                 // This key is wrong or revoked: rest it and, if another key is ready, start Live again with it right
@@ -1528,6 +1545,9 @@ class JarvisSession @Inject constructor(
         }
         const val HEALTH_CHECK_MS = 8_000L
         const val STUCK_MS = 25_000L
+        const val QUOTA_CONTINUE =
+            "[The line dropped for a second and you are back on a fresh connection. Carry on naturally from where the " +
+                "conversation was — don't greet again. If Sir was waiting for an answer, give it now.]"
         const val VOICE_GREETING =
             "[Your voice has just been changed, as Sir asked, and this is the new one. Say one short line now so he hears it, then wait.]"
         const val ROLE_GREETING =
