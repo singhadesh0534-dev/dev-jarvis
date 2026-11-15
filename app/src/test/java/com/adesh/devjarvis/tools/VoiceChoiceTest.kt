@@ -47,3 +47,12 @@ class VoiceDescriptionTest {
         org.junit.Assert.assertEquals("Kore", VoiceChoice.pick("kore", her, "Leda"))
     }
 }
+
+class OtherListVoiceTest {
+    @Test fun aMansVoiceAskedForTheGfRoleBecomesTheClosestWomansVoice() {
+        val her = com.adesh.devjarvis.brain.Persona.HER_VOICES
+        val v = VoiceChoice.pick("Algenib", her, "Leda")!!
+        org.junit.Assert.assertTrue(v in her && v != "Leda")
+        org.junit.Assert.assertNull(VoiceChoice.pick("Arcturus", her, "Leda"))
+    }
+}

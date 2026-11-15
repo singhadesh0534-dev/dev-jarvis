@@ -50,9 +50,26 @@ object VoiceChoice {
         return allowed.filter { !it.equals(current, true) && fit(it) > 0 }.maxByOrNull { fit(it) }
     }
 
-    /** A voice name, or else a description of one, for this list. */
+    /** What a trait of one list's voice means in the other list (men's "gravelly" -> women's "firm"). */
+    private val TRAIT_MAP = mapOf(
+        "gravelly" to listOf("firm"), "heavy" to listOf("firm"), "deep" to listOf("firm"), "excitable" to listOf("upbeat", "bright"),
+        "calm" to listOf("gentle", "smooth"), "informative" to listOf("clear", "mature"), "even" to listOf("smooth"),
+        "steady" to listOf("smooth"), "breathy" to listOf("soft"), "knowledgeable" to listOf("mature"), "friendly" to listOf("easy-going", "warm"),
+        "easy-going" to listOf("easy-going"),
+    )
+
+    /** A voice of another list ("Algenib" asked for in the gf role): the allowed voice with the closest character. */
+    fun similarTo(name: String, allowed: List<String>, current: String): String? {
+        val traits = CHARACTER[name]?.split(", ")?.flatMap { listOf(it) + (TRAIT_MAP[it] ?: emptyList()) } ?: return null
+        val others = allowed.filter { !it.equals(current, true) }
+        return others.maxByOrNull { v -> traits.count { CHARACTER[v]?.contains(it) == true } }
+    }
+
+    /** A voice name, a name from the other list, or else a description of one, for this list. */
     fun pick(raw: String, allowed: List<String>, current: String): String? =
-        voiceName(raw, allowed) ?: byDescription(raw, allowed, current)
+        voiceName(raw, allowed)
+            ?: voiceName(raw, ALL)?.let { similarTo(it, allowed, current) }
+            ?: byDescription(raw, allowed, current)
 
     /** The setting that holds the voice of this role. */
     fun itemFor(role: String?): String = when (Persona.normalize(role)) {

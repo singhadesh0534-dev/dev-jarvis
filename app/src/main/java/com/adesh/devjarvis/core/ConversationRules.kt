@@ -59,8 +59,13 @@ object ConversationRules {
     )
 
     /** Sir is correcting JARVIS or unhappy with the last answer — worth writing to the problem journal. */
+    /** "Aaj ka din bekar raha" is about his day, not about JARVIS. */
+    private val DAY_TALK = Regex("""\b(din|day|raat|subah|mausam|weather|hafta)\b|दिन|रात|सुबह""")
+    private val ABOUT_JARVIS = Regex("""\b(tum|tumne|tumhari|tumhara|tera|tune|aap|aapne)\b|तुम|आप|तू""")
+
     fun isComplaint(userText: String): Boolean {
         val t = spaces.replace(punctuation.replace(userText.lowercase(), " "), " ").trim()
+        if (DAY_TALK.containsMatchIn(t) && !ABOUT_JARVIS.containsMatchIn(t)) return false
         return complaints.any { it in t }
     }
 

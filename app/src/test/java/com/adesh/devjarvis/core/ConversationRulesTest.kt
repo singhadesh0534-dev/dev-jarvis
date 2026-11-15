@@ -68,3 +68,11 @@ class WrongVoicesTest {
         org.junit.Assert.assertFalse(ConversationRules.wrongVoices("mausam kaisa hai"))
     }
 }
+
+class DayTalkTest {
+    @Test fun hisBadDayIsNotAComplaintAboutJarvis() {
+        org.junit.Assert.assertFalse(ConversationRules.isComplaint("आज का दिन एकदम बेकार रहा यार।"))
+        org.junit.Assert.assertTrue(ConversationRules.isComplaint("tum bekaar ho"))
+        org.junit.Assert.assertTrue(ConversationRules.isComplaint("aaj ka din bekar tumne kar diya"))
+    }
+}
