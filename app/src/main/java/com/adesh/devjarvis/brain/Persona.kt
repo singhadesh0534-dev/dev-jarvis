@@ -30,11 +30,17 @@ object Persona {
     fun isPartner(persona: String?): Boolean = normalize(persona) == PARTNER
 
     /** Live voice for the role; JARVIS keeps the voice chosen in Settings. */
+    /**
+     * Each role has its own fixed kind of voice, whatever got saved: JARVIS and dost always a man's voice, gf always a
+     * woman's. (A woman's voice saved for JARVIS, or dost falling back to JARVIS's voice, made the roles sound mixed up.)
+     */
     fun liveVoice(persona: String, chosen: String, hers: String = HER_VOICE, dost: String = ""): String = when (normalize(persona)) {
-        PARTNER -> hers.ifBlank { HER_VOICE }
-        DOST -> dost.ifBlank { chosen }
-        else -> chosen
+        PARTNER -> hers.takeIf { it in HER_VOICES } ?: HER_VOICE
+        DOST -> dost.takeIf { it in HIS_VOICES } ?: DOST_VOICE
+        else -> chosen.takeIf { it in HIS_VOICES } ?: JARVIS_VOICE
     }
+    const val JARVIS_VOICE = "Charon"
+    const val DOST_VOICE = "Puck"
 
     /** Men's Live voices (Gemini's own set), deep and calm first. */
     val HIS_VOICES = listOf("Charon", "Orus", "Fenrir", "Iapetus", "Algenib", "Rasalgethi", "Alnilam", "Schedar", "Enceladus", "Umbriel", "Puck", "Achird", "Sadaltager")
@@ -124,7 +130,7 @@ object Persona {
     private const val GAP = """(?:\s+\S+){0,2}?\s+"""
     private const val BECOME = """(?:ban\s?ja+o?\b|ban\s?ke\b|ban\s?kar\b|bano\b|ki tarah\b|jaise\b|jaisi\b|mode\b|roop\b|role\b)"""
     private val ASK_PARTNER = Regex("""\b(?:gf|g f|girl ?friend|premika)\b$GAP$BECOME""")
-    private val ASK_DOST = Regex("""\b(?:dost|yaar|friend|buddy)\b$GAP$BECOME""")
+    private val ASK_DOST = Regex("""\b(?:dost|friend)\b$GAP$BECOME|\byaar\s+(?:ki tarah|ban\s?ja+o?|ban\s?ke|ban\s?kar)\b""")
     private val ASK_JARVIS = listOf(
         Regex("""\bjarvis(?:\s+\S+)?\s+(?:ban\s?ja+o?\b|ban\s?ke\b|bano\b)"""), Regex("""\bjarvis\s+(?:mode|roop)\b"""),
         Regex("""\bnormal\s+(?:ho\s?ja+o?\b|mode\b|ban\b)"""), Regex("""\b(?:wapas|vapas|waapas|vaapas)\s+jarvis\b"""),
@@ -159,8 +165,8 @@ object Persona {
 
     private val WORDS = mapOf(
         PARTNER to Regex("""\b(?:gf|g f|girl ?friend|premika)\b"""),
-        DOST to Regex("""\b(?:dost|yaar|friend|buddy)\b"""),
-        JARVIS to Regex("""\b(?:jarvis|normal|asli|original)\b"""),
+        DOST to Regex("""\b(?:dost|friend)\b|\byaar\s+(?:ki tarah|ban\s?ja+o?|ban\s?ke|ban\s?kar)\b"""),
+        JARVIS to Regex("""\b(?:jarvis|asli|original)\b|\bnormal\s+(?:ho|mode|ban)"""),
     )
 
     /** Did Sir's words name this role at all? The model may not change the role on its own idea. */

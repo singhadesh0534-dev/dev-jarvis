@@ -206,6 +206,10 @@ class SelfTools @Inject constructor(
                 return ToolResult.fail("Sir's voice is not recorded yet. He must open JARVIS Settings > Voice lock once and say the wake word six times; then this can be turned on.")
             }
             val changed = item.set(s, value) ?: return ToolResult.fail("'$value' is not valid for ${item.name}: ${item.about}")
+            // The role changes only on Sir's own words, through this door too.
+            if (item.name == "role" && changed.persona != Persona.normalize(s.persona) && !Persona.mentions(modes.lastUserWords, changed.persona)) {
+                return ToolResult.fail("Sir did not ask for the ${Persona.label(changed.persona)} role just now. Stay exactly as you are.")
+            }
             val heardBefore = Persona.liveVoice(s.persona, s.liveVoice, s.gfVoice, s.dostVoice)
             val heardAfter = Persona.liveVoice(changed.persona, changed.liveVoice, changed.gfVoice, changed.dostVoice)
             if (item.name in VOICE_ITEMS && heardAfter == heardBefore && s.voiceEngine == JarvisSettings.VOICE_LIVE) {

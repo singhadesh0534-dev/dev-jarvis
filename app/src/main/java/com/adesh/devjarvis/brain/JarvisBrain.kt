@@ -277,7 +277,9 @@ class JarvisBrain @Inject constructor(
         if (forLive) {
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {
-                append("\n\n[Your recent conversation with Sir — continue from it; he may refer to it]\n")
+                append("\n\n[Your recent conversation with Sir — continue from it; he may refer to it. Some of your lines may be " +
+                    "from another role (JARVIS / dost / gf): keep the facts, but speak ONLY as ${Persona.label(s.persona)} now, " +
+                    "in that role's manner and address.]\n")
                 recent.takeLast(16).forEach { append(if (it.role == Role.USER) "Sir: " else "You: ").append(it.text.take(300)).append('\n') }
             }
         }
