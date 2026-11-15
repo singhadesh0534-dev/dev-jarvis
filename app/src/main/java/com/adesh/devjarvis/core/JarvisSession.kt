@@ -1246,6 +1246,8 @@ class JarvisSession @Inject constructor(
                             userSaid.append(e.text)
                             modes.lastUserWords = userSaid.toString()
                             if (ConversationRules.wrongVoices(userSaid.toString())) crowdMode()
+                            // "switch off / so jao / chup ho jao": decided now, not only when his turn is committed.
+                            if (ConversationRules.isEnder(userSaid.toString())) endAfterTurn = true
                             haltTools = com.adesh.devjarvis.brain.Persona.saidStop(userSaid.toString())
                             if (haltTools) SessionTrace.add("STOP said: tools halted")
                             noteRoleRequest(userSaid.toString())

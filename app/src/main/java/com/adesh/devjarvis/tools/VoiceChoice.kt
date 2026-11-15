@@ -24,6 +24,36 @@ object VoiceChoice {
     /** "Charon (calm, informative), Orus (firm, deep), …" for a tool description. */
     fun described(names: List<String>): String = names.joinToString(", ") { n -> CHARACTER[n]?.let { "$n ($it)" } ?: n }
 
+    /** Words Sir uses for a kind of voice -> the characters that fit it. */
+    private val WANTS: List<Pair<List<String>, List<String>>> = listOf(
+        listOf("tagd", "strong", "powerful", "damdaar", "dabang", "firm", "dhamakedar") to listOf("firm", "excitable", "gravelly"),
+        listOf("bhaari", "bhari", "heavy", "deep", "gehri", "gahri", "bass", "moti") to listOf("gravelly", "deep", "firm"),
+        listOf("soft", "meethi", "mithi", "sweet", "pyaari", "pyari", "komal", "dheemi", "gentle", "naram") to listOf("soft", "gentle", "warm", "breathy"),
+        listOf("natural", "normal", "asli", "real", "insaan", "human") to listOf("friendly", "easy-going", "warm", "even"),
+        listOf("young", "jawaan", "jawan", "cute", "chhoti") to listOf("youthful", "upbeat", "bright"),
+        listOf("mature", "senior", "samajhdaar") to listOf("mature", "informative", "knowledgeable"),
+        listOf("energetic", "excited", "josh", "fast", "tez") to listOf("excitable", "upbeat", "lively"),
+        listOf("clear", "saaf") to listOf("clear"),
+        listOf("smooth", "silky") to listOf("smooth"),
+        listOf("dost", "friendly", "yaar") to listOf("friendly", "easy-going"),
+    )
+
+    /**
+     * "Tagdi awaaz", "thodi soft", "natural wali": the allowed voice whose character fits best, never the current one.
+     * Null when the words describe no kind of voice.
+     */
+    fun byDescription(raw: String, allowed: List<String>, current: String): String? {
+        val t = raw.lowercase()
+        val traits = WANTS.filter { (words, _) -> words.any { it in t } }.flatMap { it.second }
+        if (traits.isEmpty()) return null
+        fun fit(v: String) = traits.count { tr -> CHARACTER[v]?.contains(tr) == true }
+        return allowed.filter { !it.equals(current, true) && fit(it) > 0 }.maxByOrNull { fit(it) }
+    }
+
+    /** A voice name, or else a description of one, for this list. */
+    fun pick(raw: String, allowed: List<String>, current: String): String? =
+        voiceName(raw, allowed) ?: byDescription(raw, allowed, current)
+
     /** The setting that holds the voice of this role. */
     fun itemFor(role: String?): String = when (Persona.normalize(role)) {
         Persona.DOST -> "dost_voice"

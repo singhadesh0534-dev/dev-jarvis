@@ -34,3 +34,16 @@ class VoiceChoiceTest {
         org.junit.Assert.assertTrue(VoiceChoice.described(listOf("Algenib")).contains("gravelly"))
     }
 }
+
+class VoiceDescriptionTest {
+    @Test fun describedVoicesArePickedFromTheRightList() {
+        val her = com.adesh.devjarvis.brain.Persona.HER_VOICES
+        val strong = VoiceChoice.pick("tagdi wali awaaz", her, "Leda")!!
+        org.junit.Assert.assertTrue(strong in her && strong != "Leda")
+        org.junit.Assert.assertEquals("firm", VoiceChoice.CHARACTER[strong])
+        val soft = VoiceChoice.pick("thodi soft aur meethi", her, "Kore")!!
+        org.junit.Assert.assertTrue(soft in listOf("Achernar", "Vindemiatrix", "Sulafat"))
+        org.junit.Assert.assertNull(VoiceChoice.pick("Aurora", her, "Kore"))
+        org.junit.Assert.assertEquals("Kore", VoiceChoice.pick("kore", her, "Leda"))
+    }
+}

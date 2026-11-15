@@ -68,14 +68,6 @@ object LiveMessages {
                     }
                 }
                 put("model", if (model.startsWith("models/")) model else "models/$model")
-                if (patientVad) {
-                    // Google's adjustable filters off, as Sir asked. Sent with the other optional settings: if this model
-                    // rejects them, the session retries once without any of them (see liveVadRejected).
-                    putJsonArray("safetySettings") {
-                        listOf("HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT", "HARM_CATEGORY_DANGEROUS_CONTENT")
-                            .forEach { c -> add(buildJsonObject { put("category", c); put("threshold", "BLOCK_NONE") }) }
-                    }
-                }
                 putJsonObject("generationConfig") {
                     putJsonArray("responseModalities") { add(kotlinx.serialization.json.JsonPrimitive("AUDIO")) }
                     putJsonObject("speechConfig") {

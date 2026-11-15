@@ -271,7 +271,7 @@ class JarvisBrain @Inject constructor(
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {
                 append("\n\n[Your recent conversation with Sir — continue from it; he may refer to it]\n")
-                recent.takeLast(10).forEach { append(if (it.role == Role.USER) "Sir: " else "You: ").append(it.text.take(300)).append('\n') }
+                recent.takeLast(16).forEach { append(if (it.role == Role.USER) "Sir: " else "You: ").append(it.text.take(300)).append('\n') }
             }
         }
     }
