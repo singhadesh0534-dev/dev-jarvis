@@ -1064,7 +1064,8 @@ class JarvisSession @Inject constructor(
         }
         val source = when (provider) {
             Provider.LIVE -> "LIVE #${keys.live.currentBox(s.geminiApiKey)}"
-            Provider.GEMINI -> "GEMINI #${keys.gemini.currentBox(s.geminiApiKey)}"
+            // Classic chosen in settings vs Live not available right now: say which, so the chip explains itself.
+            Provider.GEMINI -> (if (s.voiceEngine == JarvisSettings.VOICE_CLASSIC) "CLASSIC #" else "GEMINI #") + keys.gemini.currentBox(s.geminiApiKey)
             Provider.GROQ -> if (s.hasGroqKey && keys.groq.readyCount(s.groqApiKey) > 0) "GROQ #${keys.groq.currentBox(s.groqApiKey)}"
                 else if (s.hasExtraBrain) "3RD BRAIN" else "GROQ #${keys.groq.currentBox(s.groqApiKey)}"
         }.replace(" #0", "")
@@ -1462,7 +1463,8 @@ class JarvisSession @Inject constructor(
 
     private fun errorText(e: BrainError): String = when (e) {
         is BrainError.MissingKey -> "Sir, mera dimaag abhi plug-in nahi hua. Settings mein Gemini API key daal dijiye."
-        is BrainError.NoNetwork -> "Sir, network gayab hai, abhi offline hoon."
+        is BrainError.NoNetwork -> if (device.isOnline()) "Sir, net abhi bahut dheema hai, jawab nahi aa paya. Ek baar phir boliye."
+            else "Sir, network gayab hai, abhi offline hoon."
         is BrainError.RateLimited -> "Sir, aaj ka free fuel khatam ho gaya. Thodi der baad phir koshish karte hain."
         is BrainError.InvalidKey -> "Sir, ye API key Google ko pasand nahi aayi. Settings mein ek baar check kar lijiye."
         is BrainError.Blocked -> "Sir, is sawaal pe mere safety filters ne haath khade kar diye. Kuch aur poochiye."
