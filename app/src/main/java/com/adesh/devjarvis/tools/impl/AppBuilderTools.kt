@@ -35,11 +35,13 @@ class AppBuilderTools @Inject constructor(
         ?: dir.listFiles()?.firstOrNull { it.nameWithoutExtension.contains(AppMaker.slug(name)) || AppMaker.slug(name).contains(it.nameWithoutExtension) }
 
     private fun open(file: File) = runCatching {
-        context.startActivity(
-            Intent(context, AppViewerActivity::class.java).putExtra(AppViewerActivity.EXTRA_FILE, file.absolutePath)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-        )
+        context.startActivity(com.adesh.devjarvis.apps.AppInstaller.intentFor(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }.isSuccess
+
+    private fun label(file: File) = file.nameWithoutExtension.replace('-', ' ').replaceFirstChar(Char::uppercase)
+
+    /** Home-screen icon; Android shows its own "Add" box for Sir to tap. */
+    private fun pin(file: File) = com.adesh.devjarvis.apps.AppInstaller.pin(context, file, label(file))
 
     /** Write, then one review pass that fixes bugs; the reviewed version is kept only if it is still a whole app. */
     private suspend fun generate(system: String, request: String): String? = withTimeoutOrNull(240_000) {
@@ -68,8 +70,10 @@ class AppBuilderTools @Inject constructor(
             val file = fileFor(name)
             withContext(Dispatchers.IO) { file.writeText(html) }
             val opened = open(file)
+            val pinned = pin(file)
             return ToolResult.ok("App '$name' built (${html.length / 1000} KB), checked once for bugs, saved" +
                 (if (opened) " and opened on screen." else ". It could not open by itself: Sir can say 'meri $name app kholo'.") +
+                (if (pinned) " Android is showing an 'Add to home screen' box: tell Sir to tap Add, then the app has its own icon on the home screen." else "") +
                 " Ask him to try it and say what to change.")
         }
     }
@@ -105,7 +109,20 @@ class AppBuilderTools @Inject constructor(
         }
     }
 
+    private val install = object : SimpleTool(
+        "install_my_app",
+        "Put an app JARVIS built on the home screen as its own icon (\"ise phone mein install karo\", \"home screen pe lagao\"). " +
+            "Android shows an 'Add to home screen' box that Sir taps. This is a home-screen app, not a Play Store APK.",
+        params { string("name", "Which app", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val file = find(args.requireString("name")) ?: return ToolResult.fail("no app by that name. Apps: ${names()}")
+            return if (pin(file)) ToolResult.ok("Android's 'Add to home screen' box is on screen for '${label(file)}': tell Sir to tap Add.")
+            else ToolResult.fail("this phone's launcher does not allow adding icons from apps — Sir can open it by saying 'meri ${label(file)} app kholo'")
+        }
+    }
+
     private fun names() = dir.listFiles()?.map { it.nameWithoutExtension }?.joinToString().orEmpty().ifBlank { "(none yet)" }
 
-    val tools: List<JarvisTool> = listOf(build, change, openApp)
+    val tools: List<JarvisTool> = listOf(build, change, openApp, install)
 }

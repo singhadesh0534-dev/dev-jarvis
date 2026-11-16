@@ -17,8 +17,15 @@ class AppViewerActivity : Activity() {
         if (file == null || !file.exists() || !file.canonicalPath.startsWith(File(filesDir, "apps").canonicalPath)) {
             finish(); return
         }
-        title = file.nameWithoutExtension
+        val label = file.nameWithoutExtension.replace('-', ' ').replaceFirstChar(Char::uppercase)
+        title = label
+        // Its own name, icon and colour in Recents, like an installed app.
+        runCatching {
+            @Suppress("DEPRECATION")
+            setTaskDescription(android.app.ActivityManager.TaskDescription(label, AppInstaller.icon(label, 192), AppInstaller.palette(label).first))
+        }
         val web = WebView(this)
+        this.web = web
         web.settings.javaScriptEnabled = true
         web.settings.domStorageEnabled = true // localStorage: the app's data stays
         web.settings.allowFileAccess = true
@@ -26,6 +33,14 @@ class AppViewerActivity : Activity() {
         web.webChromeClient = WebChromeClient() // alert / confirm work
         setContentView(web)
         web.loadUrl("file://" + file.absolutePath)
+    }
+
+    private var web: WebView? = null
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        val w = web
+        if (w != null && w.canGoBack()) w.goBack() else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
     companion object {

@@ -177,6 +177,8 @@
         <activity
             android:name=".apps.AppViewerActivity"
             android:exported="false"
+            android:documentLaunchMode="intoExisting"
+            android:excludeFromRecents="false"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
 
         <provider
