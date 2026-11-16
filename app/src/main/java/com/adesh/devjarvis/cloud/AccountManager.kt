@@ -35,7 +35,12 @@ class AccountManager @Inject constructor(
     private val http: OkHttpClient,
     private val backup: BackupManager,
 ) {
-    data class State(val email: String = "", val loggedIn: Boolean = false, val busy: Boolean = false, val message: String = "")
+    data class State(
+        val email: String = "", val loggedIn: Boolean = false, val busy: Boolean = false, val message: String = "",
+        /** A one-time code was emailed here and is waiting to be typed. */
+        val codeSentTo: String = "",
+        val codeSentAt: Long = 0,
+    )
 
     private val base = BuildConfig.ACCOUNT_URL
     private val anon = BuildConfig.ACCOUNT_ANON_KEY
@@ -108,6 +113,52 @@ class AccountManager @Inject constructor(
         val (c2, b2) = post(AuthRest.passwordUrl(base), AuthRest.credentialsBody(email, password), quiet = true) ?: (0 to "")
         val s2 = if (c2 in 200..299) AuthRest.session(b2) else null
         if (s2 != null) loggedIn(s2) else note("Account ban gaya. $email pe aaya confirm link dabaiye, phir yahan Login karein.")
+    }
+
+    // ---------------- one-time code (OTP) on email
+    @Volatile private var pendingPassword: String? = null
+
+    /**
+     * Signup (with the password Sir chose) or login: email a one-time code. Signup creates the account only after the
+     * code is typed, so every account has a real, owned email.
+     */
+    suspend fun sendCode(email: String, password: String?, signup: Boolean) {
+        if (!available) return note("Account server abhi set nahi hai.")
+        if (!AuthRest.validEmail(email)) return note("Sahi email daaliye.")
+        if (signup && (password == null || password.length < 6)) return note("Password kam se kam 6 akshar ka rakhiye.")
+        busy("Code bhej raha hoon…")
+        val (code, body) = post(AuthRest.otpUrl(base), AuthRest.otpBody(email, createUser = signup)) ?: return
+        if (code !in 200..299) return note(AuthRest.errorText(code, body))
+        pendingPassword = if (signup) password else null
+        _state.value = _state.value.copy(busy = false, codeSentTo = email.trim(), codeSentAt = System.currentTimeMillis(),
+            message = "${email.trim()} pe code bheja hai. Inbox (ya Spam) dekhiye.")
+    }
+
+    suspend fun verifyCode(raw: String) {
+        val email = _state.value.codeSentTo.ifEmpty { return note("Pehle code mangaiye.") }
+        val code = AuthRest.cleanCode(raw)
+        if (!AuthRest.validCode(code)) return note("Email mein aaya poora code daaliye.")
+        busy("Code check ho raha hai…")
+        val (status, body) = post(AuthRest.verifyUrl(base), AuthRest.verifyBody(email, code)) ?: return
+        val s = if (status in 200..299) AuthRest.session(body) else null
+        if (s == null) return note(AuthRest.errorText(status, body))
+        // Signup: keep the password Sir chose, so he can also log in with it.
+        pendingPassword?.let { pw ->
+            withContext(Dispatchers.IO) {
+                runCatching {
+                    http.newCall(req(AuthRest.userUrl(base), s.accessToken).put(AuthRest.passwordBody(pw).toRequestBody(json)).build()).execute().close()
+                }
+            }
+        }
+        pendingPassword = null
+        _state.value = _state.value.copy(codeSentTo = "")
+        loggedIn(s)
+    }
+
+    /** "Email badlo": back to the form. */
+    fun cancelCode() {
+        pendingPassword = null
+        _state.value = _state.value.copy(codeSentTo = "", busy = false, message = "")
     }
 
     suspend fun logIn(email: String, password: String) {

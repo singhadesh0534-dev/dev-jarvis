@@ -80,6 +80,18 @@ object AuthRest {
     fun refreshBody(refresh: String) = buildJsonObject { put("refresh_token", refresh) }.toString()
     fun emailBody(email: String) = buildJsonObject { put("email", email.trim()) }.toString()
 
+    // ---- one-time code (OTP) on email: signup and login
+    fun otpUrl(base: String) = base.trimEnd('/') + "/auth/v1/otp"
+    fun otpBody(email: String, createUser: Boolean) = buildJsonObject { put("email", email.trim()); put("create_user", createUser) }.toString()
+    fun verifyUrl(base: String) = base.trimEnd('/') + "/auth/v1/verify"
+    fun verifyBody(email: String, code: String) = buildJsonObject { put("type", "email"); put("email", email.trim()); put("token", code.trim()) }.toString()
+    fun userUrl(base: String) = base.trimEnd('/') + "/auth/v1/user"
+    fun passwordBody(password: String) = buildJsonObject { put("password", password) }.toString()
+
+    /** A code as typed: digits only, 6 to 10 long. */
+    fun cleanCode(raw: String) = raw.filter { it.isDigit() }.take(10)
+    fun validCode(code: String) = code.length in 6..10
+
     fun validEmail(e: String) = Regex("""^[^@\s]+@[^@\s]+\.[^@\s]+$""").matches(e.trim())
 
     /** Login / refresh response -> session. null when there is no session (e.g. signup that must confirm the email first). */
@@ -101,6 +113,11 @@ object AuthRest {
         val r = raw.lowercase()
         return when {
             "invalid login" in r || "invalid_grant" in r -> "Email ya password galat hai."
+            "signups not allowed" in r || "user not found" in r -> "Is email se account nahi hai — SIGNUP kijiye."
+            "expired" in r || ("invalid" in r && "token" in r) || "otp" in r && "invalid" in r -> "Code galat hai ya purana ho gaya — naya code mangaiye."
+            "not authorized" in r && "email" in r -> "Is email pe abhi code nahi ja sakta — server ka email setup baaki hai."
+            "rate limit" in r && "email" in r -> "Abhi bahut code bhej chuke — thodi der baad phir mangaiye."
+            "security purposes" in r -> "Thoda ruk kar code dobara mangaiye (kuch second)."
             "already registered" in r || "already exists" in r -> "Is email se account pehle se hai — Login dabaiye."
             "not confirmed" in r -> "Email confirm nahi hua — inbox mein Supabase ka link dabaiye, phir login."
             "password" in r && ("6" in r || "short" in r || "weak" in r) -> "Password kam se kam 6 akshar ka rakhiye."

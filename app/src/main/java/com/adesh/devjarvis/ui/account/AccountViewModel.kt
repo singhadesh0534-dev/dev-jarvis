@@ -20,6 +20,9 @@ class AccountViewModel @Inject constructor(private val account: AccountManager) 
     fun logIn(email: String, password: String) = viewModelScope.launch { account.logIn(email, password) }
     fun signUp(email: String, password: String) = viewModelScope.launch { account.signUp(email, password) }
     fun forgot(email: String) = viewModelScope.launch { account.resetPassword(email) }
+    fun sendCode(email: String, password: String?, signup: Boolean) = viewModelScope.launch { account.sendCode(email, password, signup) }
+    fun verifyCode(code: String) = viewModelScope.launch { account.verifyCode(code) }
+    fun cancelCode() = account.cancelCode()
     fun logOut() = viewModelScope.launch { account.logOut() }
     fun syncNow() = viewModelScope.launch { account.push() }
     fun skip() { account.asked = true }

@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -62,6 +63,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -107,6 +110,7 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
 
     var emailOpen by rememberSaveable { mutableStateOf(false) }
     var signup by rememberSaveable { mutableStateOf(false) }
+    var otpLogin by rememberSaveable { mutableStateOf(false) }
     var email by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
 
@@ -188,19 +192,38 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
                             GhostButton("Email se login / signup", Hud.Ice) { emailOpen = true }
                         }
                         AnimatedVisibility(emailOpen || !googleOn, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            if (state.codeSentTo.isNotEmpty()) {
+                                // Step 2: the code from the email.
+                                CodeStep(state.codeSentTo, state.codeSentAt, signup, time, accent, state.busy,
+                                    onVerify = { viewModel.verifyCode(it) },
+                                    onResend = { viewModel.sendCode(state.codeSentTo, password.takeIf { signup }, signup) },
+                                    onBack = { viewModel.cancelCode() })
+                            } else Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Segmented(signup, accent) { signup = it }
                                 Spacer(Modifier.height(12.dp))
                                 HoloField("Email", email, Icons.Filled.Email, KeyboardType.Email, ImeAction.Next) { email = it.trim() }
-                                Spacer(Modifier.height(10.dp))
-                                HoloField(if (signup) "Naya password (6+ akshar)" else "Password", password, Icons.Filled.Lock,
-                                    KeyboardType.Password, ImeAction.Done, secret = true) { password = it }
-                                Spacer(Modifier.height(16.dp))
-                                GlowButton(if (signup) "ACCOUNT BANAO" else "LOGIN", accent, enabled = !state.busy) {
-                                    if (signup) viewModel.signUp(email, password) else viewModel.logIn(email, password)
+                                if (signup || !otpLogin) {
+                                    Spacer(Modifier.height(10.dp))
+                                    HoloField(if (signup) "Naya password (6+ akshar)" else "Password", password, Icons.Filled.Lock,
+                                        KeyboardType.Password, ImeAction.Done, secret = true) { password = it }
                                 }
-                                if (!signup) TextButton(onClick = { viewModel.forgot(email) }) {
-                                    Text("Password bhool gaye?", color = Hud.Dim, style = MaterialTheme.typography.bodySmall)
+                                Spacer(Modifier.height(16.dp))
+                                when {
+                                    // Signup: the account is made only after the emailed code is typed.
+                                    signup -> GlowButton("OTP BHEJO", accent, enabled = !state.busy) { viewModel.sendCode(email, password, signup = true) }
+                                    otpLogin -> GlowButton("OTP BHEJO", accent, enabled = !state.busy) { viewModel.sendCode(email, null, signup = false) }
+                                    else -> GlowButton("LOGIN", accent, enabled = !state.busy) { viewModel.logIn(email, password) }
+                                }
+                                if (signup) {
+                                    Text("Email pe 6 ankon ka code aayega — wahi daalke account banega.", style = MaterialTheme.typography.labelSmall,
+                                        color = Hud.Dim, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    TextButton(onClick = { otpLogin = !otpLogin }) {
+                                        Text(if (otpLogin) "Password se login" else "OTP se login", color = Hud.Cyan, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                    if (!otpLogin) TextButton(onClick = { viewModel.forgot(email) }) {
+                                        Text("Password bhool gaye?", color = Hud.Dim, style = MaterialTheme.typography.bodySmall)
+                                    }
                                 }
                             }
                         }
@@ -314,6 +337,67 @@ private fun OrDivider() {
         Text("  YA EMAIL SE  ", style = TextStyle(fontSize = 10.sp, letterSpacing = 2.5.sp), color = Hud.Dim)
         Box(Modifier.weight(1f).height(1.dp).background(Brush.horizontalGradient(listOf(Hud.Line, Color.Transparent))))
     }
+}
+
+/** Step 2 of signup / OTP login: type the code from the email; resend after 45 s; or go back and change the email. */
+@Composable
+private fun CodeStep(
+    email: String, sentAt: Long, signup: Boolean, time: Float, accent: Color, busy: Boolean,
+    onVerify: (String) -> Unit, onResend: () -> Unit, onBack: () -> Unit,
+) {
+    var code by rememberSaveable(email, sentAt) { mutableStateOf("") }
+    val wait = (45 - ((System.currentTimeMillis() - sentAt) / 1000).toInt()).coerceAtLeast(0)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("CODE DAALIYE", style = TextStyle(fontSize = 12.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Bold), color = accent)
+        Text(email, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
+        OtpBoxes(code, accent, time) { v -> code = v }
+        // Auto-check a 6-digit code once typing pauses (a longer code keeps typing, or uses the button).
+        LaunchedEffect(code) {
+            if (code.length == 6 && !busy) { delay(900); onVerify(code) }
+        }
+        Spacer(Modifier.height(16.dp))
+        GlowButton(if (signup) "VERIFY & ACCOUNT BANAO" else "VERIFY & LOGIN", accent, enabled = !busy && code.length >= 6) { onVerify(code) }
+        Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = onBack) { Text("‹ Email badlo", color = Hud.Dim, style = MaterialTheme.typography.bodySmall) }
+            TextButton(onClick = onResend, enabled = wait == 0 && !busy) {
+                Text(if (wait > 0) "Dobara bhejo (${wait}s)" else "Code dobara bhejo", color = if (wait > 0) Hud.Faint else Hud.Cyan,
+                    style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+/** 6 glowing boxes over one hidden number field: paste works, the keyboard stays numeric. */
+@Composable
+private fun OtpBoxes(value: String, accent: Color, time: Float, onChange: (String) -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    val boxes = if (value.length > 6) value.length.coerceAtMost(10) else 6
+    BasicTextField(
+        value = value,
+        onValueChange = { onChange(it.filter(Char::isDigit).take(10)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Done),
+        singleLine = true,
+        modifier = Modifier.focusRequester(focus),
+        decorationBox = {
+            Row(horizontalArrangement = Arrangement.spacedBy(if (boxes > 6) 5.dp else 8.dp)) {
+                repeat(boxes) { i ->
+                    val ch = value.getOrNull(i)?.toString().orEmpty()
+                    val current = i == value.length
+                    val glow = if (current) 0.55f + 0.45f * (0.5f + 0.5f * sin(time * 6f)) else if (ch.isNotEmpty()) 0.8f else 0.25f
+                    Box(
+                        Modifier.size(width = if (boxes > 6) 34.dp else 44.dp, height = 54.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Hud.Abyss.copy(alpha = 0.7f))
+                            .border(if (current) 2.dp else 1.dp, accent.copy(alpha = glow), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(ch, style = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold), color = Hud.White)
+                    }
+                }
+            }
+        },
+    )
 }
 
 @Composable

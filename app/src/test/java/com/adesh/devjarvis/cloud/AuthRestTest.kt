@@ -30,6 +30,15 @@ class AuthRestTest {
         assertNull(AuthRest.session("""{"id":"U","email":"a@b.co"}"""))
     }
 
+    @Test fun otpRequests() {
+        assertEquals("""{"email":"a@b.co","create_user":true}""", AuthRest.otpBody(" a@b.co ", true))
+        assertEquals("""{"type":"email","email":"a@b.co","token":"123456"}""", AuthRest.verifyBody("a@b.co", "123456 "))
+        assertEquals("123456", AuthRest.cleanCode("12 34-56"))
+        assertTrue(AuthRest.validCode("12345678")); assertFalse(AuthRest.validCode("1234"))
+        assertEquals("Code galat hai ya purana ho gaya — naya code mangaiye.", AuthRest.errorText(403, """{"code":403,"error_code":"otp_expired","msg":"Token has expired or is invalid"}"""))
+        assertEquals("Is email se account nahi hai — SIGNUP kijiye.", AuthRest.errorText(422, """{"msg":"Signups not allowed for otp"}"""))
+    }
+
     @Test fun googleSwitch() {
         assertEquals(false, AuthRest.googleEnabled("""{"external":{"email":true,"google":false},"disable_signup":false}"""))
         assertEquals(true, AuthRest.googleEnabled("""{"external":{"google":true}}"""))
