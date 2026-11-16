@@ -125,7 +125,7 @@ class LiveConnection(
 
     /** The greeting request: goes out when the session is ready, unless Sir is already talking by then. */
     fun sendKickoff(text: String) {
-        if (closed) return
+        if (closed || text.isBlank()) return // a resumed session needs no greeting
         val msg = LiveMessages.text(text)
         synchronized(pending) {
             if (!ready) {
@@ -176,7 +176,9 @@ class LiveConnection(
     companion object {
         /** ~3 s of 50 ms chunks spoken before the server was ready. */
 
-        fun setup(model: String, voice: String, system: String, tools: List<JsonObject>, patientVad: Boolean) =
-            LiveMessages.setup(model, voice, system, tools, patientVad)
+        fun setup(
+            model: String, voice: String, system: String, tools: List<JsonObject>, patientVad: Boolean,
+            longMemory: Boolean = false, resumeHandle: String? = null,
+        ) = LiveMessages.setup(model, voice, system, tools, patientVad, longMemory, resumeHandle)
     }
 }

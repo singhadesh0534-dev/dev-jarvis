@@ -33,6 +33,8 @@ object LiveMessages {
         data class ToolCalls(val calls: List<Call>) : ServerEvent
         data class ToolCancelled(val ids: List<String>) : ServerEvent
         data class GoAway(val timeLeft: String?) : ServerEvent
+        /** The server's handle to continue this very session later (same memory of the talk), if it is resumable. */
+        data class ResumeHandle(val handle: String, val resumable: Boolean) : ServerEvent
     }
 
     enum class CloseKind { QUOTA, AUTH, MODEL, NETWORK, OTHER }
@@ -52,9 +54,18 @@ object LiveMessages {
         systemInstruction: String,
         functionDeclarations: List<JsonObject>,
         patientVad: Boolean = false,
+        /** Long-memory features: session resumption (resume with [resumeHandle] if given) and a sliding context window. */
+        longMemory: Boolean = false,
+        resumeHandle: String? = null,
     ): String =
         buildJsonObject {
             putJsonObject("setup") {
+                if (longMemory) {
+                    // A dropped connection (or the server's ~10 min limit) continues the SAME session with its memory.
+                    putJsonObject("sessionResumption") { if (!resumeHandle.isNullOrBlank()) put("handle", resumeHandle) }
+                    // Long talks: the oldest turns are compressed instead of the session ending.
+                    putJsonObject("contextWindowCompression") { putJsonObject("slidingWindow") { } }
+                }
                 if (patientVad) {
                     // Wait for a real pause before answering, and don't treat small noises as Sir speaking.
                     putJsonObject("realtimeInputConfig") {
@@ -163,6 +174,11 @@ object LiveMessages {
             out += ServerEvent.ToolCancelled((c["ids"] as? JsonArray).orEmpty().mapNotNull { it.jsonPrimitive.contentOrNull })
         }
         (root["goAway"] as? JsonObject)?.let { g -> out += ServerEvent.GoAway(g["timeLeft"]?.jsonPrimitive?.contentOrNull) }
+        (root["sessionResumptionUpdate"] as? JsonObject)?.let { u ->
+            val h = u["newHandle"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val ok = u["resumable"]?.jsonPrimitive?.booleanOrNull ?: h.isNotEmpty()
+            if (h.isNotEmpty()) out += ServerEvent.ResumeHandle(h, ok)
+        }
         return out
     }
 

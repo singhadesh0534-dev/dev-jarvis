@@ -86,3 +86,20 @@ class LiveMessagesTest {
         assertEquals(LiveMessages.CloseKind.OTHER, LiveMessages.classifyClose(1000, "bye"))
     }
 }
+
+class LiveLongMemoryTest {
+    @org.junit.Test fun setupAsksForResumptionAndCompression() {
+        val fresh = LiveMessages.setup("m", "Charon", "sys", emptyList(), longMemory = true)
+        org.junit.Assert.assertTrue(fresh.contains("\"sessionResumption\":{}"))
+        org.junit.Assert.assertTrue(fresh.contains("\"contextWindowCompression\":{\"slidingWindow\":{}}"))
+        val resumed = LiveMessages.setup("m", "Charon", "sys", emptyList(), longMemory = true, resumeHandle = "h123")
+        org.junit.Assert.assertTrue(resumed.contains("\"sessionResumption\":{\"handle\":\"h123\"}"))
+        org.junit.Assert.assertTrue(!LiveMessages.setup("m", "Charon", "sys", emptyList()).contains("sessionResumption"))
+    }
+
+    @org.junit.Test fun readsTheResumeHandle() {
+        val ev = LiveMessages.parse("""{"sessionResumptionUpdate":{"newHandle":"abc","resumable":true}}""")
+        org.junit.Assert.assertEquals(listOf(LiveMessages.ServerEvent.ResumeHandle("abc", true)), ev)
+        org.junit.Assert.assertTrue(LiveMessages.parse("""{"sessionResumptionUpdate":{"resumable":false}}""").isEmpty())
+    }
+}

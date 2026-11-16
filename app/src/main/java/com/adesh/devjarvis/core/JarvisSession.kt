@@ -189,6 +189,13 @@ class JarvisSession @Inject constructor(
     private var liveAuthRetries = 0
     /** Key switches after a limit inside one conversation (bounded, reset on the next wake). */
     private var liveQuotaHops = 0
+    // Session resumption: the server's handle for the open conversation, so a dropped connection continues it.
+    private var liveResumeHandle: String? = null
+    private var liveResumeAt = 0L
+    private var liveResumeKey = ""
+    private var liveResumeHops = 0
+    private var liveResumeNext = false
+    private var liveLongMemoryRejected = false
     /** Tools that succeeded since Sir's last request (to catch "ho gaya" with nothing done). */
     @Volatile private var turnToolOk = 0
     /** The app itself did what Sir asked this turn (e.g. changed the role), so "ho gaya" is true without a tool. */
@@ -658,6 +665,9 @@ class JarvisSession @Inject constructor(
         _ui.update { it.copy(inConversation = true) }
         liveAuthRetries = 0
         liveQuotaHops = 0
+        liveResumeHops = 0
+        liveResumeHandle = null // a new conversation starts fresh (it gets the recent talk from the prompt)
+        liveResumeNext = false
         // A call / "bye" in the last conversation set this; left set, every new Live session closed the moment it opened.
         endAfterReply = false
         if (shouldUseLive(settings.current)) startLive() else startListening(followUp = false)
@@ -1157,7 +1167,9 @@ class JarvisSession @Inject constructor(
     private fun startLive() {
         listenJob?.cancel()
         liveClosingByUs = false
-        val greeting = (liveKickoff ?: Greetings.kickoff(settings.current.persona, java.time.LocalTime.now().hour, recentGreetings.toList())) +
+        val resuming = liveResumeNext
+        liveResumeNext = false
+        val greeting = if (resuming) "" else (liveKickoff ?: Greetings.kickoff(settings.current.persona, java.time.LocalTime.now().hour, recentGreetings.toList())) +
             if (liveKickoff != null) Greetings.avoid(recentGreetings.toList()) else ""
         liveKickoff = null
         val s = settings.current
@@ -1170,7 +1182,11 @@ class JarvisSession @Inject constructor(
 
             val liveVoiceNow = com.adesh.devjarvis.brain.Persona.liveVoice(s.persona, s.liveVoice, s.gfVoice, s.dostVoice)
             val liveKey = keys.live.current(s.geminiApiKey)
-            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true), registry.declarations, patientVad = !liveVadRejected))
+            val longMemory = !liveLongMemoryRejected
+            val handle = liveResumeHandle?.takeIf { resuming && liveResumeKey == liveKey }
+            val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true),
+                registry.declarations, patientVad = !liveVadRejected, longMemory = longMemory, resumeHandle = handle))
+            if (handle != null) SessionTrace.add("LIVE resuming the same session (hop $liveResumeHops)")
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter, speechModel = { silero.open() }) { bytes, n -> conn.sendAudio(bytes, n) }
             SessionTrace.add("LIVE start model=${s.liveModel} voice=$liveVoiceNow role=${s.persona} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
@@ -1350,7 +1366,12 @@ class JarvisSession @Inject constructor(
                             conn.sendToolResponse(LiveMessages.toolResponse(results))
                             setState(JarvisState.LISTENING)
                         }
-                        is LiveMessages.ServerEvent.GoAway -> Unit // server ends the session soon; we close on Closed
+                        is LiveMessages.ServerEvent.GoAway -> SessionTrace.add("LIVE server says goAway (${e.timeLeft}); will resume the same session")
+                        is LiveMessages.ServerEvent.ResumeHandle -> if (e.resumable) {
+                            liveResumeHandle = e.handle
+                            liveResumeAt = System.currentTimeMillis()
+                            liveResumeKey = liveKey
+                        }
                         LiveMessages.ServerEvent.SetupComplete -> {
                             SessionTrace.add("LIVE connected + setup ok after ${System.currentTimeMillis() - startedAt} ms")
                             if (conn.spokeWhileConnecting) {
@@ -1415,6 +1436,23 @@ class JarvisSession @Inject constructor(
         }
         liveRestartForRole = false
         if (liveClosingByUs) return // closeLive() already handled the ending
+        // The setup's memory fields weren't accepted by this model: run without them (once) rather than lose Live.
+        if (!anyReply && !liveLongMemoryRejected && Regex("sessionResumption|contextWindowCompression|slidingWindow").containsMatchIn(detail)) {
+            liveLongMemoryRejected = true
+            SessionTrace.add("LIVE long-memory fields rejected; continuing without them")
+            if (_ui.value.inConversation) { startLive(); return }
+        }
+        // Connection dropped or the server's time limit: continue the SAME session (it remembers the whole talk).
+        val freshHandle = liveResumeHandle != null && System.currentTimeMillis() - liveResumeAt < 90 * 60_000L
+        if (_ui.value.inConversation && freshHandle && kind != LiveMessages.CloseKind.QUOTA && kind != LiveMessages.CloseKind.AUTH &&
+            liveResumeHops < 8 && (anyReply || liveResumeHops > 0)
+        ) {
+            liveResumeHops++
+            liveResumeNext = true
+            if (!anyReply) liveResumeHandle = null // a resume that failed at once: next time start fresh with the history
+            startLive()
+            return
+        }
         if (!anyReply && liveUsedPatientVad && kind == LiveMessages.CloseKind.OTHER && _ui.value.inConversation) {
             // Maybe this model doesn't accept the turn-taking config: try once more without it before giving up on Live.
             liveVadRejected = true
