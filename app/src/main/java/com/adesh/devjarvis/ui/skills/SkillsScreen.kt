@@ -89,7 +89,7 @@ fun SkillsScreen(viewModel: SkillsViewModel, onBack: () -> Unit, onRun: () -> Un
             .hudBackdrop(glowY = 0f)
             .safeDrawingPadding(),
     ) {
-        ScreenHeader("SKILLS", "${rows.size} kaam aate hain · $mine aapke / khud seekhe", onBack) {
+        ScreenHeader("SKILLS", "${rows.size} skills · $mine mere", onBack) {
             Action("+ JODO", Hud.Cyan) { adding = true }
             Action("IMPORT", Hud.Cyan) { picker.launch(arrayOf("application/zip", "application/x-zip-compressed", "text/*", "application/json", "application/octet-stream")) }
         }
