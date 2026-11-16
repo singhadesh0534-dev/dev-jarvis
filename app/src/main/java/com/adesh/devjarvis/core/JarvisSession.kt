@@ -110,6 +110,7 @@ sealed interface SessionSignal {
 @Singleton
 class JarvisSession @Inject constructor(
     private val supabase: com.adesh.devjarvis.cloud.SupabaseSync,
+    private val account: com.adesh.devjarvis.cloud.AccountManager,
     private val silero: com.adesh.devjarvis.live.SileroSpeech,
     private val keys: KeyRing,
     private val brain: JarvisBrain,
@@ -667,7 +668,7 @@ class JarvisSession @Inject constructor(
         modes.reset()
         scheduleMemoryExtraction()
         // After the new memories are written: copy everything to Sir's Supabase, if he set it up (at most every 10 min).
-        scope.launch { delay(40_000); supabase.autoPush() }
+        scope.launch { delay(40_000); supabase.autoPush(); account.autoPush() }
         val wasOpen = _ui.value.inConversation
         focus.release()
         _ui.update { it.copy(inConversation = false, partial = "", micLevel = 0f) }

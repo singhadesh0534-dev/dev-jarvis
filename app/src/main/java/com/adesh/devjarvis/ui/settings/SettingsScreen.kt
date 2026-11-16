@@ -108,6 +108,7 @@ fun SettingsScreen(
     onOpenSetup: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenVoiceLock: () -> Unit,
+    onOpenAccount: () -> Unit = {},
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val rejectedKeys by viewModel.rejectedKeys.collectAsStateWithLifecycle()
@@ -380,6 +381,9 @@ fun SettingsScreen(
                 Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
                 ActionRow { HudButton("Open memory", onOpenMemory) }
                 CardDivider()
+                SubLabel("Account (Gmail / email login)")
+                Hint("Login karo to yaadein, notes, skills aur routines aapke account mein save hote hain — naye phone pe login karte hi sab wapas.")
+                ActionRow { HudButton("Account / Login", onOpenAccount) }
                 BackupBlock(viewModel)
             }
 

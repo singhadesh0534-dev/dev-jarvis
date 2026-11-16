@@ -26,6 +26,8 @@ import com.adesh.devjarvis.ui.setup.SetupScreen
 import com.adesh.devjarvis.ui.theme.JarvisTheme
 import com.adesh.devjarvis.update.AppUpdater
 import dagger.hilt.android.AndroidEntryPoint
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -34,13 +36,16 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var session: JarvisSession
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var updater: AppUpdater
+    @Inject lateinit var account: com.adesh.devjarvis.cloud.AccountManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Debug builds only: the emulator smoke test (CI) goes straight to the HUD.
         val smokeTest = BuildConfig.DEBUG && intent?.getBooleanExtra("smoke_skip_setup", false) == true
-        val home = if (settings.current.setupDone || smokeTest) ROUTE_HUD else ROUTE_SETUP_FIRST
+        val afterLogin = if (settings.current.setupDone || smokeTest) ROUTE_HUD else ROUTE_SETUP_FIRST
+        // New phone / new user: login or signup first, so their memories come back before anything else.
+        val home = if (account.available && !account.asked && !account.state.value.loggedIn && !smokeTest) ROUTE_ACCOUNT_FIRST else afterLogin
         // Boot animation on a normal cold start only — not when launched by the assistant gesture.
         val isAssist = intent?.action in TALK_ACTIONS
         val start = if (savedInstanceState == null && !isAssist && !smokeTest && settings.current.bootAnimation) ROUTE_BOOT else home
@@ -84,6 +89,7 @@ class MainActivity : ComponentActivity() {
                             onOpenSetup = { nav.navigate(ROUTE_SETUP) },
                             onOpenMemory = { nav.navigate(ROUTE_MEMORY) },
                             onOpenVoiceLock = { nav.navigate(ROUTE_VOICELOCK) },
+                            onOpenAccount = { nav.navigate(ROUTE_ACCOUNT) },
                         )
                     }
                     composable(ROUTE_MEMORY) {
@@ -97,12 +103,21 @@ class MainActivity : ComponentActivity() {
                             nav.navigate(ROUTE_HUD) { popUpTo(ROUTE_SETUP_FIRST) { inclusive = true } }
                         })
                     }
+                    composable(ROUTE_ACCOUNT_FIRST) {
+                        com.adesh.devjarvis.ui.account.AccountScreen(viewModel = hiltViewModel(), firstRun = true, onDone = {
+                            nav.navigate(afterLogin) { popUpTo(ROUTE_ACCOUNT_FIRST) { inclusive = true } }
+                        })
+                    }
+                    composable(ROUTE_ACCOUNT) {
+                        com.adesh.devjarvis.ui.account.AccountScreen(viewModel = hiltViewModel(), firstRun = false, onDone = { nav.popBackStack() })
+                    }
                     composable(ROUTE_SETUP) {
                         SetupScreen(viewModel = hiltViewModel(), onDone = { nav.popBackStack() })
                     }
                 }
             }
         }
+        handleLogin(intent)
         if (savedInstanceState == null) {
             handleAssist(intent)
             updater.checkIfDue() // quiet; HUD shows a banner if a newer build exists
@@ -111,6 +126,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (handleLogin(intent)) return
         handleAssist(intent)
     }
 
@@ -119,6 +135,15 @@ class MainActivity : ComponentActivity() {
         // App khula hai = foreground: yahi sahi waqt hai mic service ko (dobara) start karne ka,
         // e.g. reboot ya XOS ke maarne ke baad.
         if (settings.current.alwaysOn && !session.ui.value.alwaysOn) ServiceController.start(this)
+    }
+
+    /** devjarvis://login-callback?code=… from the browser after Google login. */
+    private fun handleLogin(intent: Intent?): Boolean {
+        val uri = intent?.data?.toString() ?: return false
+        if (!uri.startsWith(com.adesh.devjarvis.cloud.AuthRest.REDIRECT)) return false
+        intent.data = null
+        lifecycleScope.launch { account.finishGoogle(uri) }
+        return true
     }
 
     /** Home long-press / assistant button: seedha sunna shuru. */
@@ -152,5 +177,7 @@ class MainActivity : ComponentActivity() {
         const val ROUTE_SETUP = "setup"
         const val ROUTE_SKILLS = "skills"
         const val ROUTE_CONNECTORS = "connectors"
+        const val ROUTE_ACCOUNT = "account"
+        const val ROUTE_ACCOUNT_FIRST = "account_first"
     }
 }

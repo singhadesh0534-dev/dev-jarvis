@@ -108,6 +108,13 @@
                 <action android:name="android.intent.action.VOICE_COMMAND" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
+            <!-- Google login comes back here from the browser. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="devjarvis" android:host="login-callback" />
+            </intent-filter>
             <!-- Earbud / car-kit button while the phone is locked. -->
             <intent-filter>
                 <action android:name="android.speech.action.VOICE_SEARCH_HANDS_FREE" />

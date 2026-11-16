@@ -55,6 +55,9 @@ jobs:
         run: ./gradlew testFullDebugUnitTest --no-daemon --stacktrace
 
       - name: Build Full + Lite APKs
+        env:
+          JARVIS_ACCOUNT_URL: ${{ secrets.JARVIS_ACCOUNT_URL }}
+          JARVIS_ACCOUNT_ANON_KEY: ${{ secrets.JARVIS_ACCOUNT_ANON_KEY }}
         run: ./gradlew assembleFullRelease assembleLiteRelease --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4

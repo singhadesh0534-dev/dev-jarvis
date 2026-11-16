@@ -19,6 +19,9 @@ android {
         versionCode = 100 + (run ?: 0)
         versionName = "1.0." + (run ?: 0)
         buildConfigField("String", "UPDATE_REPO", "\"singhadesh0534-dev/dev-jarvis\"")
+        // JARVIS accounts server (Supabase). Never in the repo: CI passes it from repo secrets; blank = no login screen.
+        buildConfigField("String", "ACCOUNT_URL", "\"" + (System.getenv("JARVIS_ACCOUNT_URL") ?: "").trim() + "\"")
+        buildConfigField("String", "ACCOUNT_ANON_KEY", "\"" + (System.getenv("JARVIS_ACCOUNT_ANON_KEY") ?: "").trim() + "\"")
     }
 
     // One fixed key for every build, so a new APK installs over the old one (live updates keep data).
