@@ -14,6 +14,7 @@ import javax.inject.Singleton
 class MemoryRepository @Inject constructor(
     private val facts: FactDao,
     private val conversations: ConversationDao,
+    private val meaning: SemanticIndex,
 ) {
     val allFacts: Flow<List<Fact>> = facts.observeAll().map { list -> list.map { it.toFact() } }
     val recentSummaries: Flow<List<ConversationEntity>> = conversations.observeRecent()
@@ -38,7 +39,11 @@ class MemoryRepository @Inject constructor(
     /** Top facts for this turn; marks them used so they stay "fresh". */
     suspend fun relevant(query: String, limit: Int = 5): List<Fact> {
         val now = System.currentTimeMillis()
-        val top = MemoryRanker.top(facts.all().map { it.toFact() }, query, now, limit)
+        val all = facts.all().map { it.toFact() }
+        // Meaning search on top of keywords (a short wait at most; on any trouble it is keywords only).
+        val sims = if (query.isBlank()) emptyMap()
+        else kotlinx.coroutines.withTimeoutOrNull(2_500) { runCatching { meaning.similarities(query, all) }.getOrNull() }.orEmpty()
+        val top = MemoryRanker.top(all, query, now, limit, sims)
         if (top.isNotEmpty() && query.isNotBlank()) facts.touch(top.map { it.id }, now)
         return top
     }

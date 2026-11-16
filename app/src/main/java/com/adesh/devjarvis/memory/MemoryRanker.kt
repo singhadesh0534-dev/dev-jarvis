@@ -25,6 +25,14 @@ object MemoryRanker {
     private fun expand(words: Set<String>): Set<String> =
         words.flatMap { w -> FuzzyMatcher.ALIAS_GROUPS.firstOrNull { w in it } ?: setOf(w) }.toSet()
 
+    /** Meaning match (cosine of embeddings, when known) on top of the keyword score: 0.55+ counts as a hit. */
+    fun meaningBoost(similarity: Double?): Double = when {
+        similarity == null -> 0.0
+        similarity >= 0.55 -> 1.0 + (similarity - 0.55) * 4.0
+        similarity >= 0.45 -> (similarity - 0.45) * 5.0
+        else -> 0.0
+    }
+
     fun score(fact: Fact, queryWords: Set<String>, now: Long): Double {
         val factWords = keywords(fact.text)
         val q = expand(queryWords)
@@ -38,9 +46,9 @@ object MemoryRanker {
     }
 
     /** Top [limit]. With a query, facts need at least one keyword hit unless we have room to spare. */
-    fun top(facts: List<Fact>, query: String, now: Long, limit: Int = 5): List<Fact> {
+    fun top(facts: List<Fact>, query: String, now: Long, limit: Int = 5, similarity: Map<Long, Double> = emptyMap()): List<Fact> {
         val q = keywords(query)
-        val scored = facts.map { it to score(it, q, now) }.sortedByDescending { it.second }
+        val scored = facts.map { it to score(it, q, now) + meaningBoost(similarity[it.id]) }.sortedByDescending { it.second }
         if (q.isEmpty()) return scored.take(limit).map { it.first }
         val hits = scored.filter { it.second >= 1.0 }.map { it.first }
         val fill = scored.map { it.first }.filter { it !in hits && (it.category == "person" || it.category == "preference") }
