@@ -16,7 +16,33 @@ object BriefingTemplate {
         val facts: List<String>,
         /** Two or three headlines, already one line each; null = none. */
         val news: String? = null,
+        /** Important messages that came overnight (already sorted by triage); null = none. */
+        val messages: String? = null,
+        /** Birthdays / anniversaries / special days from memory that fall today or tomorrow. */
+        val specialDays: List<String> = emptyList(),
     )
+
+    private val MONTHS = listOf("january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december")
+    private val SHORT = MONTHS.map { it.take(3) }
+    private val SPECIAL = Regex("""(?i)birthday|bday|janamdin|janmdin|anniversary|saalgirah|salgirah|shaadi ki|death anniversary|barsi|puja|festival""")
+
+    /**
+     * Memories that mention a special day falling on [day]/[month] ("Mummy's birthday is 12 March", "anniversary 3/12").
+     * [tomorrow] true -> tag "kal". Pure.
+     */
+    fun specialDaysOn(facts: List<String>, day: Int, month: Int, tomorrow: Boolean = false): List<String> {
+        val m = month - 1
+        val dateRx = Regex("""(?i)\b0?$day(st|nd|rd|th)?\s*(of\s*)?(${MONTHS[m]}|${SHORT[m]})\b|\b(${MONTHS[m]}|${SHORT[m]})\s*0?$day(st|nd|rd|th)?\b|\b0?$day[/.-]0?$month\b""")
+        return facts.filter { SPECIAL.containsMatchIn(it) && dateRx.containsMatchIn(it) }
+            .map { (if (tomorrow) "kal: " else "aaj: ") + it.take(140) }
+    }
+
+    /** Sir's interests from memory, for one personal headline ("cricket", "share market"...). */
+    fun interests(facts: List<String>): List<String> {
+        val all = facts.joinToString(" ").lowercase()
+        return listOf("cricket", "football", "share market", "stock market", "crypto", "bollywood", "technology", "ai", "gaming", "politics", "startup", "cars", "bikes")
+            .filter { Regex("""\b${Regex.escape(it)}\b""").containsMatchIn(all) }.take(2)
+    }
 
     fun greeting(hour: Int) = when (hour) {
         in 4..11 -> "Good morning, Sir."
@@ -88,5 +114,7 @@ object BriefingTemplate {
         appendLine("Battery: ${i.batteryPercent}%${if (i.charging) " charging" else ""}")
         if (i.facts.isNotEmpty()) appendLine("Facts about Sir: ${i.facts.joinToString("; ")}")
         if (!i.news.isNullOrBlank()) appendLine("Top news to mention in one sentence (only what is written here): ${i.news}")
+        if (!i.messages.isNullOrBlank()) appendLine("Important messages that came (mention who and the gist, one sentence): ${i.messages}")
+        if (i.specialDays.isNotEmpty()) appendLine("SPECIAL DAYS — mention FIRST, warmly, and offer to send a wish: ${i.specialDays.joinToString("; ")}")
     }
 }

@@ -46,6 +46,7 @@ class BriefingComposer @Inject constructor(
     private val device: DeviceStatus,
     private val memory: MemoryRepository,
     private val life: LifeStore,
+    private val notifications: com.adesh.devjarvis.notifications.NotificationStore,
 ) {
     /** Raat ka summary: aaj ka kharcha + kal ka plan. */
     suspend fun composeNight(): String {
@@ -81,6 +82,18 @@ class BriefingComposer @Inject constructor(
         val to = LocalDate.now().plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
         val fmt = DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH)
         val d = device.snapshot()
+        val allFacts = runCatching { memory.all().map { it.text } }.getOrDefault(emptyList())
+        val today = LocalDate.now()
+        val special = BriefingTemplate.specialDaysOn(allFacts, today.dayOfMonth, today.monthValue) +
+            today.plusDays(1).let { BriefingTemplate.specialDaysOn(allFacts, it.dayOfMonth, it.monthValue, tomorrow = true) }
+        val interests = BriefingTemplate.interests(allFacts)
+        val newsQuery = "Aaj ki India ki 3 sabse badi khabrein" +
+            (if (interests.isNotEmpty()) " aur ${interests.joinToString(" aur ")} ki 1 sabse badi khabar" else "") + ", har ek ek chhoti line mein"
+        fun csv(x: String) = x.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        val important = runCatching {
+            com.adesh.devjarvis.notifications.NotificationTriage.summary(notifications.triageItems(), csv(s.importantContacts), csv(s.importantApps), 0)
+                .lineSequence().firstOrNull { it.startsWith("IMPORTANT:") }?.removePrefix("IMPORTANT:")?.trim()?.take(300)
+        }.getOrNull()
         val inputs = BriefingTemplate.Inputs(
             hour = now.hour,
             dateText = now.format(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.ENGLISH)),
@@ -90,7 +103,9 @@ class BriefingComposer @Inject constructor(
             batteryPercent = d.batteryPercent,
             charging = d.charging,
             facts = memory.relevant("", limit = 3).map { it.text },
-            news = runCatching { brain.webAnswer("Aaj ki India ki 3 sabse badi khabrein, har ek ek chhoti line mein") }.getOrNull()?.take(400),
+            news = runCatching { brain.webAnswer(newsQuery) }.getOrNull()?.substringBefore("\n(Sources:")?.take(500),
+            messages = important,
+            specialDays = special,
         )
         val llm = brain.complete(s.systemPrompt, BriefingTemplate.llmPrompt(inputs), json = false)
             ?.let { SpeechSanitizer.clean(it) }
