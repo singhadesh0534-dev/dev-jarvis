@@ -468,8 +468,13 @@ class JarvisBrain @Inject constructor(
         }
     }
 
-    /** Latest info from the web (Gemini grounded with Google Search). Null if unavailable. */
-    suspend fun webAnswer(query: String): String? {
+    /** Latest info from the web, with the site names it came from. */
+    suspend fun webAnswer(query: String): String? = webAnswerWithSources(query)?.let { (text, sites) ->
+        if (sites.isEmpty()) text else "$text\n(Sources: ${sites.joinToString(", ")})"
+    }
+
+    /** Latest info from the web (Gemini grounded with Google Search) and the sites used. Null if unavailable. */
+    suspend fun webAnswerWithSources(query: String): Pair<String, List<String>>? {
         val s = settings.current
         if (!s.hasGeminiKey || !device.isOnline()) return null
         val tools = JsonArray(listOf(buildJsonObject { put("google_search", buildJsonObject { }) }))
@@ -478,9 +483,10 @@ class JarvisBrain @Inject constructor(
         return try {
             usage.recordGeminiRequest()
             val out = StringBuilder()
+            val sites = LinkedHashSet<String>()
             geminiTurn(s, s.geminiModel, SystemPrompt.WEB + "\n\n" + context, JsonArray(listOf(content)), tools)
-                .collect { out.append(it.text) }
-            out.toString().trim().ifEmpty { null }
+                .collect { c -> out.append(c.text); c.sources.forEach { (t, u) -> sites += Research.siteName(t, u) } }
+            out.toString().trim().ifEmpty { null }?.let { it to sites.filter { s2 -> s2.isNotBlank() }.take(6) }
         } catch (e: BrainError) {
             if (e is BrainError.RateLimited) usage.markExhausted(Provider.GEMINI, cooldownFor(e))
             null

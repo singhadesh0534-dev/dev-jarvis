@@ -23,6 +23,8 @@ object GeminiStreamParser {
          */
         val rawParts: List<JsonObject> = emptyList(),
         val blockedReason: String? = null,
+        /** Web pages a Google-Search-grounded answer used (site name, link). */
+        val sources: List<Pair<String, String>> = emptyList(),
     )
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -61,8 +63,15 @@ object GeminiStreamParser {
 
         val finish = candidate["finishReason"]?.jsonPrimitive?.contentOrNull
         val blocked = finish?.takeIf { it == "SAFETY" || it == "PROHIBITED_CONTENT" || it == "BLOCKLIST" }
-        if (parts.isEmpty() && blocked == null) return null
-        return Chunk(text.toString(), calls, parts, blocked)
+        val sources = ((candidate["groundingMetadata"] as? JsonObject)?.get("groundingChunks") as? JsonArray).orEmpty()
+            .mapNotNull { (it as? JsonObject)?.get("web") as? JsonObject }
+            .mapNotNull { w ->
+                val title = w["title"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                val uri = w["uri"]?.jsonPrimitive?.contentOrNull.orEmpty()
+                if (title.isBlank() && uri.isBlank()) null else title to uri
+            }
+        if (parts.isEmpty() && blocked == null && sources.isEmpty()) return null
+        return Chunk(text.toString(), calls, parts, blocked, sources)
     }
 
     /** Pulls the human-readable message out of a Gemini error body, if any. */
@@ -70,4 +79,6 @@ object GeminiStreamParser {
         runCatching {
             json.parseToJsonElement(body).jsonObject["error"]!!.jsonObject["message"]!!.jsonPrimitive.content
         }.getOrDefault(body.take(200))
+
+    private fun JsonArray?.orEmpty(): List<kotlinx.serialization.json.JsonElement> = this ?: emptyList()
 }

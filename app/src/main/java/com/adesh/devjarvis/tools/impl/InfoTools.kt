@@ -1,5 +1,8 @@
 package com.adesh.devjarvis.tools.impl
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+
 import com.adesh.devjarvis.brain.JarvisBrain
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.Calculator
@@ -62,6 +65,37 @@ class InfoTools @Inject constructor(
                 "NOT live-checked (web search busy right now), from your own knowledge: $known\n" +
                     "If this is about today's news, live scores, prices or weather, tell Sir in a few words it may not be the latest.",
             )
+        }
+    }
+
+    private val deepResearch = object : SimpleTool(
+        "deep_research",
+        "Research a real question properly (\"research karo\", \"detail mein batao\", comparisons, 'kaunsa better hai', " +
+            "health / money / tech decisions, anything where one search is not enough): JARVIS searches it from 3-4 angles at " +
+            "once, compares, and answers with the sites it came from. Takes 10-30 seconds; tell Sir in a few words first.",
+        params { string("question", "Sir's question in full", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val question = args.requireString("question")
+            val brain = brainProvider.get()
+            val queries = com.adesh.devjarvis.brain.Research.parseQueries(
+                brain.complete(com.adesh.devjarvis.brain.Research.PLAN, question, json = true), question,
+            )
+            val findings = kotlinx.coroutines.coroutineScope {
+                queries.map { q -> async { brain.webAnswerWithSources(q)?.let { (t, s) -> Triple(q, t, s) } } }.awaitAll().filterNotNull()
+            }
+            if (findings.isEmpty()) {
+                return brain.webAnswer(question)?.let { ToolResult.ok(it) }
+                    ?: ToolResult.fail("web search is busy right now — tell Sir in one line and offer to try in a minute")
+            }
+            val answer = brain.complete(
+                com.adesh.devjarvis.brain.Research.SYNTH,
+                "QUESTION: $question\n\n" + com.adesh.devjarvis.brain.Research.findingsBlock(findings),
+                json = false, maxTokens = 2_048,
+            )?.trim().orEmpty()
+            val sites = findings.flatMap { it.third }.distinct().take(8)
+            val body = answer.ifEmpty { findings.joinToString("\n") { it.second.take(600) } }
+            return ToolResult.ok("$body\n(Searched ${findings.size} angles. Sources: ${sites.joinToString(", ").ifEmpty { "Google Search" }})")
         }
     }
 
@@ -134,5 +168,5 @@ class InfoTools @Inject constructor(
         }
     }
 
-    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer, askFile, setWakeWord)
+    val tools: List<JarvisTool> = listOf(weatherTool, calculate, time, schedule, webAnswer, deepResearch, askFile, setWakeWord)
 }
