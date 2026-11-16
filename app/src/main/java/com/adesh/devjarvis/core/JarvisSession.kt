@@ -278,6 +278,21 @@ class JarvisSession @Inject constructor(
                 settings.update { it.copy(speakerProfile = SpeakerVerification.encode(v)) }
             }
         }
+        // The voice lock learns too: when Sir keeps having to insist, it was too strict for his voice — relax it a little.
+        scope.launch {
+            val recent = ArrayDeque<Float>()
+            wake.insistedScores.collect { score ->
+                recent.addLast(score)
+                while (recent.size > 8) recent.removeFirst()
+                val cur = settings.current.speakerThreshold
+                SpeakerVerification.relaxedThreshold(cur, recent.toList())?.let { next ->
+                    settings.update { it.copy(speakerThreshold = next) }
+                    wake.speakerThreshold = next
+                    recent.clear()
+                    SessionTrace.add("WAKE voice lock relaxed ${"%.2f".format(cur)} -> ${"%.2f".format(next)} (Sir had to insist 3+ times)")
+                }
+            }
+        }
         scope.launch { healthLoop() }
         // Call shuru/khatam hone par turant react: beech mein JARVIS turant chup aur mic chhod de.
         focus.watchCallState { scope.launch { onCallStateChanged() } }

@@ -96,6 +96,8 @@ class WakeWordEngine @Inject constructor(
     val learnedProfile = MutableSharedFlow<FloatArray>(extraBufferCapacity = 2)
     /** Wakes let through after Sir insisted (for the flight recorder). */
     val speakerNotes = MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Match scores of wakes accepted only because Sir insisted (his voice, scored too low): the threshold learns from them. */
+    val insistedScores = MutableSharedFlow<Float>(extraBufferCapacity = 4)
     private val insistence = SpeakerVerification.Insistence()
 
     /** Last speaker-check result for the HUD: "you" / "not you" / "". */
@@ -271,6 +273,7 @@ class WakeWordEngine @Inject constructor(
                                 !overMedia && insistence.shouldAccept(now) -> {
                                     // Third call in 45 s: that is Sir not being heard, not a stranger.
                                     speakerNotes.tryEmit("'${heard.text}' accepted on the 3rd call in 45 s (match ${"%.2f".format(score)}, needs $speakerThreshold)")
+                                    insistedScores.tryEmit(score)
                                     if (score >= speakerThreshold * 0.5f) learnedProfile.tryEmit(SpeakerVerification.blend(profile, candidate, INSIST_LEARN_RATE))
                                     insistence.clear()
                                 }

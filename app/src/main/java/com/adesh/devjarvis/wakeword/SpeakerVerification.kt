@@ -81,6 +81,19 @@ object SpeakerVerification {
     }
 
     /** Profile ko text mein save/load karna. */
+    /**
+     * Sir had to insist (3rd call) although it was his voice: these match scores are "Sir, but too strict". With 3 or
+     * more of them, the threshold relaxes to just under their median — never below [floor], never above [current].
+     * Null when nothing should change.
+     */
+    fun relaxedThreshold(current: Float, insistedScores: List<Float>, floor: Float = 0.25f): Float? {
+        val real = insistedScores.filter { it > 0f && it < current }
+        if (real.size < 3) return null
+        val median = real.sorted()[real.size / 2]
+        val next = (median - 0.02f).coerceIn(floor, current)
+        return next.takeIf { current - it >= 0.01f }
+    }
+
     fun encode(vector: FloatArray): String = vector.joinToString(",")
     fun decode(text: String?): FloatArray? {
         if (text.isNullOrBlank()) return null
