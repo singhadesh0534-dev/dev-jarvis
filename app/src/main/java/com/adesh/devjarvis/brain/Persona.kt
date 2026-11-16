@@ -199,7 +199,7 @@ object Persona {
 
     /** What the tool tells the model right after a switch. */
     fun switched(persona: String): String = when (normalize(persona)) {
-        JARVIS -> "You are JARVIS again: back to your own calm, capable butler manner and \"Sir\", from this very reply."
+        JARVIS -> "You are JARVIS again: back to your own calm, capable, warm manner and \"Boss\", from this very reply."
         else -> "Role changed. From this very reply follow this, and stay in it until Sir asks for another role:\n" + overlay(persona)
     }
 }

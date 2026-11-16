@@ -169,7 +169,8 @@ class LiveEyes @Inject constructor(
         const val FRAME_SIDE = 768
         const val FRAME_QUALITY = 60
         const val CAMERA_INTERVAL_MS = 1_000L
-        const val SCREEN_INTERVAL_MS = 2_500L
+        /** About one picture a second: as fast as the Live model takes in video. */
+        const val SCREEN_INTERVAL_MS = 1_100L
         /** A phone screen is tall and full of small text: it needs more pixels than a camera frame to be readable. */
         const val SCREEN_FRAME_SIDE = 1_024
         const val SCREEN_FRAME_QUALITY = 70

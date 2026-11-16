@@ -55,6 +55,7 @@ class JarvisBrain @Inject constructor(
     @dagger.hilt.android.qualifiers.ApplicationContext private val appContext: android.content.Context,
     private val modes: com.adesh.devjarvis.core.ConversationMode,
     private val connectorStore: com.adesh.devjarvis.connectors.ConnectorStore,
+    private val activityLog: com.adesh.devjarvis.core.ActivityLog,
 ) {
     private val conversation = Conversation(JarvisConfig.HISTORY_TURNS)
     /** The recent conversation is kept on the phone: after a restart, or the next "hello", JARVIS still knows it. */
@@ -225,7 +226,8 @@ class JarvisBrain @Inject constructor(
         if (!inRole) {
             append(s.systemPrompt.trim())
             append("\n\nYour boss, owner and creator is ${JarvisConfig.BOSS_NAME} (Adesh). He built you. As JARVIS you call him " +
-                "\"Sir\"; his name is Adesh Singh whenever a name is needed (messages, forms, introductions). Never forget it.")
+                "\"Boss\" (now and then \"Sir\"); his name is Adesh Singh whenever a name is needed (messages, forms, introductions). Never forget it.")
+            append("\n\n").append(SystemPrompt.APNAPAN)
         } else {
             append(SystemPrompt.roleIdentity(s.persona))
         }
@@ -271,6 +273,20 @@ class JarvisBrain @Inject constructor(
         if (diary.isNotEmpty()) {
             append("\n\n[Diary of the last days — what happened, use it when Sir refers back]\n")
             diary.forEach { (day, text) -> append("- ").append(day).append(": ").append(text.take(350)).append('\n') }
+        }
+        // What JARVIS really did lately (true answers to "kya kiya?", also after a restart) and his own recent mistakes.
+        val done = com.adesh.devjarvis.core.SelfReview.recentActions(
+            activityLog.entries.value.map { com.adesh.devjarvis.core.SelfReview.Done(it.timeMillis, it.tool, it.args, it.ok, it.result) },
+            System.currentTimeMillis(), limit = if (compact) 5 else 12,
+        )
+        if (done.isNotEmpty()) {
+            append("\n\n[What you did for Sir lately, oldest first — when he asks what you did or what happened, answer from this exactly; never guess]\n")
+            append(done)
+        }
+        val lessons = com.adesh.devjarvis.core.SelfReview.lessons(com.adesh.devjarvis.core.ProblemJournal.dump(120).lines(), limit = if (compact) 3 else 6)
+        if (lessons.isNotEmpty()) {
+            append("\n\n[Your own recent mistakes, caught by your self-check — understand why each happened and do not repeat any of them]\n")
+            append(lessons)
         }
         val taught = life.get().macros
         if (taught.isNotEmpty()) {
