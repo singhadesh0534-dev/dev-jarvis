@@ -170,7 +170,7 @@ class AutomationEngine @Inject constructor(
         val minute = now.hour * 60 + now.minute
         fire("time", minute.toString())
         if (now.minute % 10 == 0) suggest()
-        if (minute == DIARY_MINUTE) scope?.launch { runCatching { writeDiary() } }
+        if (minute == DIARY_MINUTE) scope?.launch { runCatching { writeDiary() }; runCatching { learnFromToday() } }
         scope?.launch { runCatching { meetingHeadsUp() } }
         if (minute == 9 * 60 + 5) scope?.launch { runCatching { specialDays() } }
     }
@@ -247,6 +247,26 @@ class AutomationEngine @Inject constructor(
         store.update { it.copy(diary = DiaryLogic.put(it.diary, DiaryLogic.dayKey(now), entry)) }
         SessionTrace.add("AUTO diary written ai=${written != null}")
         return entry
+    }
+
+    // ---------------------------------------------------------------- self-learning
+
+    /** Every night: today's self-caught mistakes become up to 3 new "Lesson:" memories (kept in view in every talk). */
+    suspend fun learnFromToday(): List<String> {
+        val day = java.text.SimpleDateFormat("dd MMM", Locale.ENGLISH).format(java.util.Date())
+        val problems = com.adesh.devjarvis.core.SelfLearning.todaysProblems(com.adesh.devjarvis.core.ProblemJournal.dump(400).lines(), day)
+        if (problems.size < 2) return emptyList()
+        val existing = memory.all().map { it.text }.filter { it.startsWith("Lesson:") }
+        val raw = withContext(Dispatchers.IO) {
+            runCatching { brain.complete(com.adesh.devjarvis.core.SelfLearning.PROMPT, com.adesh.devjarvis.core.SelfLearning.userPrompt(problems, existing), json = true) }.getOrNull()
+        }
+        val lessons = com.adesh.devjarvis.core.SelfLearning.parse(raw, existing)
+        lessons.forEach { l ->
+            memory.add(l, "other")
+            activity.add("self_learning", "lesson", true, l)
+        }
+        SessionTrace.add("AUTO self-learning: ${problems.size} problems -> ${lessons.size} new lessons")
+        return lessons
     }
 
     private companion object {
