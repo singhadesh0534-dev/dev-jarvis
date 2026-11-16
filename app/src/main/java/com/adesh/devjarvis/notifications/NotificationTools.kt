@@ -20,17 +20,25 @@ import javax.inject.Singleton
 class NotificationTools @Inject constructor(
     @ApplicationContext private val context: Context,
     private val store: NotificationStore,
+    private val settings: com.adesh.devjarvis.settings.SettingsRepository,
 ) {
     private fun notConnected() = ToolResult.fail("notification access is off — Sir can turn it on in JARVIS Setup")
 
     private val read = object : SimpleTool(
-        "read_notifications", "Recent notifications (OTP/bank/payment ones are always hidden). Optionally only from one app or person.",
+        "read_notifications", "Sir's notifications, sorted like a good assistant: IMPORTANT (his people, urgent messages, missed calls) " +
+            "first, then others, offers / feeds / system noise only counted. OTP/bank/payment ones are always hidden. Optionally only " +
+            "from one app or person. Speak the important ones, mention the rest in a few words.",
         params { string("app", "App or sender name, e.g. WhatsApp, Mummy") },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             if (!store.listenerConnected) return notConnected()
-            val list = store.recent(args.string("app"), limit = 5)
             val hidden = store.hiddenSensitiveCount
+            if (args.string("app").isNullOrBlank()) {
+                val s = settings.current
+                fun csv(x: String) = x.split(',').map { it.trim() }.filter { it.isNotEmpty() }
+                return ToolResult.ok(NotificationTriage.summary(store.triageItems(), csv(s.importantContacts), csv(s.importantApps), hidden))
+            }
+            val list = store.recent(args.string("app"), limit = 8)
             if (list.isEmpty()) return ToolResult.ok("no notifications" + if (hidden > 0) " (some private ones hidden)" else "")
             return ToolResult.ok(list.joinToString(" | ") { "${it.appLabel}, ${it.title}: ${it.text.take(120)}" })
         }

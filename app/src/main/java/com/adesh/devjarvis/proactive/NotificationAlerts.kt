@@ -1,6 +1,7 @@
 package com.adesh.devjarvis.proactive
 
 import com.adesh.devjarvis.notifications.NotificationStore
+import com.adesh.devjarvis.notifications.NotificationTriage
 import com.adesh.devjarvis.notifications.SeenNotification
 import com.adesh.devjarvis.settings.SettingsRepository
 import com.adesh.devjarvis.tools.FuzzyMatcher
@@ -37,7 +38,11 @@ class NotificationAlerts @Inject constructor(
         val fromContact = contacts.any { FuzzyMatcher.score(it, n.title) >= 0.85 }
         val fromApp = apps.any { FuzzyMatcher.score(it, n.appLabel) >= 0.85 }
         // A whitelisted person always counts; a whitelisted app only for direct messages (they have a reply action).
-        return fromContact || (fromApp && n.reply != null)
+        if (fromContact || (fromApp && n.reply != null)) return true
+        // Also anyone with an urgent message, a missed call, or one person messaging again and again.
+        val item = NotificationTriage.Item(n.key, n.appLabel, n.title, n.text, n.time, n.reply != null)
+        if (NotificationTriage.level(item, contacts, apps) == NotificationTriage.Level.IMPORTANT) return true
+        return n.reply != null && NotificationTriage.isBurst(store.triageItems(), n.title, System.currentTimeMillis())
     }
 
     private suspend fun alert(n: SeenNotification) {
@@ -47,6 +52,13 @@ class NotificationAlerts @Inject constructor(
         spokenKeys.addLast(n.key)
         while (spokenKeys.size > 30) spokenKeys.removeFirst()
         val preview = n.text.replace('\n', ' ').take(80)
-        speaker.offer(ProactivePolicy.Kind.NOTIFICATION, "Sir, ${n.title} ka ${n.appLabel} pe message: $preview")
+        val urgent = NotificationTriage.isUrgent("${n.title} ${n.text}")
+        val burst = n.reply != null && NotificationTriage.isBurst(store.triageItems(), n.title, now)
+        val lead = when {
+            urgent -> "Boss, zaroori lag raha hai — "
+            burst -> "Boss, ${n.title} baar-baar message kar rahe hain — "
+            else -> "Sir, "
+        }
+        speaker.offer(ProactivePolicy.Kind.NOTIFICATION, "$lead${n.title} ka ${n.appLabel} pe message: $preview")
     }
 }

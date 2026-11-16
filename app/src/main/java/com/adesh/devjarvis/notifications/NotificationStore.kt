@@ -65,6 +65,11 @@ class NotificationStore @Inject constructor() {
         return filtered.take(limit)
     }
 
+    /** Everything stored, for triage (newest first). */
+    @Synchronized
+    fun triageItems(): List<NotificationTriage.Item> = items.values.sortedByDescending { it.time }
+        .map { NotificationTriage.Item(it.key, it.appLabel, it.title, it.text, it.time, it.reply != null) }
+
     /** Short lines for the brain's context block. */
     fun topForContext(limit: Int): List<String> = recent(limit = limit).map { "${it.appLabel} — ${it.title}: ${it.text.take(90)}" }
 
