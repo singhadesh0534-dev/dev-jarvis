@@ -67,6 +67,27 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      # Sir's signing key from the repo secret (never in the repo); a throwaway key only if the secret is missing.
+      - name: Signing key
+        env:
+          KS_B64: ${{ secrets.JARVIS_KEYSTORE_B64 }}
+          KS_PASS: ${{ secrets.JARVIS_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.JARVIS_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.JARVIS_KEY_PASSWORD }}
+        run: |
+          ks="$RUNNER_TEMP/factory.jks"
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$ks"
+            [ -n "$KS_PASS" ] && echo "FACTORY_STORE_PASS=$KS_PASS" >> "$GITHUB_ENV"
+            [ -n "$KEY_ALIAS" ] && echo "FACTORY_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            [ -n "$KEY_PASS" ] && echo "FACTORY_KEY_PASS=$KEY_PASS" >> "$GITHUB_ENV"
+          else
+            echo "::warning::JARVIS_KEYSTORE_B64 not set - throwaway key; rebuilt apps won't install over old ones."
+            keytool -genkeypair -keystore "$ks" -storepass jarvis-personal -keypass jarvis-personal -alias jarvis \
+              -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=JARVIS App Factory" -noprompt
+          fi
+          echo "FACTORY_KEYSTORE=$ks" >> "$GITHUB_ENV"
+
       - name: Build the APK
         env:
           APP_ID: ${{ steps.app.outputs.id }}
