@@ -367,6 +367,16 @@ class JarvisSession @Inject constructor(
     fun onTextSubmitted(text: String) {
         if (text.isBlank()) return
         SessionTrace.add("TYPED ${text.trim().length} chars")
+        // A Live conversation is open: the typed words go into it, so the same voice and the same memory of the talk
+        // answer (it used to go to the other brain and speak in the phone / ElevenLabs voice, without the Live context).
+        val conn = liveConn
+        if (liveActive && conn != null) {
+            addLine(fromUser = true, text = text.trim())
+            modes.lastUserWords = text.trim()
+            conn.sendText(text.trim())
+            SessionTrace.add("TYPED sent into Live")
+            return
+        }
         memoryJob?.cancel()
         if (conversationStartedAt == 0L) conversationStartedAt = System.currentTimeMillis()
         listenJob?.cancel()
@@ -1495,6 +1505,13 @@ class JarvisSession @Inject constructor(
     /** JARVIS's own line (errors, notices): shown and spoken. */
     private fun say(line: String, detail: String? = null) {
         val text = com.adesh.devjarvis.brain.Persona.address(line, settings.current.persona) // "Sir" -> "jaan" / "bhai" in a role
+        // During Live a second voice must not cut in: show the line and let Live say it in its own voice.
+        val conn = liveConn
+        if (liveActive && conn != null) {
+            addLine(fromUser = false, text = text, system = true)
+            conn.sendText("[App notice for Sir — tell him this briefly in your own words and voice: $text]")
+            return
+        }
         runCatching { focus.prepareToSpeak() }
         addLine(fromUser = false, text = text)
         detail?.let { addLine(fromUser = false, text = it, system = true) }
