@@ -30,7 +30,10 @@ class HudViewModel @Inject constructor(
     private val documents: com.adesh.devjarvis.vision.DocumentReader,
     private val modes: com.adesh.devjarvis.core.ConversationMode,
     private val learnedSkills: com.adesh.devjarvis.brain.LearnedSkills,
+    apkFactory: com.adesh.devjarvis.apps.ApkFactory,
 ) : ViewModel() {
+    /** "Todo: APK ban raha hai… 2 min" while the App Factory works, else "". */
+    val factoryStatus: StateFlow<String> = apkFactory.status
     /** A file Sir picked with + and has not sent yet (he may type a question about it first). */
     data class Attachment(val uri: android.net.Uri, val name: String, val isImage: Boolean)
 

@@ -26,6 +26,7 @@ class AppBuilderTools @Inject constructor(
     @ApplicationContext private val context: Context,
     // Provider breaks the JarvisBrain -> ToolRegistry -> tools -> JarvisBrain cycle.
     private val brain: Provider<JarvisBrain>,
+    private val factory: com.adesh.devjarvis.apps.ApkFactory,
 ) {
     private val dir get() = File(context.filesDir, "apps").apply { mkdirs() }
 
@@ -122,7 +123,32 @@ class AppBuilderTools @Inject constructor(
         }
     }
 
+    private val makeApk = object : SimpleTool(
+        "make_apk",
+        "Turn an app JARVIS built into a REAL Android APK that installs like any app (\"ise asli app bana do\", " +
+            "\"iska APK banao\", \"phone mein asli app ki tarah install karo\"). Built free on GitHub's cloud with Sir's token " +
+            "from Settings, takes 3-6 minutes in the background; Android's installer opens by itself when it is ready.",
+        params { string("name", "Which app", required = true) },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val file = find(args.requireString("name")) ?: return ToolResult.fail("no app by that name. Apps: ${names()}")
+            if (!com.adesh.devjarvis.core.Edition.declares(context, android.Manifest.permission.REQUEST_INSTALL_PACKAGES)) {
+                return ToolResult.fail("this Lite edition cannot install APKs — the Full JARVIS can")
+            }
+            if (!factory.hasToken) {
+                return ToolResult.fail("no GitHub token yet. Tell Sir: one time only, Settings > API keys > 'GitHub token banao' button, " +
+                    "generate, paste the token there and SAVE; then say this again.")
+            }
+            if (factory.busy) return ToolResult.ok("an APK is already being built; this one can follow when it is done — tell Sir")
+            val html = withContext(Dispatchers.IO) { file.readText() }
+            factory.start(label(file), html)
+            return ToolResult.ok("Started: '${label(file)}' is being built into a real APK on GitHub's free cloud (3-6 minutes, " +
+                "progress on the HUD and in a notification). When ready, Android's installer opens: Sir taps Install. " +
+                "Tell him this in one or two lines and carry on talking meanwhile.")
+        }
+    }
+
     private fun names() = dir.listFiles()?.map { it.nameWithoutExtension }?.joinToString().orEmpty().ifBlank { "(none yet)" }
 
-    val tools: List<JarvisTool> = listOf(build, change, openApp, install)
+    val tools: List<JarvisTool> = listOf(build, change, openApp, install, makeApk)
 }

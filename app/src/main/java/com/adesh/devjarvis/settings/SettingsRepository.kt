@@ -117,6 +117,8 @@ data class JarvisSettings(
     val rawTalk: Boolean = true,
     // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
     val elevenApiKey: String = "",
+    /** GitHub token for the App Factory (real APKs). A secret: encrypted here, never logged, never in backups. */
+    val githubToken: String = "",
     val elevenVoiceId: String = "",
     val elevenModel: String = "",
 ) {
@@ -233,6 +235,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putString(K_SUPABASE_SYNC, cleaned.supabaseSync.trim().ifEmpty { prefs.getString(K_SUPABASE_SYNC, "").orEmpty() }.ifEmpty { com.adesh.devjarvis.cloud.SupabaseRest.newSyncCode() })
             .putBoolean(K_RAW_TALK, cleaned.rawTalk)
             .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
+            .putString(K_GITHUB_TOKEN, cleaned.githubToken.trim())
             .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
             .putString(K_ELEVEN_MODEL, cleaned.elevenModel.trim())
             // commit (not apply) so a disk/keystore failure is thrown here and caught, not swallowed on a
@@ -317,6 +320,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             },
             rawTalk = prefs.getBoolean(K_RAW_TALK, d.rawTalk),
             elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
+            githubToken = prefs.getString(K_GITHUB_TOKEN, "").orEmpty(),
             elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
             elevenModel = prefs.getString(K_ELEVEN_MODEL, d.elevenModel).orEmpty(),
         )
@@ -389,6 +393,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SUPABASE_SYNC = "supabase_sync"
         const val K_RAW_TALK = "raw_talk"
         const val K_ELEVEN_KEY = "eleven_api_key"
+        const val K_GITHUB_TOKEN = "github_token"
         const val K_ELEVEN_VOICE = "eleven_voice_id"
         const val K_ELEVEN_MODEL = "eleven_model"
         const val K_GEMINI = "gemini_api_key"

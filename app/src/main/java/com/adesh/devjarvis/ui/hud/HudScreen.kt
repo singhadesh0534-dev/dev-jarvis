@@ -142,6 +142,7 @@ fun HudScreen(
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
     val role by viewModel.role.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
+    val factory by viewModel.factoryStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
 
@@ -227,6 +228,8 @@ fun HudScreen(
 
             // One line for whatever needs attention, most important first (not a stack of big boxes).
             val alerts = buildList {
+                // App Factory at work: the cloud APK build shows right here, inside JARVIS.
+                if (factory.isNotBlank()) add(Alert("APK", factory, Hud.Green) {})
                 if (!ui.hasKey) add(Alert("KEY", "Gemini API key nahi hai — tap karke daaliye", Hud.Amber, onOpenSettings))
                 if (missing.isNotEmpty()) add(
                     Alert(

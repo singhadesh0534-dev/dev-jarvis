@@ -27,6 +27,10 @@ android {
         val accountAnon = System.getenv("JARVIS_ACCOUNT_ANON_KEY")?.trim().takeUnless { it.isNullOrEmpty() }
             ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrbmNnYm9ndGRjdGN1YWxtcmh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMDYxNDcsImV4cCI6MjEwNjc4MjE0N30.dYZu663hbAA74aRFtB6wauMBSr8gXJ_XzL-djIlPGM8"
         buildConfigField("String", "ACCOUNT_URL", "\"$accountUrl\"")
+        // App Factory: the jarvis-apps branch is made from the branch this build came from (it has factory/).
+        val factoryBase = System.getenv("GITHUB_REF_NAME")?.trim().takeUnless { it.isNullOrEmpty() || it == "jarvis-apps" }
+            ?: "ccr-d192dd53-1qpxqo"
+        buildConfigField("String", "FACTORY_BASE", "\"$factoryBase\"")
         buildConfigField("String", "ACCOUNT_ANON_KEY", "\"$accountAnon\"")
     }
 

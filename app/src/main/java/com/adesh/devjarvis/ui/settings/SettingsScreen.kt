@@ -200,6 +200,14 @@ fun SettingsScreen(
                 Hint("Bas key daaliye: awaaz (gehri, mard, British) aur model JARVIS aapke account mein se khud chun leta hai.")
                 Hint("ElevenLabs sirf Classic mode, reminders aur confirmations ki awaaz badalta hai — Live mode ki awaaz Gemini ki apni hai. Free account mein mahine ke thode hi characters milte hain; khatam hote hi JARVIS khud phone ki awaaz pe aa jaata hai.")
                 Hint("Har key apne alag box mein daalo (alag-alag accounts ki). Box khaali chhod sakte ho. Ek ki free limit khatam hote hi JARVIS turant agli key pe chala jaata hai — awaaz, yaaddasht, personality sab wahi rehta hai.")
+
+                SubLabel("ASLI APP (APK) BANANE KE LIYE")
+                SecretField("GitHub token", draft.githubToken) { v -> viewModel.edit { it.copy(githubToken = v.trim()) } }
+                ActionRow {
+                    OpenLinkButton("GitHub token banao (ek baar)", com.adesh.devjarvis.cloud.FactoryRest.tokenPage(
+                        com.adesh.devjarvis.BuildConfig.UPDATE_REPO.substringBefore('/')))
+                }
+                Hint("Sirf ek baar: button dabao → GitHub pe \"Generate token\" (Repository: dev-jarvis; Contents: Read and write; Actions: Read) → token yahan paste karke SAVE. Uske baad bas bolo \"ise asli app bana do\" — JARVIS khud GitHub ke free cloud pe APK banata hai aur install ka popup laata hai. Free.")
             }
 
             ControlCard("ROOP & AWAAZ", "Teeno roop, unki awaaz aur jawab ka andaaz", anchor("roop"), accent = roopAccent(draft.persona)) {
