@@ -83,4 +83,13 @@ class ReasoningLeakTest {
         org.junit.Assert.assertEquals("Maafi, Boss, woh option nahi mil raha. Despina try karein?", ConversationRules.stripReasoning(leaked))
         org.junit.Assert.assertEquals("Ho gaya.", ConversationRules.stripReasoning("Ho gaya."))
     }
+
+    @Test fun thinkingHeadingsAndThirdPersonAreCut() {
+        val leaked = "Theek hai.\n    *   *Analysis of Tool Output:* The tool returned that the JARVIS role already"
+        org.junit.Assert.assertEquals("Theek hai.", ConversationRules.stripReasoning(leaked))
+        org.junit.Assert.assertTrue(ConversationRules.leaksReasoning("The user wants a new voice"))
+        org.junit.Assert.assertEquals("", ConversationRules.stripReasoning("I need to call the tool again."))
+        org.junit.Assert.assertFalse(ConversationRules.leaksReasoning("Haan Sir, plan ready hai, analysis kar liya."))
+        org.junit.Assert.assertFalse(ConversationRules.leaksReasoning("Kal ka plan: subah 6 baje gym."))
+    }
 }

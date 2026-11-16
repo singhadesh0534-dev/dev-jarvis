@@ -60,12 +60,21 @@ object ConversationRules {
 
     /** Sir is correcting JARVIS or unhappy with the last answer — worth writing to the problem journal. */
     /** The model's own planning ("* *Step 1: Check …") sometimes leaks into its words: cut it off there. */
-    private val REASONING = Regex("""(?m)^\s*[*•-]?\s*\*{0,2}\s*Step\s*\d+\s*[:.)]""")
+    private val REASONING = Regex(
+        """(?m)^\s*[*•-]?\s*\*{0,2}\s*Step\s*\d+\s*[:.)]""" +
+            // markdown headings of its own thinking: "* *Analysis of Tool Output:*", "**Thinking**", "*Plan:*"
+            """|(?m)^\s*[*•-]?\s*\*{1,2}\s*(Analysis|Analyzing|Thinking|Thought|Reasoning|Plan|Planning|Considering|Assessing|Evaluating|Reflecting|Interpreting|Understanding|Clarifying|Tool Output|Response|Next Steps?|Approach|Goal)\b""" +
+            // English talk about Sir in the third person: that is the model thinking, never words for him
+            """|(?i)\b(the user|user's|user is|the tool (returned|result|output)|I need to|I should (now )?(call|check|use|tell|respond|answer)|my (next step|plan|response) (is|will))\b""",
+    )
 
     fun stripReasoning(text: String): String {
         val m = REASONING.find(text) ?: return text
         return text.substring(0, m.range.first).trimEnd()
     }
+
+    /** True once the words so far contain the model's thinking: the rest of that turn must not be played. */
+    fun leaksReasoning(text: String): Boolean = REASONING.containsMatchIn(text)
 
     /** "Aaj ka din bekar raha" is about his day, not about JARVIS. */
     private val DAY_TALK = Regex("""\b(din|day|raat|subah|mausam|weather|hafta)\b|दिन|रात|सुबह""")

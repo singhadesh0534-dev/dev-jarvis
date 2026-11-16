@@ -1184,6 +1184,7 @@ class JarvisSession @Inject constructor(
             var closeDetail = ""
             val userSaid = StringBuilder()
             val jarvisSaid = StringBuilder()
+            var hushTurn = false // the model started speaking its own thinking: the rest of this turn is not played
             var userLine = -1L
             var jarvisLine = -1L
             var endAfterTurn = false
@@ -1198,7 +1199,7 @@ class JarvisSession @Inject constructor(
                 if (j.isNotEmpty()) lastJarvisSaid = j
                 if (u.isNotEmpty() || j.isNotEmpty()) brain.remember(u.ifEmpty { "…" }, j.ifEmpty { "…" })
                 if (u.isNotEmpty() && ConversationRules.isEnder(u)) endAfterTurn = true
-                userSaid.clear(); jarvisSaid.clear()
+                userSaid.clear(); jarvisSaid.clear(); hushTurn = false
                 userLine = -1; jarvisLine = -1
                 speakingText = ""
             }
@@ -1289,13 +1290,22 @@ class JarvisSession @Inject constructor(
                             }
                             anyReply = true
                             followUp?.cancel()
-                            audio.enqueue(e.pcm)
-                            setState(JarvisState.SPEAKING)
+                            if (!hushTurn) {
+                                audio.enqueue(e.pcm)
+                                setState(JarvisState.SPEAKING)
+                            }
                         }
                         is LiveMessages.ServerEvent.OutputText -> {
                             anyReply = true
                             liveConfirm.onModelSpoke()
                             jarvisSaid.append(e.text)
+                            if (!hushTurn && ConversationRules.leaksReasoning(jarvisSaid.toString())) {
+                                // "* *Analysis of Tool Output: The user…" was being read out: cut the speaker at once.
+                                hushTurn = true
+                                audio.flushPlayback()
+                                SessionTrace.add("LIVE thinking-aloud cut off")
+                                ProblemJournal.add("THINKING_ALOUD", "Live started reading its reasoning; the rest of the turn was muted")
+                            }
                             speakingText = jarvisSaid.toString()
                             if (jarvisLine < 0) jarvisLine = nextId++
                             upsertLine(jarvisLine, ConversationRules.stripReasoning(jarvisSaid.toString().trim()))

@@ -283,9 +283,10 @@ class WakeWordEngine @Inject constructor(
                             }
                             _lastSpeaker.value = "you ✓"
                         }
-                        // No voiceprint came out of this utterance. With the lock on, or over the phone's own video /
-                        // music, an unverified "Jarvis" does not wake him (Sir says it once more, a little longer).
-                        if ((profile == null || candidate == null) && (overMedia || (speakerLock && profile != null))) {
+                        // No voiceprint came out of this utterance (too short / too quiet to check). Over the phone's own
+                        // video or music it does not wake him; otherwise it does: Sir had to say it twice every time.
+                        // A real other voice is still refused above, where a voiceprint WAS taken and did not match.
+                        if ((profile == null || candidate == null) && overMedia) {
                             if (!overMedia && insistence.shouldAccept(now)) {
                                 speakerNotes.tryEmit("'${heard.text}' accepted on the 3rd call in 45 s (voice could not be checked)")
                                 insistence.clear()
