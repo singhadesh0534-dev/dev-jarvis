@@ -551,7 +551,7 @@ private fun AccountCard(viewModel: SettingsViewModel, modifier: Modifier, onOpen
                     modifier = Modifier.padding(top = 3.dp))
             } else {
                 Text("Login / Signup", style = MaterialTheme.typography.titleMedium, color = Hud.White)
-                Text("Google se ek tap — phone badle to bhi yaadein, skills sab wapas", style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 2)
+                Text("Phone badle to bhi yaadein, skills, routines sab wapas", style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 2)
             }
         }
         Text("›", style = MaterialTheme.typography.headlineSmall, color = accent, modifier = Modifier.padding(start = 8.dp))

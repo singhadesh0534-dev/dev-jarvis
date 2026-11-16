@@ -61,6 +61,15 @@ object AuthRest {
     fun pkceTokenUrl(base: String) = base.trimEnd('/') + "/auth/v1/token?grant_type=pkce"
     fun pkceBody(code: String, verifier: String) = buildJsonObject { put("auth_code", code); put("code_verifier", verifier) }.toString()
 
+    /** Public auth settings: which login providers the server has switched on. */
+    fun settingsUrl(base: String) = base.trimEnd('/') + "/auth/v1/settings"
+
+    /** true / false from the settings response, null if it can't be read. */
+    fun googleEnabled(body: String): Boolean? = runCatching {
+        val ext = (Json.parseToJsonElement(body) as JsonObject)["external"] as JsonObject
+        (ext["google"] as JsonPrimitive).content.toBooleanStrict()
+    }.getOrNull()
+
     // ---- email + password
     fun signupUrl(base: String) = base.trimEnd('/') + "/auth/v1/signup"
     fun passwordUrl(base: String) = base.trimEnd('/') + "/auth/v1/token?grant_type=password"

@@ -97,6 +97,7 @@ import kotlin.random.Random
 @Composable
 fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val googleOn by viewModel.googleOn.collectAsStateWithLifecycle()
     val time by rememberClock()
 
     var started by remember { mutableStateOf(false) }
@@ -118,7 +119,7 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
     }
 
     val accent = if (state.loggedIn) Hud.Green else Hud.Cyan
-    val holoSize by animateDpAsState(if (emailOpen && !state.loggedIn) 170.dp else 260.dp, tween(500), label = "holo")
+    val holoSize by animateDpAsState(if ((emailOpen || !googleOn) && !state.loggedIn) 190.dp else 260.dp, tween(500), label = "holo")
     val speed by animateFloatAsState(if (state.busy) 3.5f else 1f, tween(600), label = "speed")
 
     Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Hud.Abyss, Hud.Background, Color(0xFF041322))))) {
@@ -156,7 +157,7 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
             val greeting = when {
                 justLoggedIn && state.busy -> "Pehchaan confirm. Aapki yaadein la raha hoon…"
                 state.loggedIn -> "Welcome back, ${displayName(state.email)}."
-                signup && emailOpen -> "Naya account. Do minute, aur JARVIS hamesha aapka."
+                signup && (emailOpen || !googleOn) -> "Naya account. Do minute, aur JARVIS hamesha aapka."
                 else -> "Namaste. Main JARVIS hoon. Login kijiye — aapka sab kuch, har phone pe."
             }
             Typewriter(greeting, Modifier.fillMaxWidth().height(44.dp), if (started) 500 else 0)
@@ -178,12 +179,15 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
                             onSave = { viewModel.syncNow() }, onLogout = { viewModel.logOut() }, onContinue = onDone)
                     } else {
                         if (state.busy) ScanLine(time, accent)
-                        GoogleButton(enabled = !state.busy) { viewModel.google() }
-                        OrDivider()
-                        AnimatedVisibility(!emailOpen, enter = fadeIn(), exit = fadeOut() + shrinkVertically()) {
+                        // Google only when the server has it switched on; otherwise email is the way in, already open.
+                        if (googleOn) {
+                            GoogleButton(enabled = !state.busy) { viewModel.google() }
+                            OrDivider()
+                        }
+                        AnimatedVisibility(googleOn && !emailOpen, enter = fadeIn(), exit = fadeOut() + shrinkVertically()) {
                             GhostButton("Email se login / signup", Hud.Ice) { emailOpen = true }
                         }
-                        AnimatedVisibility(emailOpen, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                        AnimatedVisibility(emailOpen || !googleOn, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Segmented(signup, accent) { signup = it }
                                 Spacer(Modifier.height(12.dp))

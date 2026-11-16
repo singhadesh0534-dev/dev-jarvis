@@ -30,6 +30,12 @@ class AuthRestTest {
         assertNull(AuthRest.session("""{"id":"U","email":"a@b.co"}"""))
     }
 
+    @Test fun googleSwitch() {
+        assertEquals(false, AuthRest.googleEnabled("""{"external":{"email":true,"google":false},"disable_signup":false}"""))
+        assertEquals(true, AuthRest.googleEnabled("""{"external":{"google":true}}"""))
+        assertNull(AuthRest.googleEnabled("oops"))
+    }
+
     @Test fun errorsAreShortHinglish() {
         assertEquals("Email ya password galat hai.", AuthRest.errorText(400, """{"error":"invalid_grant","error_description":"Invalid login credentials"}"""))
         assertEquals("Is email se account pehle se hai — Login dabaiye.", AuthRest.errorText(422, """{"msg":"User already registered"}"""))

@@ -12,6 +12,9 @@ import javax.inject.Inject
 class AccountViewModel @Inject constructor(private val account: AccountManager) : ViewModel() {
     val state: StateFlow<AccountManager.State> = account.state
     val available: Boolean get() = account.available
+    val googleOn: StateFlow<Boolean> = account.googleOn
+
+    init { viewModelScope.launch { account.checkProviders() } }
 
     fun google() = account.startGoogle()
     fun logIn(email: String, password: String) = viewModelScope.launch { account.logIn(email, password) }

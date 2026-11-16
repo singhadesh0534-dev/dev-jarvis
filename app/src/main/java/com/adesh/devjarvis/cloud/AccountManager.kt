@@ -56,6 +56,23 @@ class AccountManager @Inject constructor(
     private val _state = MutableStateFlow(State(email = prefs.getString(K_EMAIL, "").orEmpty(), loggedIn = prefs.getString(K_REFRESH, "").orEmpty().isNotEmpty()))
     val state: StateFlow<State> = _state.asStateFlow()
 
+    /** Google login is switched on at the server (the button is shown only then). */
+    private val _google = MutableStateFlow(prefs.getBoolean(K_GOOGLE, false))
+    val googleOn: StateFlow<Boolean> = _google.asStateFlow()
+
+    suspend fun checkProviders() {
+        if (!available) return
+        val on = withContext(Dispatchers.IO) {
+            runCatching {
+                http.newCall(req(AuthRest.settingsUrl(base)).get().build()).execute().use { r ->
+                    if (r.isSuccessful) AuthRest.googleEnabled(r.body?.string().orEmpty()) else null
+                }
+            }.getOrNull()
+        } ?: return
+        _google.value = on
+        prefs.edit().putBoolean(K_GOOGLE, on).apply()
+    }
+
     /** The first-run screen was answered (logged in or "baad mein"). */
     var asked: Boolean
         get() = prefs.getBoolean(K_ASKED, false)
@@ -215,5 +232,6 @@ class AccountManager @Inject constructor(
         const val K_EXPIRES = "expires"
         const val K_VERIFIER = "pkce"
         const val K_ASKED = "asked"
+        const val K_GOOGLE = "google_on"
     }
 }
