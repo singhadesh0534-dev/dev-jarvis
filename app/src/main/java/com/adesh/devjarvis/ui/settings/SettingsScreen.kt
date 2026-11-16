@@ -86,6 +86,7 @@ import kotlinx.coroutines.launch
 
 /** Section rail entries: key (anchor) to the short label shown in the rail. */
 private val SECTIONS = listOf(
+    "account" to "ACCOUNT",
     "updates" to "UPDATES",
     "keys" to "KEYS",
     "roop" to "ROOP",
@@ -146,6 +147,8 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Spacer(Modifier.height(0.dp))
+
+            AccountCard(viewModel, anchor("account"), onOpenAccount)
 
             ControlCard("UPDATES", "App ka version aur naye update", anchor("updates")) {
                 UpdatesBlock(viewModel.updater)
@@ -377,13 +380,10 @@ fun SettingsScreen(
                 Hint("Jaise: Mummy, Papa, 9876543210 (max 5). \"Jarvis, SOS\" bolne par ek baar confirm karke in sabko aapki location ke saath SMS jaata hai. Full edition + SMS aur Location permission chahiye. SMS ka charge aapke SIM plan ke hisaab se.")
             }
 
-            ControlCard("MEMORY", "Yaadein aur backup — sab sirf aapke phone pe", anchor("memory")) {
+            ControlCard("MEMORY", "Yaadein dekho, badlo, aur backup file", anchor("memory")) {
                 Hint("JARVIS baat-cheet se khud zaruri baatein yaad rakhta hai (sirf phone pe). Yahan dekho, badlo, mitao.")
                 ActionRow { HudButton("Open memory", onOpenMemory) }
                 CardDivider()
-                SubLabel("Account (Gmail / email login)")
-                Hint("Login karo to yaadein, notes, skills aur routines aapke account mein save hote hain — naye phone pe login karte hi sab wapas.")
-                ActionRow { HudButton("Account / Login", onOpenAccount) }
                 BackupBlock(viewModel)
             }
 
@@ -512,6 +512,49 @@ private fun SaveBar(saved: Boolean, saveFailed: Boolean, onSave: () -> Unit) {
             shape = HudShapes.Chip,
             colors = ButtonDefaults.buttonColors(containerColor = Hud.Cyan, contentColor = Hud.Background),
         ) { Text("SAVE", style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold, letterSpacing = 2.sp)) }
+    }
+}
+
+/**
+ * The signed-in person at the top of Settings: avatar, name, email and "sync on" — or one clear "Login" call.
+ * Tapping it opens the account screen. Hidden when this build has no login server.
+ */
+@Composable
+private fun AccountCard(viewModel: SettingsViewModel, modifier: Modifier, onOpen: () -> Unit) {
+    if (!viewModel.accountAvailable) return
+    val acc by viewModel.account.collectAsStateWithLifecycle()
+    val accent = if (acc.loggedIn) Hud.Green else Hud.Cyan
+    val name = acc.email.substringBefore('@').replace('.', ' ').filter { !it.isDigit() }.trim()
+        .split(' ').filter { it.isNotBlank() }.joinToString(" ") { it.replaceFirstChar(Char::uppercase) }.ifBlank { "Aap" }
+    Row(
+        modifier
+            .fillMaxWidth()
+            .glass(accent, HudShapes.Panel, tint = 0.8f, edge = 0.7f)
+            .clip(HudShapes.Panel)
+            .clickable(onClick = onOpen)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(52.dp).clip(RoundedCornerShape(26.dp))
+                .background(Brush.radialGradient(listOf(accent.copy(alpha = 0.35f), Hud.Panel)))
+                .border(1.5.dp, accent.copy(alpha = 0.7f), RoundedCornerShape(26.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(if (acc.loggedIn) name.take(1).uppercase() else "J", style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold), color = Hud.White)
+        }
+        Column(Modifier.weight(1f).padding(start = 14.dp)) {
+            if (acc.loggedIn) {
+                Text(name, style = MaterialTheme.typography.titleMedium, color = Hud.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(acc.email, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("● CLOUD SYNC ON", style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.5.sp, fontWeight = FontWeight.Bold), color = accent,
+                    modifier = Modifier.padding(top = 3.dp))
+            } else {
+                Text("Login / Signup", style = MaterialTheme.typography.titleMedium, color = Hud.White)
+                Text("Google se ek tap — phone badle to bhi yaadein, skills sab wapas", style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 2)
+            }
+        }
+        Text("›", style = MaterialTheme.typography.headlineSmall, color = accent, modifier = Modifier.padding(start = 8.dp))
     }
 }
 
@@ -981,21 +1024,6 @@ private fun BackupBlock(viewModel: SettingsViewModel) {
     ActionRow {
         HudButton("Backup file banao", { save.launch("dev-jarvis-backup.json") })
         HudButton("Backup se wapas lao", { open.launch(arrayOf("application/json", "text/plain", "*/*")) })
-    }
-    // Supabase: the same backup, in Sir's own online database.
-    val draft by viewModel.draft.collectAsStateWithLifecycle()
-    SubLabel("Supabase sync (online backup)")
-    Hint("Apna Supabase project banao (supabase.com, free). Pehle \"Setup SQL copy\" dabake Supabase > SQL Editor mein Run karo. Phir Project URL aur anon key yahan daalo. Har baat-cheet ke baad yaadein, notes, skills apne aap wahan save hongi. API keys kabhi nahi jaati.")
-    HudField("Supabase Project URL (https://…supabase.co)", draft.supabaseUrl, { v -> viewModel.edit { it.copy(supabaseUrl = v) } })
-    SecretField("Supabase anon key", draft.supabaseKey) { v -> viewModel.edit { it.copy(supabaseKey = v) } }
-    Hint("Sync code: aapka backup sirf isi code se khulta hai. Ise kahin likh lo — naye phone pe yahi code daal ke \"wapas lao\" dabana. Khaali chhodo to naya ban jaata hai.")
-    SecretField("Sync code (jv-…)", draft.supabaseSync) { v -> viewModel.edit { it.copy(supabaseSync = v) } }
-    ActionRow {
-        HudButton("Setup SQL copy", { viewModel.copySupabaseSql() })
-        HudButton("Abhi sync karo", { viewModel.supabasePush() })
-    }
-    ActionRow {
-        HudButton("Supabase se wapas lao", { viewModel.supabasePull() })
     }
     report?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
 }

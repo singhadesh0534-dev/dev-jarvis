@@ -35,7 +35,12 @@ class SettingsViewModel @Inject constructor(
     private val keyChecker: com.adesh.devjarvis.core.KeyChecker,
     private val backup: com.adesh.devjarvis.core.BackupManager,
     private val supabase: com.adesh.devjarvis.cloud.SupabaseSync,
+    private val accountManager: com.adesh.devjarvis.cloud.AccountManager,
 ) : ViewModel() {
+    /** Who is signed in (top card of Settings). */
+    val account: kotlinx.coroutines.flow.StateFlow<com.adesh.devjarvis.cloud.AccountManager.State> = accountManager.state
+    val accountAvailable: Boolean get() = accountManager.available
+
     /** Result of the last backup / restore, shown under the buttons. */
     val backupReport = MutableStateFlow<String?>(null)
 
