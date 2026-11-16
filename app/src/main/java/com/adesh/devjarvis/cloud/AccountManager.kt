@@ -65,8 +65,23 @@ class AccountManager @Inject constructor(
     private val _google = MutableStateFlow(prefs.getBoolean(K_GOOGLE, false))
     val googleOn: StateFlow<Boolean> = _google.asStateFlow()
 
+    /** Email OTP is switched on at the server (only once the email sending is set up there). */
+    private val _otp = MutableStateFlow(prefs.getBoolean(K_OTP, false))
+    val otpOn: StateFlow<Boolean> = _otp.asStateFlow()
+
     suspend fun checkProviders() {
         if (!available) return
+        withContext(Dispatchers.IO) {
+            runCatching {
+                http.newCall(req(AuthRest.configUrl(base)).get().build()).execute().use { r ->
+                    if (r.isSuccessful) AuthRest.config(r.body?.string().orEmpty())["otp_enabled"]?.let { v ->
+                        val on = v.equals("true", ignoreCase = true)
+                        _otp.value = on
+                        prefs.edit().putBoolean(K_OTP, on).apply()
+                    }
+                }
+            }
+        }
         val on = withContext(Dispatchers.IO) {
             runCatching {
                 http.newCall(req(AuthRest.settingsUrl(base)).get().build()).execute().use { r ->
@@ -288,5 +303,6 @@ class AccountManager @Inject constructor(
         const val K_VERIFIER = "pkce"
         const val K_ASKED = "asked"
         const val K_GOOGLE = "google_on"
+        const val K_OTP = "otp_on"
     }
 }

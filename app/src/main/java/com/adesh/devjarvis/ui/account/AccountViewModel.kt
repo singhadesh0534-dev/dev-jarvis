@@ -13,6 +13,7 @@ class AccountViewModel @Inject constructor(private val account: AccountManager) 
     val state: StateFlow<AccountManager.State> = account.state
     val available: Boolean get() = account.available
     val googleOn: StateFlow<Boolean> = account.googleOn
+    val otpOn: StateFlow<Boolean> = account.otpOn
 
     init { viewModelScope.launch { account.checkProviders() } }
 

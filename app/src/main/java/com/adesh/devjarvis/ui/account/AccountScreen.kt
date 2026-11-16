@@ -101,6 +101,8 @@ import kotlin.random.Random
 fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val googleOn by viewModel.googleOn.collectAsStateWithLifecycle()
+    // Email OTP only once the server can send the code mails (a switch on the server); until then email + password.
+    val otpOn by viewModel.otpOn.collectAsStateWithLifecycle()
     val time by rememberClock()
 
     var started by remember { mutableStateOf(false) }
@@ -202,7 +204,7 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
                                 Segmented(signup, accent) { signup = it }
                                 Spacer(Modifier.height(12.dp))
                                 HoloField("Email", email, Icons.Filled.Email, KeyboardType.Email, ImeAction.Next) { email = it.trim() }
-                                if (signup || !otpLogin) {
+                                if (signup || !otpLogin || !otpOn) {
                                     Spacer(Modifier.height(10.dp))
                                     HoloField(if (signup) "Naya password (6+ akshar)" else "Password", password, Icons.Filled.Lock,
                                         KeyboardType.Password, ImeAction.Done, secret = true) { password = it }
@@ -210,18 +212,20 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
                                 Spacer(Modifier.height(16.dp))
                                 when {
                                     // Signup: the account is made only after the emailed code is typed.
-                                    signup -> GlowButton("OTP BHEJO", accent, enabled = !state.busy) { viewModel.sendCode(email, password, signup = true) }
-                                    otpLogin -> GlowButton("OTP BHEJO", accent, enabled = !state.busy) { viewModel.sendCode(email, null, signup = false) }
+                                    signup && otpOn -> GlowButton("OTP BHEJO", accent, enabled = !state.busy) { viewModel.sendCode(email, password, signup = true) }
+                                    signup -> GlowButton("ACCOUNT BANAO", accent, enabled = !state.busy) { viewModel.signUp(email, password) }
+                                    otpLogin && otpOn -> GlowButton("OTP BHEJO", accent, enabled = !state.busy) { viewModel.sendCode(email, null, signup = false) }
                                     else -> GlowButton("LOGIN", accent, enabled = !state.busy) { viewModel.logIn(email, password) }
                                 }
-                                if (signup) {
+                                if (signup && otpOn) {
                                     Text("Email pe 6 ankon ka code aayega — wahi daalke account banega.", style = MaterialTheme.typography.labelSmall,
                                         color = Hud.Dim, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
-                                } else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    TextButton(onClick = { otpLogin = !otpLogin }) {
+                                } else if (!signup) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    if (otpOn) TextButton(onClick = { otpLogin = !otpLogin }) {
                                         Text(if (otpLogin) "Password se login" else "OTP se login", color = Hud.Cyan, style = MaterialTheme.typography.bodySmall)
                                     }
-                                    if (!otpLogin) TextButton(onClick = { viewModel.forgot(email) }) {
+                                    // Password reset goes by email too: only once the server's email is set up.
+                                    if (otpOn && !otpLogin) TextButton(onClick = { viewModel.forgot(email) }) {
                                         Text("Password bhool gaye?", color = Hud.Dim, style = MaterialTheme.typography.bodySmall)
                                     }
                                 }

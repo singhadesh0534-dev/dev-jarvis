@@ -39,6 +39,11 @@ class AuthRestTest {
         assertEquals("Is email se account nahi hai — SIGNUP kijiye.", AuthRest.errorText(422, """{"msg":"Signups not allowed for otp"}"""))
     }
 
+    @Test fun serverSwitches() {
+        assertEquals(mapOf("otp_enabled" to "false"), AuthRest.config("""[{"key":"otp_enabled","value":"false"}]"""))
+        assertTrue(AuthRest.config("nope").isEmpty())
+    }
+
     @Test fun googleSwitch() {
         assertEquals(false, AuthRest.googleEnabled("""{"external":{"email":true,"google":false},"disable_signup":false}"""))
         assertEquals(true, AuthRest.googleEnabled("""{"external":{"google":true}}"""))

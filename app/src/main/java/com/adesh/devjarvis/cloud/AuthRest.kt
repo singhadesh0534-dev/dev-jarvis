@@ -80,6 +80,17 @@ object AuthRest {
     fun refreshBody(refresh: String) = buildJsonObject { put("refresh_token", refresh) }.toString()
     fun emailBody(email: String) = buildJsonObject { put("email", email.trim()) }.toString()
 
+    // ---- switches Sir flips on the server (no app update needed), e.g. otp_enabled
+    fun configUrl(base: String) = base.trimEnd('/') + "/rest/v1/jarvis_app_config?select=key,value"
+
+    fun config(body: String): Map<String, String> = runCatching {
+        (Json.parseToJsonElement(body) as kotlinx.serialization.json.JsonArray).mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            val k = (o["key"] as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+            k to ((o["value"] as? JsonPrimitive)?.contentOrNull ?: "")
+        }.toMap()
+    }.getOrDefault(emptyMap())
+
     // ---- one-time code (OTP) on email: signup and login
     fun otpUrl(base: String) = base.trimEnd('/') + "/auth/v1/otp"
     fun otpBody(email: String, createUser: Boolean) = buildJsonObject { put("email", email.trim()); put("create_user", createUser) }.toString()
