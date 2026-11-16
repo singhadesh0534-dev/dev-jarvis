@@ -1,0 +1,42 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Filled in by the workflow for each app.
+def appId = System.getenv('APP_ID') ?: 'com.adesh.jarvisapp.demo'
+def appVersion = (System.getenv('APP_VERSION') ?: '1') as int
+
+android {
+    namespace 'com.adesh.jarvisapp'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId appId
+        minSdk 24
+        targetSdk 35
+        versionCode appVersion
+        versionName "1.0.$appVersion"
+    }
+
+    signingConfigs {
+        // One key for every factory app, so a rebuilt app installs over the old one and keeps its data.
+        release {
+            storeFile file('../factory.keystore')
+            storePassword 'jarvis-factory'
+            keyAlias 'factory'
+            keyPassword 'jarvis-factory'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

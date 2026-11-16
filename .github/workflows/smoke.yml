@@ -4,6 +4,8 @@ name: Emulator smoke test
 # and fails on any crash. Results (screens, JARVIS's own flight recorder, crash traces) are in the job log.
 on:
   push:
+    # jarvis-apps carries only the apps JARVIS builds for Sir (App Factory), not JARVIS itself.
+    branches-ignore: [jarvis-apps]
   workflow_dispatch:
 
 concurrency:

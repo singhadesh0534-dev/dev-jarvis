@@ -1,0 +1,89 @@
+name: JARVIS App Factory
+
+# Sir says "ise asli app bana do": JARVIS (on the phone, with Sir's GitHub token) commits the app's HTML to
+# factory-apps/<slug>/index.html on the jarvis-apps branch with the message "build: <slug>|<Name>". This turns it
+# into a signed APK and publishes it as the asset app.apk of the release "app-<slug>", where JARVIS downloads it.
+on:
+  push:
+    # jarvis-apps: an app to build and publish. Any other branch: a self-test of the factory itself (build only).
+    paths: ['factory-apps/**', 'factory/**', '.github/workflows/app-factory.yml']
+
+concurrency:
+  group: app-factory-${{ github.sha }}
+
+jobs:
+  apk:
+    if: github.ref_name != 'jarvis-apps' || startsWith(github.event.head_commit.message, 'build:')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Which app
+        id: app
+        env:
+          MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "jarvis-apps" ]; then
+            # self-test: build the template's own demo page
+            echo "slug=selftest" >> "$GITHUB_OUTPUT"; echo "name=JARVIS Selftest" >> "$GITHUB_OUTPUT"
+            echo "id=com.adesh.jarvisapp.selftest" >> "$GITHUB_OUTPUT"; echo "test=1" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          line="${MSG%%$'\n'*}"; rest="${line#build:}"; rest="$(echo "$rest" | xargs)"
+          slug="${rest%%|*}"; name="${rest#*|}"
+          slug="$(echo "$slug" | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9-')"
+          [ -n "$slug" ] && [ -f "factory-apps/$slug/index.html" ] || { echo "::error::no app '$slug'"; exit 1; }
+          [ -n "$name" ] && [ "$name" != "$rest" ] || name="$slug"
+          pkg="$(echo "$slug" | tr '-' '_')"; case "$pkg" in [0-9]*) pkg="a$pkg";; esac
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "id=com.adesh.jarvisapp.$pkg" >> "$GITHUB_OUTPUT"
+
+      - name: Put the app inside the template
+        if: steps.app.outputs.test != '1'
+        env:
+          SLUG: ${{ steps.app.outputs.slug }}
+          NAME: ${{ steps.app.outputs.name }}
+        run: |
+          cp "factory-apps/$SLUG/index.html" factory/app/src/main/assets/index.html
+          esc="$(printf '%s' "$NAME" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e "s/'/\\\\'/g")"
+          printf '<?xml version="1.0" encoding="utf-8"?>\n<resources><string name="app_name">%s</string></resources>\n' "$esc" \
+            > factory/app/src/main/res/values/strings.xml
+          # Icon: a rounded two-tone gradient picked from the name, with its first letter (plain Java, no extra tools).
+          java factory/IconMaker.java "$NAME" factory/app/src/main/res
+
+      - name: Android platform
+        run: |
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | sort -V | tail -1)/sdkmanager
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build the APK
+        env:
+          APP_ID: ${{ steps.app.outputs.id }}
+          APP_VERSION: ${{ github.run_number }}
+        run: ./gradlew -p factory assembleRelease --no-daemon --stacktrace
+
+      - name: Publish for JARVIS to download
+        if: steps.app.outputs.test != '1'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SLUG: ${{ steps.app.outputs.slug }}
+          NAME: ${{ steps.app.outputs.name }}
+        run: |
+          cp factory/app/build/outputs/apk/release/app-release.apk app.apk
+          tag="app-$SLUG"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" app.apk --clobber
+          else
+            gh release create "$tag" app.apk --title "$NAME (JARVIS app)" --notes "Built by JARVIS App Factory" --prerelease --target "$GITHUB_SHA"
+          fi

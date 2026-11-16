@@ -1,0 +1,10 @@
+// The "app factory": turns an app JARVIS wrote (one HTML file) into a real Android APK.
+// Built by .github/workflows/app-factory.yml; nothing here runs on the phone.
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = "JarvisApp"
+include ':app'
