@@ -39,6 +39,12 @@ class AuthRestTest {
         assertEquals("Is email se account nahi hai — SIGNUP kijiye.", AuthRest.errorText(422, """{"msg":"Signups not allowed for otp"}"""))
     }
 
+    @Test fun existingEmailOnSignup() {
+        assertTrue(AuthRest.alreadyRegistered("""{"id":"x","email":"a@b.co","identities":[]}"""))
+        assertFalse(AuthRest.alreadyRegistered("""{"id":"x","email":"a@b.co","identities":[{"provider":"email"}]}"""))
+        assertFalse(AuthRest.alreadyRegistered("""{"access_token":"A","user":{"identities":[]}}"""))
+    }
+
     @Test fun serverSwitches() {
         assertEquals(mapOf("otp_enabled" to "false"), AuthRest.config("""[{"key":"otp_enabled","value":"false"}]"""))
         assertTrue(AuthRest.config("nope").isEmpty())

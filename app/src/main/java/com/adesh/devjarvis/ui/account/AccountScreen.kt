@@ -182,7 +182,8 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
                         GlowButton("Aage badho", accent, enabled = true) { viewModel.skip(); onDone() }
                     } else if (state.loggedIn) {
                         ProfilePanel(state.email, time, accent, state.busy, firstRun,
-                            onSave = { viewModel.syncNow() }, onLogout = { viewModel.logOut() }, onContinue = onDone)
+                            onSave = { viewModel.syncNow() }, onLogout = { viewModel.logOut() }, onContinue = onDone,
+                            onChangePassword = { pw, done -> viewModel.changePassword(pw, done) })
                     } else {
                         if (state.busy) ScanLine(time, accent)
                         // Google only when the server has it switched on; otherwise email is the way in, already open.
@@ -258,7 +259,10 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
 private fun ProfilePanel(
     email: String, time: Float, accent: Color, busy: Boolean, firstRun: Boolean,
     onSave: () -> Unit, onLogout: () -> Unit, onContinue: () -> Unit,
+    onChangePassword: (String, () -> Unit) -> Unit,
 ) {
+    var pwOpen by rememberSaveable { mutableStateOf(false) }
+    var newPw by rememberSaveable { mutableStateOf("") }
     Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             rotateRing(time * 60f, accent)
@@ -296,6 +300,17 @@ private fun ProfilePanel(
         Spacer(Modifier.height(10.dp))
     }
     GhostButton(if (busy) "Save ho raha hai…" else "Abhi save karo", Hud.Ice, enabled = !busy, onClick = onSave)
+    Spacer(Modifier.height(10.dp))
+    AnimatedVisibility(!pwOpen) { GhostButton("Password badlo", Hud.Ice, enabled = !busy) { pwOpen = true } }
+    AnimatedVisibility(pwOpen, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+        Column {
+            HoloField("Naya password (8+ akshar behtar)", newPw, Icons.Filled.Lock, KeyboardType.Password, ImeAction.Done, secret = true) { newPw = it }
+            Spacer(Modifier.height(10.dp))
+            GlowButton("PASSWORD BADLO", accent, enabled = !busy && newPw.length >= 6) {
+                onChangePassword(newPw) { newPw = ""; pwOpen = false }
+            }
+        }
+    }
     Spacer(Modifier.height(10.dp))
     GhostButton("Logout", Hud.Red, enabled = !busy, onClick = onLogout)
 }

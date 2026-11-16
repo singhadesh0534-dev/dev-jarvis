@@ -127,7 +127,11 @@ class AccountManager @Inject constructor(
         // No session yet: try logging straight in (works when the server doesn't ask for an email confirmation).
         val (c2, b2) = post(AuthRest.passwordUrl(base), AuthRest.credentialsBody(email, password), quiet = true) ?: (0 to "")
         val s2 = if (c2 in 200..299) AuthRest.session(b2) else null
-        if (s2 != null) loggedIn(s2) else note("Account ban gaya. $email pe aaya confirm link dabaiye, phir yahan Login karein.")
+        when {
+            s2 != null -> loggedIn(s2)
+            AuthRest.alreadyRegistered(body) -> note("Is email se account pehle se hai — LOGIN kijiye (apne purane password se).")
+            else -> note("Account ban gaya. Ab LOGIN kijiye.")
+        }
     }
 
     // ---------------- one-time code (OTP) on email
@@ -196,6 +200,21 @@ class AccountManager @Inject constructor(
         }
         prefs.edit().remove(K_ACCESS).remove(K_REFRESH).remove(K_USER).remove(K_EXPIRES).remove(K_EMAIL).apply()
         _state.value = State(message = "Logout ho gaya. Is phone ka data phone pe hi hai.")
+    }
+
+    /** New password for the signed-in account. */
+    suspend fun changePassword(newPassword: String): Boolean {
+        if (newPassword.length < 6) { note("Naya password kam se kam 6 akshar ka rakhiye."); return false }
+        val token = token() ?: run { note("Pehle login kijiye."); return false }
+        busy("Password badal raha hoon…")
+        val code = withContext(Dispatchers.IO) {
+            runCatching {
+                http.newCall(req(AuthRest.userUrl(base), token).put(AuthRest.passwordBody(newPassword).toRequestBody(json)).build())
+                    .execute().use { it.code to it.body?.string().orEmpty() }
+            }.getOrNull()
+        } ?: run { note("Net nahi hai — internet check kijiye."); return false }
+        return if (code.first in 200..299) { note("Password badal gaya. Agli baar naye password se login kijiye."); true }
+        else { note(if ("same" in code.second.lowercase()) "Naya password purane se alag rakhiye." else AuthRest.errorText(code.first, code.second)); false }
     }
 
     // ---------------- backup

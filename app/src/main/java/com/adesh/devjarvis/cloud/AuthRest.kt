@@ -115,6 +115,17 @@ object AuthRest {
         Session(access, s("refresh_token").orEmpty(), now + expiresIn * 1000, user?.let { s("id", it) }.orEmpty(), user?.let { s("email", it) }.orEmpty())
     }.getOrNull()
 
+    /**
+     * Signup for an email that already has an account: Supabase answers with a look-alike user whose "identities" list
+     * is empty (and no session), so nobody can probe which emails exist.
+     */
+    fun alreadyRegistered(body: String): Boolean = runCatching {
+        val o = Json.parseToJsonElement(body) as JsonObject
+        val user = (o["user"] as? JsonObject) ?: o
+        val ids = user["identities"] as? kotlinx.serialization.json.JsonArray
+        ids != null && ids.isEmpty() && o["access_token"] == null
+    }.getOrDefault(false)
+
     /** Supabase's error text, made short for Sir. */
     fun errorText(code: Int, body: String): String {
         val raw = runCatching {
