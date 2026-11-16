@@ -27,6 +27,7 @@ class AppBuilderTools @Inject constructor(
     // Provider breaks the JarvisBrain -> ToolRegistry -> tools -> JarvisBrain cycle.
     private val brain: Provider<JarvisBrain>,
     private val factory: com.adesh.devjarvis.apps.ApkFactory,
+    private val web: com.adesh.devjarvis.apps.LocalAppServer,
 ) {
     private val dir get() = File(context.filesDir, "apps").apply { mkdirs() }
 
@@ -35,7 +36,8 @@ class AppBuilderTools @Inject constructor(
     private fun find(name: String): File? = fileFor(name).takeIf { it.exists() }
         ?: dir.listFiles()?.firstOrNull { it.nameWithoutExtension.contains(AppMaker.slug(name)) || AppMaker.slug(name).contains(it.nameWithoutExtension) }
 
-    private fun open(file: File) = runCatching {
+    /** For testing, Sir wants the app in Chrome, not inside JARVIS; JARVIS's own viewer only if no browser opens. */
+    private fun open(file: File) = web.openInChrome(file) || runCatching {
         context.startActivity(com.adesh.devjarvis.apps.AppInstaller.intentFor(context, file).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }.isSuccess
 
@@ -73,7 +75,7 @@ class AppBuilderTools @Inject constructor(
             val opened = open(file)
             val pinned = pin(file)
             return ToolResult.ok("App '$name' built (${html.length / 1000} KB), checked once for bugs, saved" +
-                (if (opened) " and opened on screen." else ". It could not open by itself: Sir can say 'meri $name app kholo'.") +
+                (if (opened) " and opened in Chrome for testing (Chrome keeps its own data for it)." else ". It could not open by itself: Sir can say 'meri $name app kholo'.") +
                 (if (pinned) " Android is showing an 'Add to home screen' box: tell Sir to tap Add, then the app has its own icon on the home screen." else "") +
                 " Ask him to try it and say what to change.")
         }
@@ -94,7 +96,7 @@ class AppBuilderTools @Inject constructor(
                 ?: return ToolResult.fail("the change could not be made right now — the old version is untouched")
             withContext(Dispatchers.IO) { file.writeText(html) }
             open(file)
-            return ToolResult.ok("Changed and reopened '${file.nameWithoutExtension}'. Ask Sir to check it.")
+            return ToolResult.ok("Changed and reopened '${file.nameWithoutExtension}' in Chrome. Ask Sir to check it (pull down to reload if it shows the old one).")
         }
     }
 
@@ -106,7 +108,7 @@ class AppBuilderTools @Inject constructor(
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val name = args.string("name") ?: return ToolResult.ok("Sir's apps: ${names()}")
             val file = find(name) ?: return ToolResult.fail("no app by that name. Apps: ${names()}")
-            return if (open(file)) ToolResult.ok("opened ${file.nameWithoutExtension}") else ToolResult.fail("could not open it")
+            return if (open(file)) ToolResult.ok("opened ${file.nameWithoutExtension} in Chrome") else ToolResult.fail("could not open it")
         }
     }
 
