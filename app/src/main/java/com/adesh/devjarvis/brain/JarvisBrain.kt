@@ -240,7 +240,8 @@ class JarvisBrain @Inject constructor(
         Persona.replyStyle(s.replyStyle).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         Persona.overlay(s.persona, compact).takeIf { it.isNotEmpty() }?.let { append("\n\n").append(it) }
         if (modes.research) append("\n\n").append(SystemPrompt.RESEARCH_MODE)
-        if (s.rawTalk) append("\n\n").append(SystemPrompt.RAW_TALK)
+        // Gaali mode is for the dost and gf roles only: JARVIS himself stays the composed butler (Sir's choice).
+        if (s.rawTalk && inRole) append("\n\n").append(SystemPrompt.RAW_TALK)
         append("\n\n").append(if (compact) (SystemPrompt.NATURAL_TALK.lines().take(6) + "- Hear what he means (rhetorical questions, sarcasm). When he says you got " +
             "him wrong, never repeat yourself: say what you now think he meant. Never send him away.").joinToString("\n") else SystemPrompt.NATURAL_TALK)
         connectorStore.all.value.takeIf { it.isNotEmpty() }?.let { list ->

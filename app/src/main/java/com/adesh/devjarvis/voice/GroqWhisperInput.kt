@@ -76,6 +76,6 @@ class GroqWhisperInput @Inject constructor(
         } catch (e: BrainError) {
             emit(SpeechInput.Event.Failed(SpeechInput.Reason.OTHER)); return@flow
         }
-        emit(if (text.isBlank()) SpeechInput.Event.Failed(SpeechInput.Reason.NOTHING_HEARD) else SpeechInput.Event.Final(text))
+        emit(if (com.adesh.devjarvis.core.ConversationRules.isNonSpeech(text)) SpeechInput.Event.Failed(SpeechInput.Reason.NOTHING_HEARD) else SpeechInput.Event.Final(text))
     }.flowOn(Dispatchers.IO)
 }

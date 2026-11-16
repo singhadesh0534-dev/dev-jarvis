@@ -77,6 +77,17 @@ class DayTalkTest {
     }
 }
 
+class NonSpeechTest {
+    @Test fun fillersAreNotWords() {
+        listOf("No speech detected.", "<noise>", "[inaudible]", " Thank you. ", "[BLANK_AUDIO]", "").forEach {
+            org.junit.Assert.assertTrue(it, ConversationRules.isNonSpeech(it))
+        }
+        listOf("Jarvis time kya hua", "thank you jarvis", "no speech wala mode band karo").forEach {
+            org.junit.Assert.assertFalse(it, ConversationRules.isNonSpeech(it))
+        }
+    }
+}
+
 class ReasoningLeakTest {
     @Test fun plannedStepsAreCutFromWhatSirSees() {
         val leaked = "Maafi, Boss, woh option nahi mil raha. Despina try karein?\n    *   *Step 1: Check available voice names.* I checked."

@@ -1258,6 +1258,8 @@ class JarvisSession @Inject constructor(
                     }
                     when (val e = (ev as LiveConnection.Event.Server).event) {
                         is LiveMessages.ServerEvent.InputText -> {
+                            // "<noise>" / "no speech detected" are not Sir's words: don't show, count or answer them.
+                            if (userSaid.isEmpty() && ConversationRules.isNonSpeech(e.text)) continue
                             lastWordsAt = System.currentTimeMillis()
                             followUp?.cancel()
                             liveConfirm.onUserSaid(e.text)

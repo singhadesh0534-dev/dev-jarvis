@@ -73,6 +73,14 @@ object ConversationRules {
         return text.substring(0, m.range.first).trimEnd()
     }
 
+    /** Transcripts that are not words: "no speech detected", "<noise>", "[inaudible]", Whisper's silence fillers. */
+    private val NON_SPEECH = Regex(
+        """(?i)^[\s\p{Punct}]*(no speech( was)? detected|no audio|<noise>|\[?(inaudible|silence|noise|music|blank_audio|no speech)\]?|""" +
+            """thank you\.?|thanks for watching!?|subtitles by.*|you)[\s\p{Punct}]*$""",
+    )
+
+    fun isNonSpeech(text: String): Boolean = text.isBlank() || NON_SPEECH.matches(text.trim())
+
     /** True once the words so far contain the model's thinking: the rest of that turn must not be played. */
     fun leaksReasoning(text: String): Boolean = REASONING.containsMatchIn(text)
 

@@ -216,7 +216,7 @@ fun SettingsScreen(
                 ChoiceRow(listOf("short" to "CHHOTA", "normal" to "NORMAL", "detailed" to "DETAIL"), draft.replyStyle) { v -> viewModel.edit { it.copy(replyStyle = v) } }
                 ToggleRow(
                     "Gaali mode",
-                    "JARVIS khul ke baat karta hai: aap gaali do to wo bhi mazaak mein deta hai, bura nahi maanta. Jaati / dharm wali gaali kabhi nahi.",
+                    "Sirf GF aur Dost role mein: khul ke baat, aap gaali do to wo bhi deta/deti hai, bura nahi maanta. JARVIS role hamesha tameez mein. Jaati / dharm wali gaali kabhi nahi.",
                     draft.rawTalk,
                 ) { v -> viewModel.edit { it.copy(rawTalk = v) } }
                 LabeledSlider("Follow-up sec", draft.followUpSeconds.toFloat(), 3f..30f) { v -> viewModel.edit { it.copy(followUpSeconds = v.toInt()) } }
