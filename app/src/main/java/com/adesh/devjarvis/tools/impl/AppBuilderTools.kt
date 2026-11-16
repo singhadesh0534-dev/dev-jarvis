@@ -1,0 +1,111 @@
+package com.adesh.devjarvis.tools.impl
+
+import android.content.Context
+import android.content.Intent
+import com.adesh.devjarvis.apps.AppMaker
+import com.adesh.devjarvis.apps.AppViewerActivity
+import com.adesh.devjarvis.brain.JarvisBrain
+import com.adesh.devjarvis.tools.JarvisTool
+import com.adesh.devjarvis.tools.SimpleTool
+import com.adesh.devjarvis.tools.ToolArgs
+import com.adesh.devjarvis.tools.ToolContext
+import com.adesh.devjarvis.tools.ToolResult
+import com.adesh.devjarvis.tools.params
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import javax.inject.Inject
+import javax.inject.Provider
+import javax.inject.Singleton
+
+/** "Ye app banao": JARVIS builds small apps for Sir right on the phone (one-file web apps, offline, free). */
+@Singleton
+class AppBuilderTools @Inject constructor(
+    @ApplicationContext private val context: Context,
+    // Provider breaks the JarvisBrain -> ToolRegistry -> tools -> JarvisBrain cycle.
+    private val brain: Provider<JarvisBrain>,
+) {
+    private val dir get() = File(context.filesDir, "apps").apply { mkdirs() }
+
+    private fun fileFor(name: String) = File(dir, AppMaker.slug(name) + ".html")
+
+    private fun find(name: String): File? = fileFor(name).takeIf { it.exists() }
+        ?: dir.listFiles()?.firstOrNull { it.nameWithoutExtension.contains(AppMaker.slug(name)) || AppMaker.slug(name).contains(it.nameWithoutExtension) }
+
+    private fun open(file: File) = runCatching {
+        context.startActivity(
+            Intent(context, AppViewerActivity::class.java).putExtra(AppViewerActivity.EXTRA_FILE, file.absolutePath)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }.isSuccess
+
+    /** Write, then one review pass that fixes bugs; the reviewed version is kept only if it is still a whole app. */
+    private suspend fun generate(system: String, request: String): String? = withTimeoutOrNull(240_000) {
+        val first = AppMaker.extractHtml(brain.get().complete(system, request, json = false, maxTokens = AppMaker.MAX_TOKENS))
+            ?.takeIf { AppMaker.looksComplete(it) } ?: return@withTimeoutOrNull null
+        val reviewed = AppMaker.extractHtml(
+            brain.get().complete(AppMaker.REVIEW, "REQUEST:\n$request\n\nAPP:\n$first", json = false, maxTokens = AppMaker.MAX_TOKENS),
+        )
+        reviewed?.takeIf { AppMaker.looksComplete(it) } ?: first
+    }
+
+    private val build = object : SimpleTool(
+        "build_app",
+        "Build a small app Sir asks for (\"ek kharcha app banao\", \"quiz app banao\", \"todo list app banao\"): a complete " +
+            "offline one-file web app, written, checked for bugs, saved on the phone and opened. Takes up to a minute or " +
+            "two: tell Sir in a few words first. Free. Not for Play Store apps.",
+        params {
+            string("name", "Short name of the app", required = true)
+            string("idea", "Everything Sir wants in it, in detail, in his words plus what clearly follows", required = true)
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val name = args.requireString("name")
+            val html = generate(AppMaker.BUILD, "App name: $name\nWhat Sir wants: ${args.requireString("idea")}")
+                ?: return ToolResult.fail("the app could not be written right now (brain busy, limit or slow net) — tell Sir and offer to try again")
+            val file = fileFor(name)
+            withContext(Dispatchers.IO) { file.writeText(html) }
+            val opened = open(file)
+            return ToolResult.ok("App '$name' built (${html.length / 1000} KB), checked once for bugs, saved" +
+                (if (opened) " and opened on screen." else ". It could not open by itself: Sir can say 'meri $name app kholo'.") +
+                " Ask him to try it and say what to change.")
+        }
+    }
+
+    private val change = object : SimpleTool(
+        "change_app",
+        "Change an app JARVIS built before (\"kharcha app mein total bhi dikhao\"). Rewrites it with the change and opens it.",
+        params {
+            string("name", "Which app", required = true)
+            string("change", "What to change or add", required = true)
+        },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val file = find(args.requireString("name")) ?: return ToolResult.fail("no app by that name. Apps: ${names()}")
+            val current = withContext(Dispatchers.IO) { file.readText() }
+            val html = generate(AppMaker.CHANGE, "CHANGE:\n${args.requireString("change")}\n\nCURRENT APP:\n$current")
+                ?: return ToolResult.fail("the change could not be made right now — the old version is untouched")
+            withContext(Dispatchers.IO) { file.writeText(html) }
+            open(file)
+            return ToolResult.ok("Changed and reopened '${file.nameWithoutExtension}'. Ask Sir to check it.")
+        }
+    }
+
+    private val openApp = object : SimpleTool(
+        "open_my_app",
+        "Open an app JARVIS built for Sir earlier, or list them when no name is given.",
+        params { string("name", "Which app (optional)") },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val name = args.string("name") ?: return ToolResult.ok("Sir's apps: ${names()}")
+            val file = find(name) ?: return ToolResult.fail("no app by that name. Apps: ${names()}")
+            return if (open(file)) ToolResult.ok("opened ${file.nameWithoutExtension}") else ToolResult.fail("could not open it")
+        }
+    }
+
+    private fun names() = dir.listFiles()?.map { it.nameWithoutExtension }?.joinToString().orEmpty().ifBlank { "(none yet)" }
+
+    val tools: List<JarvisTool> = listOf(build, change, openApp)
+}

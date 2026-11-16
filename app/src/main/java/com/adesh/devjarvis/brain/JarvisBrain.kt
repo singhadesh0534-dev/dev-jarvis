@@ -82,14 +82,14 @@ class JarvisBrain @Inject constructor(
      */
     private fun geminiTurn(
         s: JarvisSettings, model: String, system: String, contents: JsonArray, tools: JsonArray?, jsonMode: Boolean = false,
-        thinking: String = JarvisConfig.GEMINI_THINKING_LEVEL,
+        thinking: String = JarvisConfig.GEMINI_THINKING_LEVEL, maxTokens: Int = JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS,
     ): Flow<GeminiStreamParser.Chunk> = flow {
         var tries = 0
         while (true) {
             val key = keys.gemini.current(s.geminiApiKey)
             var started = false
             try {
-                gemini.streamTurn(key, model, system, contents, tools, jsonMode, thinking).collect { started = true; emit(it) }
+                gemini.streamTurn(key, model, system, contents, tools, jsonMode, thinking, maxTokens).collect { started = true; emit(it) }
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
@@ -105,6 +105,7 @@ class JarvisBrain @Inject constructor(
 
     private fun groqTurn(
         s: JarvisSettings, model: String, messages: JsonArray, tools: JsonArray?, jsonMode: Boolean = false, extra: Boolean = false,
+        maxTokens: Int = JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS,
     ): Flow<GroqStreamParser.Delta> = flow {
         var tries = 0
         val raw = if (extra) s.extraApiKey else s.groqApiKey
@@ -114,7 +115,7 @@ class JarvisBrain @Inject constructor(
             val key = pool.current(raw)
             var started = false
             try {
-                groq.streamChat(key, model, messages, tools, jsonMode, baseUrl).collect { started = true; emit(it) }
+                groq.streamChat(key, model, messages, tools, jsonMode, baseUrl, maxTokens).collect { started = true; emit(it) }
                 return@flow
             } catch (e: BrainError) {
                 val rotatable = e is BrainError.RateLimited || e is BrainError.InvalidKey
@@ -473,14 +474,17 @@ class JarvisBrain @Inject constructor(
      * One-shot JSON / text completion for background jobs (memory extraction, briefing).
      * Gemini first, Groq if Gemini is out of quota. Returns null if neither works.
      */
-    suspend fun complete(system: String, user: String, json: Boolean, thinking: String = JarvisConfig.GEMINI_THINKING_LEVEL): String? {
+    suspend fun complete(
+        system: String, user: String, json: Boolean, thinking: String = JarvisConfig.GEMINI_THINKING_LEVEL,
+        maxTokens: Int = JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS,
+    ): String? {
         val s = settings.current
         if (!device.isOnline()) return null
         if (s.hasGeminiKey && !usage.isExhausted(Provider.GEMINI)) {
             try {
                 usage.recordGeminiRequest()
                 val out = StringBuilder()
-                geminiTurn(s, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json, thinking = thinking)
+                geminiTurn(s, s.geminiModel, system, JsonArray(listOf(GeminiContents.text(Role.USER, user))), null, jsonMode = json, thinking = thinking, maxTokens = maxTokens)
                     .collect { out.append(it.text) }
                 return out.toString()
             } catch (e: BrainError) {
@@ -492,7 +496,7 @@ class JarvisBrain @Inject constructor(
                 usage.recordGroqRequest()
                 val out = StringBuilder()
                 val msgs = JsonArray(listOf(GroqMessages.text("system", system), GroqMessages.text("user", user)))
-                groqTurn(s, s.groqModel, msgs, null, jsonMode = json).collect { out.append(it.text) }
+                groqTurn(s, s.groqModel, msgs, null, jsonMode = json, maxTokens = maxTokens).collect { out.append(it.text) }
                 return out.toString()
             } catch (e: BrainError) {
                 if (e is BrainError.RateLimited) usage.markExhausted(Provider.GROQ, cooldownFor(e))

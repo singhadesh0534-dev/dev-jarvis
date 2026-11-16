@@ -39,8 +39,9 @@ class ToolRegistry @Inject constructor(
     automation: com.adesh.devjarvis.tools.impl.AutomationTools,
     self: com.adesh.devjarvis.tools.impl.SelfTools,
     connectors: com.adesh.devjarvis.tools.impl.ConnectorTools,
+    appBuilder: com.adesh.devjarvis.tools.impl.AppBuilderTools,
 ) {
-    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools + life.tools + modes.tools + safety.tools + macros.tools + automation.tools + self.tools + connectors.tools)
+    val tools: List<JarvisTool> = (communication.tools + phone.tools + info.tools + memory.tools + notifications.tools + screen.tools + life.tools + modes.tools + safety.tools + macros.tools + automation.tools + self.tools + connectors.tools + appBuilder.tools)
         .filter { Edition.isFull || it.name !in Edition.FULL_ONLY_TOOLS }
         .filter { t -> Edition.TOOL_NEEDS_PERMISSION[t.name]?.let { Edition.declares(context, it) } ?: true }
     private val byName = tools.associateBy { it.name }

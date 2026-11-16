@@ -87,7 +87,8 @@ class PersonaTest {
     @Test fun partnerGetsHerOwnVoice() {
         assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Charon"))
         assertEquals("Puck", Persona.liveVoice(Persona.DOST, "Charon"))
-        assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Kore")) // a woman's voice saved for JARVIS is never used
+        assertEquals("Despina", Persona.liveVoice(Persona.JARVIS, "Despina")) // Sir's own choice for JARVIS is honoured
+        assertEquals("Charon", Persona.liveVoice(Persona.JARVIS, "Aurora")) // not a real voice
         assertEquals("Puck", Persona.liveVoice(Persona.DOST, "Charon", "Kore", "Leda"))
         assertEquals(Persona.HER_VOICE, Persona.liveVoice(Persona.PARTNER, "Charon", "Fenrir"))
         assertTrue(!Persona.mentions("yaar aaj mann nahi lag raha", Persona.DOST))

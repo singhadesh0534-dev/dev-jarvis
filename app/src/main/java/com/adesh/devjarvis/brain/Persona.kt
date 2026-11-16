@@ -37,7 +37,7 @@ object Persona {
     fun liveVoice(persona: String, chosen: String, hers: String = HER_VOICE, dost: String = ""): String = when (normalize(persona)) {
         PARTNER -> hers.takeIf { it in HER_VOICES } ?: HER_VOICE
         DOST -> dost.takeIf { it in HIS_VOICES } ?: DOST_VOICE
-        else -> chosen.takeIf { it in HIS_VOICES } ?: JARVIS_VOICE
+        else -> chosen.takeIf { it in HIS_VOICES || it in HER_VOICES } ?: JARVIS_VOICE // whatever Sir chose for JARVIS
     }
     const val JARVIS_VOICE = "Charon"
     const val DOST_VOICE = "Puck"

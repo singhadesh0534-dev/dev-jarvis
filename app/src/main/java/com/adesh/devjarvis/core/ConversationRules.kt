@@ -59,6 +59,14 @@ object ConversationRules {
     )
 
     /** Sir is correcting JARVIS or unhappy with the last answer — worth writing to the problem journal. */
+    /** The model's own planning ("* *Step 1: Check …") sometimes leaks into its words: cut it off there. */
+    private val REASONING = Regex("""(?m)^\s*[*•-]?\s*\*{0,2}\s*Step\s*\d+\s*[:.)]""")
+
+    fun stripReasoning(text: String): String {
+        val m = REASONING.find(text) ?: return text
+        return text.substring(0, m.range.first).trimEnd()
+    }
+
     /** "Aaj ka din bekar raha" is about his day, not about JARVIS. */
     private val DAY_TALK = Regex("""\b(din|day|raat|subah|mausam|weather|hafta)\b|दिन|रात|सुबह""")
     private val ABOUT_JARVIS = Regex("""\b(tum|tumne|tumhari|tumhara|tera|tune|aap|aapne)\b|तुम|आप|तू""")

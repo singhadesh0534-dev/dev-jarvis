@@ -43,6 +43,7 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
         tools: JsonArray?,
         jsonMode: Boolean = false,
         baseUrl: String = JarvisConfig.GROQ_BASE_URL,
+        maxTokens: Int = JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS,
     ): Flow<GroqStreamParser.Delta> = channelFlow {
         if (apiKey.isBlank()) throw BrainError.MissingKey()
         val body = buildJsonObject {
@@ -50,7 +51,7 @@ class GroqClient @Inject constructor(private val http: OkHttpClient) {
             put("messages", messages)
             put("stream", true)
             put("temperature", JarvisConfig.GEMINI_TEMPERATURE)
-            put("max_tokens", JarvisConfig.GEMINI_MAX_OUTPUT_TOKENS)
+            put("max_tokens", maxTokens)
             if (jsonMode) put("response_format", buildJsonObject { put("type", "json_object") })
             if (tools != null && tools.isNotEmpty()) {
                 put("tools", tools)

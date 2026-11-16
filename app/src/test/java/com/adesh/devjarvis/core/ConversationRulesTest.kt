@@ -76,3 +76,11 @@ class DayTalkTest {
         org.junit.Assert.assertTrue(ConversationRules.isComplaint("aaj ka din bekar tumne kar diya"))
     }
 }
+
+class ReasoningLeakTest {
+    @Test fun plannedStepsAreCutFromWhatSirSees() {
+        val leaked = "Maafi, Boss, woh option nahi mil raha. Despina try karein?\n    *   *Step 1: Check available voice names.* I checked."
+        org.junit.Assert.assertEquals("Maafi, Boss, woh option nahi mil raha. Despina try karein?", ConversationRules.stripReasoning(leaked))
+        org.junit.Assert.assertEquals("Ho gaya.", ConversationRules.stripReasoning("Ho gaya."))
+    }
+}

@@ -1183,7 +1183,7 @@ class JarvisSession @Inject constructor(
 
             fun commitTurn() {
                 val u = userSaid.toString().trim()
-                val j = jarvisSaid.toString().trim()
+                val j = ConversationRules.stripReasoning(jarvisSaid.toString().trim())
                 noteComplaint(u)
                 if (j.isNotEmpty()) lastJarvisSaid = j
                 if (u.isNotEmpty() || j.isNotEmpty()) brain.remember(u.ifEmpty { "…" }, j.ifEmpty { "…" })
@@ -1288,7 +1288,7 @@ class JarvisSession @Inject constructor(
                             jarvisSaid.append(e.text)
                             speakingText = jarvisSaid.toString()
                             if (jarvisLine < 0) jarvisLine = nextId++
-                            upsertLine(jarvisLine, jarvisSaid.toString().trim())
+                            upsertLine(jarvisLine, ConversationRules.stripReasoning(jarvisSaid.toString().trim()))
                         }
                         LiveMessages.ServerEvent.Interrupted -> {
                             SessionTrace.add("LIVE interrupted (server heard speech over JARVIS)")

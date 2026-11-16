@@ -167,6 +167,11 @@
         </service>
 
 
+        <activity
+            android:name=".apps.AppViewerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"
