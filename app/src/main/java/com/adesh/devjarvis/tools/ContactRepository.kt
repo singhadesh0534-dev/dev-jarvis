@@ -32,6 +32,7 @@ class ContactRepository @Inject constructor(@ApplicationContext private val cont
 
     /** [query] can be a name/nickname or a raw phone number. */
     suspend fun resolve(query: String): Lookup {
+        PhoneNumbers.asDialable(query)?.let { return Lookup.Found(Contact(-1, it, listOf(it)), it) }
         val digits = query.filter { it.isDigit() || it == '+' }
         if (digits.count { it.isDigit() } >= 5 && digits.length >= query.count { !it.isWhitespace() } - 2) {
             return Lookup.Found(Contact(-1, query, listOf(digits)), digits)
