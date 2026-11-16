@@ -25,9 +25,10 @@ class SupabaseSync @Inject constructor(
     @Volatile private var lastPush = 0L
     private val json = "application/json".toMediaType()
 
-    val configured: Boolean get() = settings.current.let { SupabaseRest.valid(it.supabaseUrl, it.supabaseKey) }
+    val configured: Boolean get() = settings.current.let { SupabaseRest.valid(it.supabaseUrl, it.supabaseKey) && SupabaseRest.validCode(it.supabaseSync) }
 
     private fun Request.Builder.auth(key: String) = header("apikey", key).header("Authorization", "Bearer $key")
+        .header(SupabaseRest.SYNC_HEADER, settings.current.supabaseSync.trim())
 
     /** Upload now. Returns a line for Sir. */
     suspend fun push(): String = withContext(Dispatchers.IO) {
@@ -35,14 +36,14 @@ class SupabaseSync @Inject constructor(
         if (!configured) return@withContext "Supabase URL aur key Settings mein daaliye."
         val req = Request.Builder().url(SupabaseRest.tableUrl(s.supabaseUrl)).auth(s.supabaseKey)
             .header("Prefer", "resolution=merge-duplicates,return=minimal")
-            .post(SupabaseRest.upsertBody(backup.snapshot()).toRequestBody(json)).build()
+            .post(SupabaseRest.upsertBody(s.supabaseSync, backup.snapshot()).toRequestBody(json)).build()
         http.newCall(req).execute().use { r ->
             lastPush = System.currentTimeMillis()
             SessionTrace.add("SUPABASE push HTTP ${r.code}")
             when {
                 r.isSuccessful -> "Supabase pe sab save ho gaya."
                 r.code == 404 || (r.body?.string().orEmpty().contains("does not exist")) -> "Supabase mein table nahi mili — setup SQL ek baar chala dijiye."
-                r.code == 401 || r.code == 403 -> "Supabase key galat hai ya policy nahi bani (HTTP ${r.code})."
+                r.code == 401 || r.code == 403 -> "Supabase key galat hai ya naya Setup SQL nahi chala (HTTP ${r.code})."
                 else -> "Supabase pe save nahi hua (HTTP ${r.code})."
             }
         }
@@ -52,7 +53,7 @@ class SupabaseSync @Inject constructor(
     suspend fun pull(): String = withContext(Dispatchers.IO) {
         val s = settings.current
         if (!configured) return@withContext "Supabase URL aur key Settings mein daaliye."
-        val req = Request.Builder().url(SupabaseRest.selectUrl(s.supabaseUrl)).auth(s.supabaseKey).get().build()
+        val req = Request.Builder().url(SupabaseRest.selectUrl(s.supabaseUrl, s.supabaseSync)).auth(s.supabaseKey).get().build()
         val body = http.newCall(req).execute().use { r ->
             if (!r.isSuccessful) return@withContext "Supabase se nahi aaya (HTTP ${r.code})."
             r.body?.string().orEmpty()

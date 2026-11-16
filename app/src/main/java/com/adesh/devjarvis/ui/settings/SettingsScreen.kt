@@ -984,6 +984,8 @@ private fun BackupBlock(viewModel: SettingsViewModel) {
     Hint("Apna Supabase project banao (supabase.com, free). Pehle \"Setup SQL copy\" dabake Supabase > SQL Editor mein Run karo. Phir Project URL aur anon key yahan daalo. Har baat-cheet ke baad yaadein, notes, skills apne aap wahan save hongi. API keys kabhi nahi jaati.")
     HudField("Supabase Project URL (https://…supabase.co)", draft.supabaseUrl, { v -> viewModel.edit { it.copy(supabaseUrl = v) } })
     SecretField("Supabase anon key", draft.supabaseKey) { v -> viewModel.edit { it.copy(supabaseKey = v) } }
+    Hint("Sync code: aapka backup sirf isi code se khulta hai. Ise kahin likh lo — naye phone pe yahi code daal ke \"wapas lao\" dabana. Khaali chhodo to naya ban jaata hai.")
+    SecretField("Sync code (jv-…)", draft.supabaseSync) { v -> viewModel.edit { it.copy(supabaseSync = v) } }
     ActionRow {
         HudButton("Setup SQL copy", { viewModel.copySupabaseSql() })
         HudButton("Abhi sync karo", { viewModel.supabasePush() })

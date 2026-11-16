@@ -111,6 +111,8 @@ data class JarvisSettings(
     /** Supabase sync: project URL and key (the key is a secret: encrypted here, never in backups). */
     val supabaseUrl: String = "",
     val supabaseKey: String = "",
+    /** Secret sync code: the backup row's id. The database only gives a row to a request carrying its code. */
+    val supabaseSync: String = "",
     /** Gaali mode: JARVIS talks rough and swears back in banter, when Sir does. */
     val rawTalk: Boolean = true,
     // ---- Optional ElevenLabs voice (Classic mode). Blank key = phone voice.
@@ -228,6 +230,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putBoolean(K_AUTO_MEMORY, cleaned.autoMemory)
             .putString(K_SUPABASE_URL, cleaned.supabaseUrl.trim().trimEnd('/'))
             .putString(K_SUPABASE_KEY, cleaned.supabaseKey.trim())
+            .putString(K_SUPABASE_SYNC, cleaned.supabaseSync.trim().ifEmpty { prefs.getString(K_SUPABASE_SYNC, "").orEmpty() }.ifEmpty { com.adesh.devjarvis.cloud.SupabaseRest.newSyncCode() })
             .putBoolean(K_RAW_TALK, cleaned.rawTalk)
             .putString(K_ELEVEN_KEY, cleaned.elevenApiKey.trim())
             .putString(K_ELEVEN_VOICE, cleaned.elevenVoiceId.trim())
@@ -308,6 +311,10 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             autoMemory = prefs.getBoolean(K_AUTO_MEMORY, d.autoMemory),
             supabaseUrl = prefs.getString(K_SUPABASE_URL, "").orEmpty(),
             supabaseKey = prefs.getString(K_SUPABASE_KEY, "").orEmpty(),
+            supabaseSync = prefs.getString(K_SUPABASE_SYNC, "").orEmpty().ifEmpty {
+                // first run after the update: make the secret code once and keep it
+                com.adesh.devjarvis.cloud.SupabaseRest.newSyncCode().also { prefs.edit().putString(K_SUPABASE_SYNC, it).apply() }
+            },
             rawTalk = prefs.getBoolean(K_RAW_TALK, d.rawTalk),
             elevenApiKey = prefs.getString(K_ELEVEN_KEY, d.elevenApiKey).orEmpty(),
             elevenVoiceId = prefs.getString(K_ELEVEN_VOICE, d.elevenVoiceId).orEmpty(),
@@ -379,6 +386,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_AUTO_MEMORY = "auto_memory"
         const val K_SUPABASE_URL = "supabase_url"
         const val K_SUPABASE_KEY = "supabase_key"
+        const val K_SUPABASE_SYNC = "supabase_sync"
         const val K_RAW_TALK = "raw_talk"
         const val K_ELEVEN_KEY = "eleven_api_key"
         const val K_ELEVEN_VOICE = "eleven_voice_id"
