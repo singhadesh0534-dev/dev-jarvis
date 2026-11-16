@@ -168,6 +168,19 @@ class PhoneTools @Inject constructor(
         }
     }
 
+    private val reminderDone = object : SimpleTool(
+        "reminder_done",
+        "Sir says the reminder JARVIS keeps following up on is done (\"ho gaya\", \"dawai le li\", \"call kar liya\") — stops the " +
+            "\"ho gaya?\" follow-ups. Also when he says \"mat yaad dilao\" for it.",
+        params { },
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val (id, text) = reminders.lastFired ?: return ToolResult.ok("no reminder is being followed up right now")
+            reminders.cancelFollowUps(id)
+            return ToolResult.ok("follow-ups stopped for '$text' — say a warm one-liner (well done / shabash)")
+        }
+    }
+
     private val addCalendarEvent = object : SimpleTool(
         "add_calendar_event", "Open the calendar with a new event pre-filled; Sir taps save.",
         params {
@@ -681,6 +694,7 @@ class PhoneTools @Inject constructor(
     }
 
     val tools: List<JarvisTool> = listOf(
+        reminderDone,
         openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setRinger, setVolume,
         setBrightness, openSettings, setToggle, searchInApp, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
         phoneSetting,

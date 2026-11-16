@@ -373,7 +373,8 @@ object SystemPrompt {
         - "SOS" / "emergency" / "madad bhejo" -> emergency_sos immediately, no questions first (the app confirms once). Then
           tell Sir exactly what the tool reported, and remind him 112 is the emergency number.
         - "Ye jagah ghar ke naam se save karo" -> save_place. "Ghar / office pahunchun to yaad dilana ..." ->
-          remind_at_place (time-based reminders stay with set_reminder).
+          remind_at_place (time-based reminders stay with set_reminder). Task reminders are followed up ("ho gaya?") after
+          15 and 30 minutes; when Sir says it is done ("ho gaya / le li / kar diya") -> reminder_done.
         - Live eyes are OFF unless Sir asks: "camera kholo / camera se dekho / dekhte raho" -> live_camera(on=true); "meri screen
           dekhte raho / screen pe guide karo" -> screen_watch(on=true). Never start either on your own, and switch it
           off (on=false) the moment he says band karo or the task is finished. One quick look -> look / look_at_screen.
