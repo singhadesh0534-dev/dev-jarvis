@@ -22,7 +22,9 @@ import com.adesh.devjarvis.vision.CaptureBroker
 import com.adesh.devjarvis.vision.ImageUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -55,6 +57,17 @@ class ScreenTools @Inject constructor(
     private val brain: JarvisBrain get() = brainProvider.get()
 
     private fun service(): JarvisAccessibilityService? = JarvisAccessibilityService.get()
+
+    /** A screenshot with the element numbers drawn on it, as JPEG, for the agent to decide from. */
+    private suspend fun markedShot(svc: JarvisAccessibilityService): ByteArray? {
+        val bmp = runCatching { svc.screenshot() }.getOrNull() ?: return null
+        return withContext(Dispatchers.Default) {
+            runCatching {
+                val marked = runCatching { ImageUtil.withMarks(bmp, svc.marks()) }.getOrDefault(bmp)
+                ImageUtil.toJpeg(marked, maxSide = 1024, quality = 70).also { if (marked !== bmp) marked.recycle() }
+            }.getOrNull().also { bmp.recycle() }
+        }
+    }
     private fun needsAccessibility() = ToolResult.fail("needs JARVIS Accessibility turned on in Setup")
 
     /** Snapshot of the app Sir is looking at — never JARVIS's own HUD. */
@@ -311,20 +324,58 @@ class ScreenTools @Inject constructor(
                 svc.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
                 delay(800)
             }
+            // Plan first (one quick call), then act step by step against it.
+            val plan = svc.snapshot()?.let { first ->
+                runCatching { brain.complete(AgentProtocol.systemPrompt(), AgentProtocol.planPrompt(goal, ScreenFormatter.compact(first)), json = false) }
+                    .getOrNull().orEmpty().take(600)
+            }.orEmpty()
+            if (plan.isNotBlank()) _progress.tryEmit("🧭 plan: " + plan.lines().firstOrNull().orEmpty().take(80))
+            var lastPrint: Int? = null
+            var noChange = 0
+            var doneChecks = 0
             for (step in 1..AgentProtocol.MAX_STEPS) {
                 val snap = svc.snapshot() ?: run { delay(600); svc.snapshot() } ?: return ToolResult.fail("can't read the screen")
                 (ScreenSafety.check(snap) as? ScreenSafety.Verdict.Blocked)?.let {
                     return ToolResult.fail("stopped for safety: ${it.reason}. Sir should finish this part himself.")
                 }
-                val raw = brain.complete(AgentProtocol.systemPrompt(), AgentProtocol.userPrompt(goal, history, ScreenFormatter.compact(snap)), json = true)
+                // Did the last action change anything? If not, say so — the agent must try another way.
+                val print = AgentProtocol.fingerprint(snap)
+                if (lastPrint != null && print == lastPrint && history.isNotEmpty() && !history.last().endsWith(")")) {
+                    history[history.lastIndex] = history.last() + " (nothing changed on screen)"
+                    noChange++
+                } else if (lastPrint != null) noChange = 0
+                lastPrint = print
+                val prompt = AgentProtocol.userPrompt(goal, history, ScreenFormatter.compact(snap), plan)
+                // Mostly pictures, or stuck twice: decide from a screenshot (with the element numbers drawn on it).
+                val shot = if (AgentProtocol.needsEyes(snap) || noChange >= 2) markedShot(svc) else null
+                val raw = if (shot != null) {
+                    noChange = 0
+                    _progress.tryEmit("👁 $step: looking at the screen")
+                    brain.see(shot, AgentProtocol.systemPrompt() + "\n\n" + prompt + MARKS_NOTE + "\nReply with the JSON action only.")
+                        ?: brain.complete(AgentProtocol.systemPrompt(), prompt, json = true)
+                } else brain.complete(AgentProtocol.systemPrompt(), prompt, json = true)
                 val action = AgentProtocol.parse(raw) ?: return ToolResult.fail("lost my way on step $step")
                 val desc = AgentProtocol.describe(action, snap)
                 _progress.tryEmit("🖐 $step: $desc")
                 history += desc
                 if (AgentProtocol.isLooping(history)) return ToolResult.fail("stuck repeating '$desc' — stopped")
 
+                // "Done" is checked against the screen before it is believed (twice at most).
+                if (action is AgentAction.Done && doneChecks < 2) {
+                    doneChecks++
+                    val missing = AgentProtocol.notDone(runCatching {
+                        brain.complete("You check whether a phone task is finished. Be strict and short.",
+                            AgentProtocol.verifyPrompt(goal, history, ScreenFormatter.compact(snap)), json = false)
+                    }.getOrNull())
+                    if (missing != null) {
+                        history[history.lastIndex] = "said done, but check found: $missing"
+                        _progress.tryEmit("🔎 $step: not finished yet — $missing")
+                        lastPrint = null // nothing was tapped: don't count this as "no change"
+                        continue
+                    }
+                }
                 val ok = when (action) {
-                    is AgentAction.Done -> return ToolResult.ok(action.summary.ifBlank { "done" } + " (in $step steps)")
+                    is AgentAction.Done -> return ToolResult.ok(action.summary.ifBlank { "done" } + " (in $step steps, checked on screen)")
                     is AgentAction.Fail -> return ToolResult.fail(action.reason.ifBlank { "couldn't finish" })
                     is AgentAction.Tap -> {
                         val el = snap.elements.firstOrNull { it.id == action.id } ?: return ToolResult.fail("bad element on step $step")

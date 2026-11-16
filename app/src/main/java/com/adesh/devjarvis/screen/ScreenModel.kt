@@ -150,8 +150,41 @@ object AgentProtocol {
         - When the goal is achieved (e.g. the message is sent), reply done.
     """.trimIndent()
 
-    fun userPrompt(goal: String, history: List<String>, screen: String): String = buildString {
+    /** Step 0: a short plan, so the agent works towards the goal instead of wandering. */
+    fun planPrompt(goal: String, screen: String): String = """
+        Goal on Sir's Android phone: $goal
+        Current screen:
+        $screen
+        Write the shortest plan to reach the goal: 2 to 8 numbered steps, each a few words (which app, what to tap or type).
+        Plain text only. Never include paying, buying, passwords, PINs or OTPs.
+    """.trimIndent()
+
+    /** Before reporting done: is the goal really achieved on this screen? */
+    fun verifyPrompt(goal: String, history: List<String>, screen: String): String = """
+        Goal: $goal
+        Steps taken: ${history.takeLast(12).joinToString(" -> ")}
+        Screen now:
+        $screen
+        Is the goal fully achieved, as far as this screen shows? Answer YES, or NO plus in a few words what is still missing.
+    """.trimIndent()
+
+    /** The verifier's answer: null = achieved, else what is missing. */
+    fun notDone(answer: String?): String? {
+        val a = answer?.trim().orEmpty()
+        if (a.isEmpty()) return null // can't tell: trust the agent
+        return if (a.uppercase().startsWith("YES")) null else a.removePrefix("NO").removePrefix("No").trim(' ', ',', '.', '-', ':').ifEmpty { "not finished" }.take(160)
+    }
+
+    /** A cheap fingerprint of what is on screen, to tell whether an action changed anything. */
+    fun fingerprint(s: ScreenSnapshot): Int =
+        (s.packageName + "|" + s.elements.joinToString("|") { it.label + ":" + it.region + ":" + it.focused }).hashCode()
+
+    /** Few readable elements: the screen is mostly pictures / canvas, so the agent should look at a screenshot. */
+    fun needsEyes(s: ScreenSnapshot): Boolean = s.elements.count { it.label.isNotBlank() } < 4
+
+    fun userPrompt(goal: String, history: List<String>, screen: String, plan: String = ""): String = buildString {
         appendLine("Goal: $goal")
+        if (plan.isNotBlank()) appendLine("Plan: ${plan.lines().joinToString(" ") { it.trim() }.take(400)}")
         appendLine("Steps so far: ${if (history.isEmpty()) "none" else history.takeLast(8).joinToString(" -> ")}")
         appendLine("Current screen:")
         append(screen)
