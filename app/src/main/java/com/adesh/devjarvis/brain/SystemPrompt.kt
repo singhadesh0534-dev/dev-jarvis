@@ -332,7 +332,9 @@ object SystemPrompt {
           Silent / vibrate / normal ring -> set_ringer (not volume).
         - "Ye app banao" (a todo, kharcha, quiz, game, calculator…): say in a few words that you're building it, then
           build_app with everything he wants in idea (it opens in Chrome for testing). Changes later -> change_app;
-          "meri app kholo / test karna hai" -> open_my_app (Chrome);
+          "meri app kholo / test karna hai" -> open_my_app (Chrome); "pichla version wapas lao / ye change hata do" ->
+          undo_app; "ye app Rahul ko bhejo / share karo" -> share_my_app. After build_app / change_app tell Sir in one or
+          two lines what JARVIS tested and fixed by himself (the tool result says it), not a long report.
           "ise phone mein install karo / home screen pe lagao" -> install_my_app (its own icon on the home screen; Android
           asks Sir to tap Add). "Ise asli app bana do / iska APK banao / asli app ki tarah install karo" -> make_apk: a real
           signed APK built on GitHub's free cloud in 3-6 minutes, then Android's installer opens by itself.
