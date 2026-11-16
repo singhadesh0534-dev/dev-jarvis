@@ -178,7 +178,7 @@ class LiveConnection(
 
         fun setup(
             model: String, voice: String, system: String, tools: List<JsonObject>, patientVad: Boolean,
-            longMemory: Boolean = false, resumeHandle: String? = null,
-        ) = LiveMessages.setup(model, voice, system, tools, patientVad, longMemory, resumeHandle)
+            longMemory: Boolean = false, resumeHandle: String? = null, affective: Boolean = false, proactiveAudio: Boolean = false,
+        ) = LiveMessages.setup(model, voice, system, tools, patientVad, longMemory, resumeHandle, affective, proactiveAudio)
     }
 }

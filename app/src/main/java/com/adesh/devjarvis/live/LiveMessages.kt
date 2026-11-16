@@ -57,6 +57,10 @@ object LiveMessages {
         /** Long-memory features: session resumption (resume with [resumeHandle] if given) and a sliding context window. */
         longMemory: Boolean = false,
         resumeHandle: String? = null,
+        /** The voice model hears Sir's mood in his voice and matches it (affective dialog). */
+        affective: Boolean = false,
+        /** The model may stay silent when the sound isn't meant for it (TV, people nearby). */
+        proactiveAudio: Boolean = false,
     ): String =
         buildJsonObject {
             putJsonObject("setup") {
@@ -79,8 +83,10 @@ object LiveMessages {
                     }
                 }
                 put("model", if (model.startsWith("models/")) model else "models/$model")
+                if (proactiveAudio) putJsonObject("proactivity") { put("proactiveAudio", true) }
                 putJsonObject("generationConfig") {
                     putJsonArray("responseModalities") { add(kotlinx.serialization.json.JsonPrimitive("AUDIO")) }
+                    if (affective) put("enableAffectiveDialog", true)
                     putJsonObject("speechConfig") {
                         putJsonObject("voiceConfig") {
                             putJsonObject("prebuiltVoiceConfig") { put("voiceName", voice) }

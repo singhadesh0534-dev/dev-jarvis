@@ -103,3 +103,13 @@ class LiveLongMemoryTest {
         org.junit.Assert.assertTrue(LiveMessages.parse("""{"sessionResumptionUpdate":{"resumable":false}}""").isEmpty())
     }
 }
+
+class LiveMoodSetupTest {
+    @org.junit.Test fun moodAndProactiveFlags() {
+        val s = LiveMessages.setup("m", "Charon", "sys", emptyList(), affective = true, proactiveAudio = true)
+        org.junit.Assert.assertTrue(s.contains("\"enableAffectiveDialog\":true"))
+        org.junit.Assert.assertTrue(s.contains("\"proactivity\":{\"proactiveAudio\":true}"))
+        val plain = LiveMessages.setup("m", "Charon", "sys", emptyList())
+        org.junit.Assert.assertTrue(!plain.contains("Affective") && !plain.contains("proactivity"))
+    }
+}

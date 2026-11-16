@@ -293,6 +293,9 @@ class JarvisBrain @Inject constructor(
             append("\n\n[Tasks Sir taught you by showing them once — when he says a name, call run_taught with it]\n")
             taught.forEach { (name, steps) -> append("- \"").append(name).append("\" (").append(steps.size).append(" steps)\n") }
         }
+        // Sir's mood from his last lines: the reply's tone follows it.
+        MoodSense.hint(MoodSense.of(conversation.snapshot().filter { it.role == Role.USER }.map { it.text } + listOfNotNull(query.takeIf { it.isNotBlank() })))
+            .takeIf { it.isNotEmpty() }?.let { append("\n\n[Mood] ").append(it) }
         if (forLive) {
             val recent = conversation.snapshot()
             if (recent.isNotEmpty()) {

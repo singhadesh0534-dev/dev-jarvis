@@ -195,7 +195,18 @@ class JarvisSession @Inject constructor(
     private var liveResumeKey = ""
     private var liveResumeHops = 0
     private var liveResumeNext = false
-    private var liveLongMemoryRejected = false
+    // What this Live model refused once is remembered (per model), so later conversations don't fail first.
+    private val liveCaps by lazy { appContext.getSharedPreferences("live_caps", android.content.Context.MODE_PRIVATE) }
+    private fun capKey(name: String) = "${settings.current.liveModel}:$name"
+    private var liveLongMemoryRejected: Boolean
+        get() = liveCaps.getBoolean(capKey("memory"), false)
+        set(v) { liveCaps.edit().putBoolean(capKey("memory"), v).apply() }
+    private var liveAffectiveRejected: Boolean
+        get() = liveCaps.getBoolean(capKey("affective"), false)
+        set(v) { liveCaps.edit().putBoolean(capKey("affective"), v).apply() }
+    private var liveProactiveRejected: Boolean
+        get() = liveCaps.getBoolean(capKey("proactive"), false)
+        set(v) { liveCaps.edit().putBoolean(capKey("proactive"), v).apply() }
     /** Tools that succeeded since Sir's last request (to catch "ho gaya" with nothing done). */
     @Volatile private var turnToolOk = 0
     /** The app itself did what Sir asked this turn (e.g. changed the role), so "ho gaya" is true without a tool. */
@@ -1200,7 +1211,8 @@ class JarvisSession @Inject constructor(
             val longMemory = !liveLongMemoryRejected
             val handle = liveResumeHandle?.takeIf { resuming && liveResumeKey == liveKey }
             val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true),
-                registry.declarations, patientVad = !liveVadRejected, longMemory = longMemory, resumeHandle = handle))
+                registry.declarations, patientVad = !liveVadRejected, longMemory = longMemory, resumeHandle = handle,
+                affective = !liveAffectiveRejected, proactiveAudio = !liveProactiveRejected && s.noiseFilter >= 2))
             if (handle != null) SessionTrace.add("LIVE resuming the same session (hop $liveResumeHops)")
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter, speechModel = { silero.open() }) { bytes, n -> conn.sendAudio(bytes, n) }
@@ -1451,6 +1463,17 @@ class JarvisSession @Inject constructor(
         }
         liveRestartForRole = false
         if (liveClosingByUs) return // closeLive() already handled the ending
+        // Mood / proactive-audio fields not accepted by this model: drop just that one and carry on.
+        if (!anyReply && !liveAffectiveRejected && Regex("(?i)affective").containsMatchIn(detail)) {
+            liveAffectiveRejected = true
+            SessionTrace.add("LIVE affective dialog not supported; continuing without it")
+            if (_ui.value.inConversation) { startLive(); return }
+        }
+        if (!anyReply && !liveProactiveRejected && Regex("(?i)proactiv").containsMatchIn(detail)) {
+            liveProactiveRejected = true
+            SessionTrace.add("LIVE proactive audio not supported; continuing without it")
+            if (_ui.value.inConversation) { startLive(); return }
+        }
         // The setup's memory fields weren't accepted by this model: run without them (once) rather than lose Live.
         if (!anyReply && !liveLongMemoryRejected && Regex("sessionResumption|contextWindowCompression|slidingWindow").containsMatchIn(detail)) {
             liveLongMemoryRejected = true
