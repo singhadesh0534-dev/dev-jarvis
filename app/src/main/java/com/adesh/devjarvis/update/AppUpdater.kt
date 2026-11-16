@@ -103,7 +103,15 @@ class AppUpdater @Inject constructor(
                 dir.listFiles()?.forEach { it.delete() }
                 val file = File(dir, name)
                 _state.value = State.Downloading(0)
-                http.newCall(Request.Builder().url(asset.url).build()).execute().use { r ->
+                // GitHub's file servers sometimes reset HTTP/2 streams mid-download ("stream was reset:
+                // PROTOCOL_ERROR"): download over HTTP/1.1, with a long read timeout, and try up to 3 times.
+                val dl = http.newBuilder().protocols(listOf(okhttp3.Protocol.HTTP_1_1))
+                    .readTimeout(90, java.util.concurrent.TimeUnit.SECONDS).build()
+                var attempt = 0
+                while (true) {
+                    attempt++
+                    try {
+                dl.newCall(Request.Builder().url(asset.url).build()).execute().use { r ->
                     if (!r.isSuccessful) error("download HTTP ${r.code}")
                     val body = r.body ?: error("empty download")
                     val total = body.contentLength().takeIf { it > 0 } ?: asset.sizeBytes.coerceAtLeast(1)
@@ -120,6 +128,13 @@ class AppUpdater @Inject constructor(
                                 _state.value = State.Downloading((done * 100 / total).toInt().coerceIn(0, 100))
                             }
                         }
+                    }
+                }
+                        break
+                    } catch (e: java.io.IOException) {
+                        if (attempt >= 3) throw e
+                        _state.value = State.Downloading(0)
+                        kotlinx.coroutines.delay(2_000L * attempt)
                     }
                 }
                 openInstaller(file)
