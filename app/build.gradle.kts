@@ -19,9 +19,15 @@ android {
         versionCode = 100 + (run ?: 0)
         versionName = "1.0." + (run ?: 0)
         buildConfigField("String", "UPDATE_REPO", "\"singhadesh0534-dev/dev-jarvis\"")
-        // JARVIS accounts server (Supabase). Never in the repo: CI passes it from repo secrets; blank = no login screen.
-        buildConfigField("String", "ACCOUNT_URL", "\"" + (System.getenv("JARVIS_ACCOUNT_URL") ?: "").trim() + "\"")
-        buildConfigField("String", "ACCOUNT_ANON_KEY", "\"" + (System.getenv("JARVIS_ACCOUNT_ANON_KEY") ?: "").trim() + "\"")
+        // JARVIS accounts server (Supabase). The URL and the anon key are public by design (they ship inside every app
+        // build; each user's data is protected by row level security on the server). Sir chose to keep them here.
+        // CI secrets of the same names override them.
+        val accountUrl = System.getenv("JARVIS_ACCOUNT_URL")?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: "https://ykncgbogtdctcualmrhw.supabase.co"
+        val accountAnon = System.getenv("JARVIS_ACCOUNT_ANON_KEY")?.trim().takeUnless { it.isNullOrEmpty() }
+            ?: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlrbmNnYm9ndGRjdGN1YWxtcmh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMDYxNDcsImV4cCI6MjEwNjc4MjE0N30.dYZu663hbAA74aRFtB6wauMBSr8gXJ_XzL-djIlPGM8"
+        buildConfigField("String", "ACCOUNT_URL", "\"$accountUrl\"")
+        buildConfigField("String", "ACCOUNT_ANON_KEY", "\"$accountAnon\"")
     }
 
     // One fixed key for every build, so a new APK installs over the old one (live updates keep data).

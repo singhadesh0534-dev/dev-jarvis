@@ -103,7 +103,11 @@ class AccountManager @Inject constructor(
         val (code, body) = post(AuthRest.signupUrl(base), AuthRest.credentialsBody(email, password)) ?: return
         if (code !in 200..299) return note(AuthRest.errorText(code, body))
         val s = AuthRest.session(body)
-        if (s == null) note("Account ban gaya. $email pe aaya confirm link dabaiye, phir yahan Login karein.") else loggedIn(s)
+        if (s != null) return loggedIn(s)
+        // No session yet: try logging straight in (works when the server doesn't ask for an email confirmation).
+        val (c2, b2) = post(AuthRest.passwordUrl(base), AuthRest.credentialsBody(email, password), quiet = true) ?: (0 to "")
+        val s2 = if (c2 in 200..299) AuthRest.session(b2) else null
+        if (s2 != null) loggedIn(s2) else note("Account ban gaya. $email pe aaya confirm link dabaiye, phir yahan Login karein.")
     }
 
     suspend fun logIn(email: String, password: String) {
