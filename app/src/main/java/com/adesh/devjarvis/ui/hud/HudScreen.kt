@@ -12,6 +12,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -143,6 +144,17 @@ fun HudScreen(
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
     val role by viewModel.role.collectAsStateWithLifecycle()
     val hudFace by viewModel.hudFace.collectAsStateWithLifecycle()
+    val showAgent = hudFace != com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_REACTOR
+    // The robot's mood follows JARVIS's own last reply, for a while.
+    val lastReply = ui.transcript.lastOrNull { !it.fromUser && !it.isSystem }?.text.orEmpty()
+    var agentMood by remember { mutableStateOf(com.adesh.devjarvis.core.AgentMood.NEUTRAL) }
+    LaunchedEffect(lastReply, role) {
+        agentMood = com.adesh.devjarvis.core.AgentMoods.of(lastReply, role)
+        if (agentMood != com.adesh.devjarvis.core.AgentMood.NEUTRAL) {
+            kotlinx.coroutines.delay(15_000)
+            agentMood = com.adesh.devjarvis.core.AgentMood.NEUTRAL
+        }
+    }
     val update by viewModel.update.collectAsStateWithLifecycle()
     val factory by viewModel.factoryStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -265,56 +277,45 @@ fun HudScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 // Reactor and its state line belong together: centred as one group, no gap between them.
-                val both = hudFace == com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_BOTH
-                val side = if (both) {
-                    // Reactor and the AI character side by side, each half the width.
-                    minOf(maxWidth * 0.5f, maxHeight - 72.dp, 300.dp).coerceAtLeast(110.dp)
-                } else {
-                    minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
-                }
-                val tallFigure = minOf(side * 1.25f, maxHeight - 72.dp).coerceAtLeast(side)
+                val side = minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                val showReactor = hudFace != com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_CHARACTER
-                val showCharacter = hudFace != com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_REACTOR
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (showCharacter) {
-                        HoloCharacter(
-                            state = ui.state,
-                            micLevel = ui.micLevel,
-                            speechLevel = speechLevel,
-                            onTap = onTap,
-                            accent = accent,
-                            tilt = tilt,
-                            clock = holoClock,
-                            // Beside the reactor the figure may stand a little taller than the reactor is wide.
-                            modifier = if (both) Modifier.size(side, tallFigure) else Modifier.size(side),
-                        )
-                    }
-                    if (showReactor) {
-                        HoloReactor(
-                            state = ui.state,
-                            micLevel = ui.micLevel,
-                            speechLevel = speechLevel,
-                            batteryPercent = ui.batteryPercent,
-                            charging = ui.charging,
-                            fuelPercent = ui.fuelPercent,
-                            onTap = onTap,
-                            accent = accent,
-                            tilt = tilt,
-                            clock = holoClock,
-                            modifier = Modifier.size(side),
-                        )
-                    }
-                }
+                HoloReactor(
+                    state = ui.state,
+                    micLevel = ui.micLevel,
+                    speechLevel = speechLevel,
+                    batteryPercent = ui.batteryPercent,
+                    charging = ui.charging,
+                    fuelPercent = ui.fuelPercent,
+                    onTap = onTap,
+                    accent = accent,
+                    tilt = tilt,
+                    clock = holoClock,
+                    modifier = Modifier.size(side),
+                )
                 StateReadout(ui, accent, onTap)
                 }
             }
 
+            if (showAgent) {
+                // JARVIS as a character, working under the reactor: its lights follow what it's doing, its mood its reply.
+                val agentHeight by animateDpAsState(if (hasChat) 96.dp else 156.dp, tween(500), label = "agentHeight")
+                AgentScene(
+                    state = ui.state,
+                    micLevel = ui.micLevel,
+                    speechLevel = speechLevel,
+                    mood = agentMood,
+                    accent = accent,
+                    tilt = tilt,
+                    clock = holoClock,
+                    onTap = onTap,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(agentHeight),
+                )
+            }
             Column(Modifier.fillMaxWidth().animateContentSize()) {
                 ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
                 ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
             }
-            Transcript(ui, role, accent, Modifier.weight(if (hasChat) 1.1f else 0.35f))
+            Transcript(ui, role, accent, Modifier.weight(if (hasChat) 1.1f else if (showAgent) 0.02f else 0.35f))
             attachment?.let { a -> AttachmentChip(a.name, a.isImage, accent, onClear = viewModel::clearAttachment) }
             InputBar(
                 accent,
