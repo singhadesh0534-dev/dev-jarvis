@@ -99,6 +99,10 @@ fun AgentScene(
     clock: State<Float>,
     onTap: () -> Unit,
     modifier: Modifier = Modifier,
+    /** A real-movement clip of the robot for this moment (see AgentClips), played over the picture. */
+    clip: AgentClips.Source? = null,
+    clipLoop: Boolean = true,
+    onClipEnd: () -> Unit = {},
 ) {
     val image = ImageBitmap.imageResource(R.drawable.jarvis_agent)
     val tone by animateColorAsState(moodColor(mood, accent), tween(700), label = "moodTone")
@@ -285,6 +289,29 @@ fun AgentScene(
             )
             // Edges fade into the HUD.
             drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.75f to Color.Transparent, 1f to Hud.Abyss.copy(alpha = 0.55f)))
+        }
+
+        // The robot really moving: its clip for this moment, over the picture (which shows until the first frame).
+        if (clip != null) {
+            AgentVideo(clip, clipLoop, onClipEnd, Modifier.fillMaxSize(), focusX = 0.53f, focusY = 0.32f)
+            Canvas(Modifier.fillMaxSize()) {
+                val time = clock.value
+                when (moodNow.value) {
+                    AgentMood.SAD -> drawRect(Color(0xFF00102E).copy(alpha = 0.22f * moodAmt))
+                    AgentMood.ANGRY -> drawRect(Color(0xFFFF1A1A).copy(alpha = 0.08f * moodAmt), blendMode = BlendMode.Plus)
+                    AgentMood.LOVE -> drawRect(Color(0xFFFF4FA0).copy(alpha = 0.07f * moodAmt), blendMode = BlendMode.Plus)
+                    else -> Unit
+                }
+                val step = 3.5f * density
+                var y = 0f
+                while (y < size.height) { drawLine(Color.Black.copy(alpha = 0.08f), Offset(0f, y), Offset(size.width, y), 1f); y += step }
+                val sy = size.height * ((time / 6f) % 1f)
+                drawRect(
+                    Brush.verticalGradient(listOf(Color.Transparent, tone.copy(alpha = 0.06f), Color.Transparent), sy - 30f * density, sy + 30f * density),
+                    Offset(0f, sy - 30f * density), Size(size.width, 60f * density), blendMode = BlendMode.Plus,
+                )
+                drawRect(Brush.verticalGradient(0f to Color.Transparent, 0.75f to Color.Transparent, 1f to Hud.Abyss.copy(alpha = 0.55f)))
+            }
         }
 
         // Labels: who it is, and what it's doing / feeling.

@@ -299,6 +299,12 @@ fun HudScreen(
             if (showAgent) {
                 // JARVIS as a character, working under the reactor: its lights follow what it's doing, its mood its reply.
                 val agentHeight by animateDpAsState(if (hasChat) 96.dp else 156.dp, tween(500), label = "agentHeight")
+                // Real movement: the robot's clips (Settings > Roop), the right one for this moment.
+                val clipsVersion by AgentClips.version.collectAsStateWithLifecycle()
+                val clips = remember(clipsVersion) { AgentClips.Slot.entries.associateWith { AgentClips.source(context, it) } }
+                var greeting by remember { mutableStateOf(false) }
+                LaunchedEffect(ui.inConversation) { greeting = ui.inConversation && clips[AgentClips.Slot.WAVE] != null }
+                val slot = AgentClips.pick(ui.state, agentMood, greeting) { clips[it] != null }
                 AgentScene(
                     state = ui.state,
                     micLevel = ui.micLevel,
@@ -309,6 +315,9 @@ fun HudScreen(
                     clock = holoClock,
                     onTap = onTap,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(agentHeight),
+                    clip = slot?.let { clips[it] },
+                    clipLoop = slot?.loop ?: true,
+                    onClipEnd = { greeting = false },
                 )
             }
             Column(Modifier.fillMaxWidth().animateContentSize()) {
