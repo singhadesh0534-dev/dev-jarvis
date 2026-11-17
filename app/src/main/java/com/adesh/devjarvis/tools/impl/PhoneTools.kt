@@ -172,7 +172,6 @@ class PhoneTools @Inject constructor(
         "reminder_done",
         "Sir says the reminder JARVIS keeps following up on is done (\"ho gaya\", \"dawai le li\", \"call kar liya\") — stops the " +
             "\"ho gaya?\" follow-ups. Also when he says \"mat yaad dilao\" for it.",
-        params { },
     ) {
         override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
             val (id, text) = reminders.lastFired ?: return ToolResult.ok("no reminder is being followed up right now")

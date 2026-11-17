@@ -18,7 +18,9 @@ interface JarvisTool {
     fun declaration(): JsonObject = buildJsonObject {
         put("name", name)
         put("description", description)
-        parameters?.let { put("parameters", it) }
+        // Gemini refuses an object schema with no properties, and with it the WHOLE request: Live closes with
+        // "invalid argument" and every Gemini call fails. A tool without arguments sends no parameters at all.
+        parameters?.takeUnless { (it["properties"] as? JsonObject)?.isEmpty() == true }?.let { put("parameters", it) }
     }
 }
 
