@@ -727,6 +727,7 @@ class JarvisSession @Inject constructor(
             val deadline = System.currentTimeMillis() + modes.followUpMs(settings.current.followUpSeconds.coerceIn(3, 30) * 1_000L)
             var useAndroidStt = false // Groq's speech-to-text failed once: hear the rest on the phone's own recognizer
             var retriedBusy = false
+            var secondChance = false
             while (true) {
                 var outcome = ListenOutcome.NOTHING
                 var heardText = ""
@@ -760,6 +761,13 @@ class JarvisSession @Inject constructor(
                     ListenOutcome.NOTHING -> {
                         // Follow-up window mein chup rahe to thoda aur suno; warna standby.
                         if (followUp && System.currentTimeMillis() < deadline) continue
+                        // Right after the wake word Sir often takes a breath first, and some phones' recognizers give up
+                        // within a few seconds: listen once more before calling it an empty wake.
+                        if (!followUp && !secondChance) {
+                            secondChance = true
+                            SessionTrace.add("CLASSIC heard nothing after the wake word — listening once more")
+                            continue
+                        }
                         if (!followUp) lastWake?.let { w ->
                             noteFalseWake()
                             ProblemJournal.add("FALSE_WAKE?", "Woke on $w but heard no command afterwards (classic mode)")
@@ -1224,7 +1232,9 @@ class JarvisSession @Inject constructor(
             val handle = liveResumeHandle?.takeIf { resuming && liveResumeKey == liveKey }
             val conn = LiveConnection(http, liveKey, LiveConnection.setup(s.liveModel, liveVoiceNow, brain.systemPrompt(s, forLive = true),
                 registry.declarations, patientVad = !liveVadRejected, longMemory = longMemory, resumeHandle = handle,
-                affective = !liveAffectiveRejected, proactiveAudio = !liveProactiveRejected && s.noiseFilter >= 2))
+                // Proactive audio is never asked for: with it the model itself decides whether speech is meant for it and
+                // stayed silent to Sir right after the wake word ("wake word sunta hai, uske baad kuch nahi sunta").
+                affective = !liveAffectiveRejected, proactiveAudio = false))
             if (handle != null) SessionTrace.add("LIVE resuming the same session (hop $liveResumeHops)")
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter, speechModel = { silero.open() }) { bytes, n -> conn.sendAudio(bytes, n) }
