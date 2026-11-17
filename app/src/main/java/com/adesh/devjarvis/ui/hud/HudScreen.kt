@@ -196,10 +196,13 @@ fun HudScreen(
     // The whole HUD takes the role's colour: cyan for JARVIS / DOST, pink for GF.
     val accent by animateColorAsState(if (role == Persona.PARTNER) Hud.Pink else Hud.Cyan, tween(700), label = "accent")
 
+    // One clock and one tilt for the whole HUD: read only while drawing, so the screen never recomposes per frame.
+    val holoClock = rememberHoloClock()
+    val tilt = rememberTilt()
     Box(
         Modifier
             .fillMaxSize()
-            .hudBackdrop(animated = true, glowY = 0.36f)
+            .holoBackdrop(holoClock, tilt, accent)
             .safeDrawingPadding()
             .imePadding()
     ) {
@@ -260,7 +263,7 @@ fun HudScreen(
                 // Reactor and its state line belong together: centred as one group, no gap between them.
                 val side = minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                ArcReactor(
+                HoloReactor(
                     state = ui.state,
                     micLevel = ui.micLevel,
                     speechLevel = speechLevel,
@@ -269,6 +272,8 @@ fun HudScreen(
                     fuelPercent = ui.fuelPercent,
                     onTap = onTap,
                     accent = accent,
+                    tilt = tilt,
+                    clock = holoClock,
                     modifier = Modifier.size(side),
                 )
                 StateReadout(ui, accent, onTap)
