@@ -88,6 +88,10 @@ class HudViewModel @Inject constructor(
     val role: StateFlow<String> = settings.settings.map { Persona.normalize(it.persona) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, Persona.normalize(settings.current.persona))
 
+    /** The 3D AI character or the arc reactor in the middle of the HUD (Settings > Roop). */
+    val hudFace: StateFlow<String> = settings.settings.map { it.hudFace }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, settings.current.hudFace)
+
     /** The ROOP chip: the role is changed by voice, so just say how. */
     fun roleHint() = session.note("Roop badalne ke liye boliye: \"dost ban jao\", \"gf ban jao\" ya \"Jarvis ban jao\".")
 

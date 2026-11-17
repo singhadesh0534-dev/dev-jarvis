@@ -217,6 +217,11 @@ fun SettingsScreen(
                     listOf("jarvis" to "JARVIS", "dost" to "DOST", "gf" to "GF"),
                     com.adesh.devjarvis.brain.Persona.normalize(draft.persona),
                 ) { v -> viewModel.edit { it.copy(persona = v) } }
+                SubLabel("HUD ke beech mein")
+                ChoiceRow(
+                    listOf(JarvisSettings.HUD_FACE_CHARACTER to "3D AI CHARACTER", JarvisSettings.HUD_FACE_REACTOR to "REACTOR"),
+                    draft.hudFace,
+                ) { v -> viewModel.edit { it.copy(hudFace = v) } }
                 SubLabel("JARVIS ki awaaz (Live)")
                 ChoiceRow(com.adesh.devjarvis.brain.Persona.HIS_VOICES.map { it to it.uppercase() }, draft.liveVoice) { v -> viewModel.edit { it.copy(liveVoice = v) } }
                 SubLabel("DOST ki awaaz (Live)")

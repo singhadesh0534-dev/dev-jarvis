@@ -197,7 +197,8 @@ class JarvisSession @Inject constructor(
     private var liveResumeNext = false
     // What this Live model refused once is remembered (per model), so later conversations don't fail first.
     private val liveCaps by lazy { appContext.getSharedPreferences("live_caps", android.content.Context.MODE_PRIVATE) }
-    private fun capKey(name: String) = "${settings.current.liveModel}:$name"
+    // Per model AND per app version: a new version (maybe with the real fix) tries the features once more.
+    private fun capKey(name: String) = "${settings.current.liveModel}:${com.adesh.devjarvis.BuildConfig.VERSION_CODE}:$name"
     private var liveLongMemoryRejected: Boolean
         get() = liveCaps.getBoolean(capKey("memory"), false)
         set(v) { liveCaps.edit().putBoolean(capKey("memory"), v).apply() }
@@ -1227,7 +1228,7 @@ class JarvisSession @Inject constructor(
             if (handle != null) SessionTrace.add("LIVE resuming the same session (hop $liveResumeHops)")
             liveUsedPatientVad = !liveVadRejected
             val audio = LiveAudio(audioManager, hd = s.liveHdAudio, noiseFilter = s.noiseFilter, speechModel = { silero.open() }) { bytes, n -> conn.sendAudio(bytes, n) }
-            SessionTrace.add("LIVE start model=${s.liveModel} voice=$liveVoiceNow role=${s.persona} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected}")
+            SessionTrace.add("LIVE start model=${s.liveModel} voice=$liveVoiceNow role=${s.persona} hd=${s.liveHdAudio} noiseFilter=${s.noiseFilter} patientVad=${!liveVadRejected} memory=$longMemory mood=${!liveAffectiveRejected} tools=${registry.declarations.size}")
             var firstAudioLogged = false
             var userSpoke = false
             liveConn = conn
@@ -1490,6 +1491,23 @@ class JarvisSession @Inject constructor(
             liveLongMemoryRejected = true
             SessionTrace.add("LIVE long-memory fields rejected; continuing without them")
             if (_ui.value.inConversation) { startLive(); return }
+        }
+        // "Request contains an invalid argument" right after setup, with no reply: the server accepted the setup but this
+        // model refuses something in it. Heal step by step — the newest optional features first — and remember what
+        // works (per model and app version), so the next conversation starts in Live straight away.
+        val invalidArg = !anyReply && Regex("(?i)invalid argument|invalid_argument").containsMatchIn(detail)
+        if (invalidArg && _ui.value.inConversation && (!liveAffectiveRejected || !liveProactiveRejected)) {
+            liveAffectiveRejected = true
+            liveProactiveRejected = true
+            SessionTrace.add("LIVE invalid argument: trying again without mood / proactive audio")
+            startLive()
+            return
+        }
+        if (invalidArg && _ui.value.inConversation && !liveLongMemoryRejected) {
+            liveLongMemoryRejected = true
+            SessionTrace.add("LIVE invalid argument: trying again without long memory")
+            startLive()
+            return
         }
         // Connection dropped or the server's time limit: continue the SAME session (it remembers the whole talk).
         val freshHandle = liveResumeHandle != null && System.currentTimeMillis() - liveResumeAt < 90 * 60_000L

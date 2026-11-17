@@ -142,6 +142,7 @@ fun HudScreen(
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
     val role by viewModel.role.collectAsStateWithLifecycle()
+    val hudFace by viewModel.hudFace.collectAsStateWithLifecycle()
     val update by viewModel.update.collectAsStateWithLifecycle()
     val factory by viewModel.factoryStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -266,19 +267,32 @@ fun HudScreen(
                 // Reactor and its state line belong together: centred as one group, no gap between them.
                 val side = minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                HoloReactor(
-                    state = ui.state,
-                    micLevel = ui.micLevel,
-                    speechLevel = speechLevel,
-                    batteryPercent = ui.batteryPercent,
-                    charging = ui.charging,
-                    fuelPercent = ui.fuelPercent,
-                    onTap = onTap,
-                    accent = accent,
-                    tilt = tilt,
-                    clock = holoClock,
-                    modifier = Modifier.size(side),
-                )
+                if (hudFace == com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_REACTOR) {
+                    HoloReactor(
+                        state = ui.state,
+                        micLevel = ui.micLevel,
+                        speechLevel = speechLevel,
+                        batteryPercent = ui.batteryPercent,
+                        charging = ui.charging,
+                        fuelPercent = ui.fuelPercent,
+                        onTap = onTap,
+                        accent = accent,
+                        tilt = tilt,
+                        clock = holoClock,
+                        modifier = Modifier.size(side),
+                    )
+                } else {
+                    HoloCharacter(
+                        state = ui.state,
+                        micLevel = ui.micLevel,
+                        speechLevel = speechLevel,
+                        onTap = onTap,
+                        accent = accent,
+                        tilt = tilt,
+                        clock = holoClock,
+                        modifier = Modifier.size(side),
+                    )
+                }
                 StateReadout(ui, accent, onTap)
                 }
             }

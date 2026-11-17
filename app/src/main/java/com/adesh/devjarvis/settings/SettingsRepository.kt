@@ -72,6 +72,8 @@ data class JarvisSettings(
     val customWakePhrases: String = "",
     /** Live voice on the media stream (full quality). Off = phone-call audio path (strongest echo cancelling). */
     val liveHdAudio: Boolean = true,
+    /** What the HUD shows in the middle: the 3D AI character ("character") or the arc reactor ("reactor"). */
+    val hudFace: String = HUD_FACE_CHARACTER,
     /** Chime when the mic opens / closes. Off by default: JARVIS greets by voice and a haptic tick is enough. */
     val wakeChime: Boolean = false,
     /** Raat ka summary: kal ka plan, aaj ka kharcha, battery. */
@@ -132,6 +134,8 @@ data class JarvisSettings(
         const val VOICE_CLASSIC = "classic"
         const val STT_ANDROID = "android"
         const val STT_GROQ = "groq"
+        const val HUD_FACE_CHARACTER = "character"
+        const val HUD_FACE_REACTOR = "reactor"
     }
 
     val hasGeminiKey: Boolean get() = geminiApiKey.isNotBlank()
@@ -211,6 +215,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             .putFloat(K_SPK_THRESHOLD, cleaned.speakerThreshold)
             .putString(K_WAKE_PHRASES, cleaned.customWakePhrases)
             .putBoolean(K_LIVE_HD, cleaned.liveHdAudio)
+            .putString(K_HUD_FACE, cleaned.hudFace)
             .putBoolean(K_WAKE_CHIME, cleaned.wakeChime)
             .putBoolean(K_NIGHT_ON, cleaned.nightSummaryEnabled)
             .putInt(K_NIGHT_MIN, cleaned.nightSummaryMinute.coerceIn(0, 1439))
@@ -291,6 +296,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
             speakerThreshold = prefs.getFloat(K_SPK_THRESHOLD, d.speakerThreshold),
             customWakePhrases = prefs.getString(K_WAKE_PHRASES, d.customWakePhrases).orEmpty(),
             liveHdAudio = prefs.getBoolean(K_LIVE_HD, d.liveHdAudio),
+            hudFace = prefs.getString(K_HUD_FACE, d.hudFace) ?: d.hudFace,
             wakeChime = prefs.getBoolean(K_WAKE_CHIME, d.wakeChime),
             nightSummaryEnabled = prefs.getBoolean(K_NIGHT_ON, d.nightSummaryEnabled),
             nightSummaryMinute = prefs.getInt(K_NIGHT_MIN, d.nightSummaryMinute),
@@ -368,6 +374,7 @@ class SettingsRepository @Inject constructor(@ApplicationContext private val con
         const val K_SPK_THRESHOLD = "speaker_threshold"
         const val K_WAKE_PHRASES = "custom_wake_phrases"
         const val K_LIVE_HD = "live_hd_audio"
+        const val K_HUD_FACE = "hud_face"
         const val K_WAKE_CHIME = "wake_chime"
         const val K_NIGHT_ON = "night_summary_on"
         const val K_NIGHT_MIN = "night_summary_minute"
