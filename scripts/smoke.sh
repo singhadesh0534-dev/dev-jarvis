@@ -60,6 +60,7 @@ type_to_jarvis() {
 }
 
 dismiss
+adb shell dumpsys gfxinfo "$PKG" reset >/dev/null 2>&1 || true
 sleep 3; shot 01_home_start
 echo "=== HUD on start:"; texts | head -30
 check "start"
@@ -133,6 +134,10 @@ echo "=== JARVIS flight recorder"
 adb shell run-as "$PKG" cat files/crash/trace.log 2>/dev/null | tail -n 60
 echo "=== JARVIS problem journal"
 adb shell run-as "$PKG" cat files/crash/problems.log 2>/dev/null | tail -n 40
+
+echo "=== rendering cost (all screens; software GPU, so slower than a phone)"
+adb shell dumpsys gfxinfo "$PKG" | grep -E "Total frames rendered|Janky frames|50th percentile|90th percentile|99th percentile|Slow UI thread|Frame deadline missed" || true
+adb logcat -d 2>/dev/null | grep -E "Choreographer.*Skipped [0-9]+ frames" | tail -5 || true
 
 echo "=== crashes in logcat"
 adb logcat -d > logcat.txt

@@ -53,18 +53,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -87,6 +88,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.adesh.devjarvis.ui.theme.Hud
 import com.adesh.devjarvis.ui.theme.HudShapes
 import com.adesh.devjarvis.ui.theme.glass
+import com.adesh.devjarvis.ui.theme.rememberHoloClock
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
@@ -103,7 +105,8 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
     val googleOn by viewModel.googleOn.collectAsStateWithLifecycle()
     // Email OTP only once the server can send the code mails (a switch on the server); until then email + password.
     val otpOn by viewModel.otpOn.collectAsStateWithLifecycle()
-    val time by rememberClock()
+    // One capped hologram clock, read only while drawing: the screen (and its text fields) never recomposes per frame.
+    val time = rememberHoloClock()
 
     var started by remember { mutableStateOf(false) }
     var introDone by remember { mutableStateOf(!firstRun) }
@@ -257,7 +260,7 @@ fun AccountScreen(viewModel: AccountViewModel, firstRun: Boolean, onDone: () -> 
 
 @Composable
 private fun ProfilePanel(
-    email: String, time: Float, accent: Color, busy: Boolean, firstRun: Boolean,
+    email: String, time: State<Float>, accent: Color, busy: Boolean, firstRun: Boolean,
     onSave: () -> Unit, onLogout: () -> Unit, onContinue: () -> Unit,
     onChangePassword: (String, () -> Unit) -> Unit,
 ) {
@@ -265,7 +268,7 @@ private fun ProfilePanel(
     var newPw by rememberSaveable { mutableStateOf("") }
     Box(Modifier.size(84.dp), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            rotateRing(time * 60f, accent)
+            rotateRing(time.value * 60f, accent)
         }
         Box(
             Modifier.size(64.dp).clip(CircleShape).background(Brush.radialGradient(listOf(accent.copy(alpha = 0.35f), Hud.Panel))),
@@ -361,11 +364,13 @@ private fun OrDivider() {
 /** Step 2 of signup / OTP login: type the code from the email; resend after 45 s; or go back and change the email. */
 @Composable
 private fun CodeStep(
-    email: String, sentAt: Long, signup: Boolean, time: Float, accent: Color, busy: Boolean,
+    email: String, sentAt: Long, signup: Boolean, time: State<Float>, accent: Color, busy: Boolean,
     onVerify: (String) -> Unit, onResend: () -> Unit, onBack: () -> Unit,
 ) {
     var code by rememberSaveable(email, sentAt) { mutableStateOf("") }
-    val wait = (45 - ((System.currentTimeMillis() - sentAt) / 1000).toInt()).coerceAtLeast(0)
+    var now by remember(sentAt) { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(sentAt) { while (true) { now = System.currentTimeMillis(); delay(1_000) } }
+    val wait = (45 - ((now - sentAt) / 1000).toInt()).coerceAtLeast(0)
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text("CODE DAALIYE", style = TextStyle(fontSize = 12.sp, letterSpacing = 3.sp, fontWeight = FontWeight.Bold), color = accent)
         Text(email, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, modifier = Modifier.padding(top = 4.dp, bottom = 14.dp))
@@ -388,7 +393,7 @@ private fun CodeStep(
 
 /** 6 glowing boxes over one hidden number field: paste works, the keyboard stays numeric. */
 @Composable
-private fun OtpBoxes(value: String, accent: Color, time: Float, onChange: (String) -> Unit) {
+private fun OtpBoxes(value: String, accent: Color, time: State<Float>, onChange: (String) -> Unit) {
     val focus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
     val boxes = if (value.length > 6) value.length.coerceAtMost(10) else 6
@@ -403,12 +408,20 @@ private fun OtpBoxes(value: String, accent: Color, time: Float, onChange: (Strin
                 repeat(boxes) { i ->
                     val ch = value.getOrNull(i)?.toString().orEmpty()
                     val current = i == value.length
-                    val glow = if (current) 0.55f + 0.45f * (0.5f + 0.5f * sin(time * 6f)) else if (ch.isNotEmpty()) 0.8f else 0.25f
+                    val still = if (ch.isNotEmpty()) 0.8f else 0.25f
                     Box(
                         Modifier.size(width = if (boxes > 6) 34.dp else 44.dp, height = 54.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Hud.Abyss.copy(alpha = 0.7f))
-                            .border(if (current) 2.dp else 1.dp, accent.copy(alpha = glow), RoundedCornerShape(12.dp)),
+                            .drawBehind {
+                                // The box being typed into breathes (read while drawing: no recomposition per frame).
+                                val glow = if (current) 0.55f + 0.45f * (0.5f + 0.5f * sin(time.value * 6f)) else still
+                                val sw = (if (current) 2.dp else 1.dp).toPx()
+                                drawRoundRect(
+                                    accent.copy(alpha = glow), Offset(sw / 2, sw / 2), Size(size.width - sw, size.height - sw),
+                                    CornerRadius(12.dp.toPx() - sw / 2), style = Stroke(sw),
+                                )
+                            },
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(ch, style = TextStyle(fontSize = 22.sp, fontWeight = FontWeight.Bold), color = Hud.White)
@@ -495,7 +508,7 @@ private fun GhostButton(text: String, color: Color, enabled: Boolean = true, onC
 }
 
 @Composable
-private fun StatusChip(message: String, time: Float, accent: Color) {
+private fun StatusChip(message: String, time: State<Float>, accent: Color) {
     Row(
         Modifier.fillMaxWidth().padding(top = 14.dp).clip(RoundedCornerShape(12.dp))
             .background(Hud.Panel.copy(alpha = 0.8f)).border(1.dp, Hud.Line, RoundedCornerShape(12.dp))
@@ -508,15 +521,14 @@ private fun StatusChip(message: String, time: Float, accent: Color) {
 }
 
 @Composable
-private fun BlinkDot(time: Float, color: Color) {
-    val a = 0.35f + 0.65f * (0.5f + 0.5f * sin(time * 4f))
-    Box(Modifier.size(7.dp).clip(CircleShape).background(color.copy(alpha = a)))
+private fun BlinkDot(time: State<Float>, color: Color) {
+    Box(Modifier.size(7.dp).graphicsLayer { alpha = 0.35f + 0.65f * (0.5f + 0.5f * sin(time.value * 4f)) }.clip(CircleShape).background(color))
 }
 
 @Composable
-private fun ScanLine(time: Float, accent: Color) {
+private fun ScanLine(time: State<Float>, accent: Color) {
     Canvas(Modifier.fillMaxWidth().height(3.dp).padding(bottom = 1.dp)) {
-        val p = (time * 0.8f) % 1f
+        val p = (time.value * 0.8f) % 1f
         val x = size.width * p
         drawLine(Brush.horizontalGradient(listOf(Color.Transparent, accent, Color.Transparent), startX = x - 120f, endX = x + 120f),
             Offset(0f, size.height / 2), Offset(size.width, size.height / 2), size.height, StrokeCap.Round)
@@ -538,20 +550,14 @@ private fun Typewriter(text: String, modifier: Modifier, startDelayMs: Int) {
 
 // ------------------------------------------------------------------ 3D hologram
 
-/** Seconds since the screen opened, ticking every frame. */
-@Composable
-private fun rememberClock(): State<Float> = produceState(0f) {
-    val start = withFrameNanos { it }
-    while (true) withFrameNanos { value = (it - start) / 1_000_000_000f }
-}
-
 /**
  * A wireframe globe turning in 3D (latitude + longitude rings, projected with perspective so the near side is bright and
  * the far side faint), a scanning band, three tilted orbit rings with satellites, a pulsing core and a rotating HUD dial.
  */
 @Composable
-private fun JarvisHologram(time: Float, speed: Float, color: Color, busy: Boolean, modifier: Modifier) {
+private fun JarvisHologram(time: State<Float>, speed: Float, color: Color, busy: Boolean, modifier: Modifier) {
     Canvas(modifier) {
+        val time = time.value
         val c = center
         val r = size.minDimension * 0.26f
         val yaw = time * 0.45f * speed
@@ -655,9 +661,10 @@ private fun DrawScope.rotateRing(deg: Float, color: Color) {
 
 /** Stars that twinkle, and a perspective grid floor sliding towards you. */
 @Composable
-private fun HoloBackdrop(time: Float, color: Color, modifier: Modifier) {
+private fun HoloBackdrop(time: State<Float>, color: Color, modifier: Modifier) {
     val stars = remember { val rnd = Random(7); List(80) { Triple(rnd.nextFloat(), rnd.nextFloat() * 0.7f, rnd.nextFloat() * 6.28f) } }
     Canvas(modifier) {
+        val time = time.value
         val w = size.width; val h = size.height
         stars.forEach { (x, y, ph) ->
             val a = 0.15f + 0.5f * (0.5f + 0.5f * sin(time * 1.3f + ph))

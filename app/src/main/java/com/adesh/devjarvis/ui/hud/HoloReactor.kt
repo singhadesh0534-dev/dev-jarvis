@@ -9,13 +9,10 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
@@ -90,19 +87,13 @@ fun HoloReactor(
         when (state) { JarvisState.THINKING -> 4.2f; JarvisState.LISTENING -> 1.8f; JarvisState.SPEAKING -> 1.4f; JarvisState.IDLE -> 0.55f },
         label = "speed",
     )
-    val currentSpeed by rememberUpdatedState(speed)
+    val speedNow = rememberUpdatedState(speed)
     val thinking by animateFloatAsState(if (state == JarvisState.THINKING) 1f else 0f, tween(450), label = "thinking")
     val tone by animateColorAsState(if (state == JarvisState.THINKING) lerp(accent, Hud.Ice, 0.4f) else accent, tween(600), label = "tone")
 
-    // Spin angle integrates speed, so a speed change never makes the rings jump.
-    val angle = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        var last = 0L
-        while (true) withFrameNanos { now ->
-            if (last != 0L) angle.floatValue = (angle.floatValue + (now - last) / 1_000_000_000f * 30f * currentSpeed) % 360f
-            last = now
-        }
-    }
+    // Spin angle integrates speed over the hologram clock, so a speed change never makes the rings jump (and there is
+    // no extra per-frame loop: everything moves on the one capped clock).
+    val spin = remember { FloatArray(2) { -1f } } // [angle, last clock time]
 
     val sparks = remember { val rnd = Random(11); List(46) { floatArrayOf(rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat(), rnd.nextFloat()) } }
     val textMeasurer = rememberTextMeasurer()
@@ -131,7 +122,10 @@ fun HoloReactor(
         val r = min(size.width, size.height) / 2f
         val c = center
         val time = clock.value
-        val a = angle.floatValue
+        if (spin[1] >= 0f && time >= spin[1]) spin[0] = (spin[0] + (time - spin[1]) * 30f * speedNow.value) % 360f
+        if (spin[1] < 0f) spin[0] = 0f
+        spin[1] = time
+        val a = spin[0]
         val t = tilt.value
         fun depth(d: Float, block: DrawScope.() -> Unit) = translate(t.x * d * r * 0.05f, t.y * d * r * 0.05f, block)
 

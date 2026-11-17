@@ -9,7 +9,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -212,6 +211,7 @@ fun HudScreen(
         Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
             TopBar(
                 accent = accent,
+                clock = holoClock,
                 onOpenSettings = onOpenSettings,
                 onOpenActivity = onOpenActivity,
                 onOpenMemory = onOpenMemory,
@@ -222,7 +222,7 @@ fun HudScreen(
                 },
             )
             StatusStrip(
-                ui, role, accent,
+                ui, role, accent, holoClock,
                 onPower = { openSystem(context, android.content.Intent.ACTION_POWER_USAGE_SUMMARY) },
                 onNet = {
                     openSystem(context, if (android.os.Build.VERSION.SDK_INT >= 29) android.provider.Settings.Panel.ACTION_INTERNET_CONNECTIVITY else android.provider.Settings.ACTION_WIRELESS_SETTINGS)
@@ -357,13 +357,13 @@ private fun AttachmentChip(name: String, isImage: Boolean, accent: Color, onClea
 @Composable
 private fun TopBar(
     accent: Color,
+    clock: State<Float>,
     onOpenSettings: () -> Unit,
     onOpenActivity: () -> Unit,
     onOpenMemory: () -> Unit,
     onReport: () -> Unit,
 ) {
-    val pulse = rememberInfiniteTransition(label = "online")
-    val dot by pulse.animateFloat(0.35f, 1f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "dot")
+    // The "online" dot breathes on the one hologram clock (no extra full-rate animation).
     Row(
         Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -371,7 +371,7 @@ private fun TopBar(
         Column(Modifier.weight(1f)) {
             Wordmark()
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                StatusDot(Hud.Green, Modifier.graphicsLayer { alpha = dot }, size = 5)
+                StatusDot(Hud.Green, Modifier.graphicsLayer { alpha = 0.35f + 0.65f * (0.5f + 0.5f * kotlin.math.sin(clock.value * 2.85f)) }, size = 5)
                 Text(
                     "ONLINE",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp, letterSpacing = 2.sp),
@@ -406,7 +406,7 @@ private class Alert(val tag: String, val text: String, val color: Color, val act
  */
 @Composable
 private fun StatusStrip(
-    ui: HudUiState, role: String, accent: Color,
+    ui: HudUiState, role: String, accent: Color, clock: State<Float>,
     onPower: () -> Unit, onNet: () -> Unit, onBrain: () -> Unit, onRole: () -> Unit,
     onToggle: (Boolean) -> Unit,
 ) {
@@ -446,7 +446,7 @@ private fun StatusStrip(
             Modifier.fillMaxWidth().padding(start = 12.dp, end = 6.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            WakeRadar(on = ui.alwaysOn, color = tone)
+            WakeRadar(on = ui.alwaysOn, color = tone, clock = clock)
             val sub = ui.wakeNotice
                 ?: if (ui.alwaysOn) "\"Hello Dev\" boliye — screen off bhi sunta hoon" else "Wake word off — reactor ya mic dabake baat"
             Text(
@@ -543,19 +543,13 @@ private fun AlertLine(alert: Alert, more: Int) {
 
 /** Small radar: a steady dot, with a ring sweeping outward while always-on is listening. */
 @Composable
-private fun WakeRadar(on: Boolean, color: Color) {
-    // The clock runs only while listening.
-    val ping: State<Float>? = if (on) {
-        rememberInfiniteTransition(label = "radar")
-            .animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "ping")
-    } else {
-        null
-    }
+private fun WakeRadar(on: Boolean, color: Color, clock: State<Float>) {
+    // The ring sweeps only while listening, on the one hologram clock.
     Canvas(Modifier.size(22.dp)) {
         val r = size.minDimension / 2f
         drawCircle(color.copy(alpha = 0.18f), radius = r, style = androidx.compose.ui.graphics.drawscope.Stroke(1.dp.toPx()))
-        if (ping != null) {
-            val p = ping.value
+        if (on) {
+            val p = (clock.value / 1.8f) % 1f
             drawCircle(
                 color.copy(alpha = (1f - p) * 0.6f),
                 radius = r * (0.3f + 0.7f * p),
