@@ -97,12 +97,14 @@ fun HoloCharacter(
     ) {
         val time = clock.value
         val t = tilt.value
-        val s = size.minDimension
+        // The figure is taller than wide: in a tall box it grows to use the height (centred).
+        val s = minOf(size.width * 1.2f, size.height)
+        val oy = (size.height - s) / 2f
         val cx = size.width / 2f
         val unit = s * 0.215f
-        val headY = s * 0.30f
-        val padC = Offset(cx, s * 0.865f)
-        val padRx = s * 0.36f
+        val headY = oy + s * 0.30f
+        val padC = Offset(cx, oy + s * 0.865f)
+        val padRx = minOf(s * 0.36f, size.width * 0.47f)
         val padRy = s * 0.075f
         // Hologram flicker: a short dip now and then.
         val flick = if ((time * 1000).toInt() % 6100 < 70) 0.6f else 1f

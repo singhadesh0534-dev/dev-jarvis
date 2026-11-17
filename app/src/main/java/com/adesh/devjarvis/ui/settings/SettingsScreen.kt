@@ -219,7 +219,7 @@ fun SettingsScreen(
                 ) { v -> viewModel.edit { it.copy(persona = v) } }
                 SubLabel("HUD ke beech mein")
                 ChoiceRow(
-                    listOf(JarvisSettings.HUD_FACE_CHARACTER to "3D AI CHARACTER", JarvisSettings.HUD_FACE_REACTOR to "REACTOR"),
+                    listOf(JarvisSettings.HUD_FACE_BOTH to "DONO", JarvisSettings.HUD_FACE_REACTOR to "REACTOR", JarvisSettings.HUD_FACE_CHARACTER to "AI CHARACTER"),
                     draft.hudFace,
                 ) { v -> viewModel.edit { it.copy(hudFace = v) } }
                 SubLabel("JARVIS ki awaaz (Live)")

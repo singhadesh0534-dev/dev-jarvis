@@ -265,33 +265,46 @@ fun HudScreen(
                 contentAlignment = Alignment.Center,
             ) {
                 // Reactor and its state line belong together: centred as one group, no gap between them.
-                val side = minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                if (hudFace == com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_REACTOR) {
-                    HoloReactor(
-                        state = ui.state,
-                        micLevel = ui.micLevel,
-                        speechLevel = speechLevel,
-                        batteryPercent = ui.batteryPercent,
-                        charging = ui.charging,
-                        fuelPercent = ui.fuelPercent,
-                        onTap = onTap,
-                        accent = accent,
-                        tilt = tilt,
-                        clock = holoClock,
-                        modifier = Modifier.size(side),
-                    )
+                val both = hudFace == com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_BOTH
+                val side = if (both) {
+                    // Reactor and the AI character side by side, each half the width.
+                    minOf(maxWidth * 0.5f, maxHeight - 72.dp, 300.dp).coerceAtLeast(110.dp)
                 } else {
-                    HoloCharacter(
-                        state = ui.state,
-                        micLevel = ui.micLevel,
-                        speechLevel = speechLevel,
-                        onTap = onTap,
-                        accent = accent,
-                        tilt = tilt,
-                        clock = holoClock,
-                        modifier = Modifier.size(side),
-                    )
+                    minOf(maxWidth * 0.86f, maxHeight - 72.dp, 360.dp).coerceAtLeast(120.dp)
+                }
+                val tallFigure = minOf(side * 1.25f, maxHeight - 72.dp).coerceAtLeast(side)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                val showReactor = hudFace != com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_CHARACTER
+                val showCharacter = hudFace != com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_REACTOR
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (showCharacter) {
+                        HoloCharacter(
+                            state = ui.state,
+                            micLevel = ui.micLevel,
+                            speechLevel = speechLevel,
+                            onTap = onTap,
+                            accent = accent,
+                            tilt = tilt,
+                            clock = holoClock,
+                            // Beside the reactor the figure may stand a little taller than the reactor is wide.
+                            modifier = if (both) Modifier.size(side, tallFigure) else Modifier.size(side),
+                        )
+                    }
+                    if (showReactor) {
+                        HoloReactor(
+                            state = ui.state,
+                            micLevel = ui.micLevel,
+                            speechLevel = speechLevel,
+                            batteryPercent = ui.batteryPercent,
+                            charging = ui.charging,
+                            fuelPercent = ui.fuelPercent,
+                            onTap = onTap,
+                            accent = accent,
+                            tilt = tilt,
+                            clock = holoClock,
+                            modifier = Modifier.size(side),
+                        )
+                    }
                 }
                 StateReadout(ui, accent, onTap)
                 }
