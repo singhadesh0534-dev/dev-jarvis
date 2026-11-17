@@ -40,7 +40,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // The HUD is always dark: light status / navigation icons, even when the phone is in light mode.
+        enableEdgeToEdge(
+            statusBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = androidx.activity.SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         // Debug builds only: the emulator smoke test (CI) goes straight to the HUD.
         val smokeTest = BuildConfig.DEBUG && intent?.getBooleanExtra("smoke_skip_setup", false) == true
         val afterLogin = if (settings.current.setupDone || smokeTest) ROUTE_HUD else ROUTE_SETUP_FIRST

@@ -55,10 +55,17 @@ fun rememberHoloClock(): State<Float> {
     LaunchedEffect(Unit) {
         val fps = holoFps(context)
         if (fps == 0) return@LaunchedEffect
-        val gap = 1000L / fps
+        var gap = 1000L / fps
         val start = withFrameNanos { it }
+        var last = start
+        var slow = 0
         while (true) {
             val now = nextFrame(gap)
+            // A phone that can't keep up (frames coming at under half the asked rate, again and again) gets a calmer
+            // hologram instead of a stuttering one that also slows taps and typing — never below 8 fps.
+            slow = if ((now - last) / 1_000_000 > gap * 2) slow + 1 else 0
+            last = now
+            if (slow >= 20 && gap < 125) { gap *= 2; slow = 0 }
             t.floatValue = ((now - start) / 1_000_000_000.0 % 3600.0).toFloat()
         }
     }

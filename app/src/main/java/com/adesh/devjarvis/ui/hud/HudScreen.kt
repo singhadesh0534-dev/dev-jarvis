@@ -601,12 +601,7 @@ private fun StateReadout(ui: HudUiState, accent: Color, onTap: () -> Unit) {
             }
             Text(hint, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(
-            "FUEL ${ui.fuelPercent}%  ·  PWR ${if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%"}",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, letterSpacing = 1.5.sp),
-            color = if (ui.fuelPercent < 15) Hud.Amber else accent.copy(alpha = 0.75f),
-            modifier = Modifier.padding(top = 3.dp),
-        )
+        // Fuel and power are on the status strip and the reactor's dial: no third copy here.
     }
 }
 

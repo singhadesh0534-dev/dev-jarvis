@@ -103,10 +103,6 @@ fun HoloReactor(
     }
     val fuel = remember(fuelPercent, tone) { textMeasurer.measure("FUEL ${fuelPercent.coerceIn(0, 100)}%", label.copy(color = tone.copy(alpha = 0.8f))) }
     val name = remember(tone) { textMeasurer.measure("J.A.R.V.I.S", label.copy(color = tone.copy(alpha = 0.9f))) }
-    val mode = remember(state, tone) {
-        val m = when (state) { JarvisState.LISTENING -> "LISTENING"; JarvisState.SPEAKING -> "SPEAKING"; JarvisState.THINKING -> "PROCESSING"; JarvisState.IDLE -> "STANDBY" }
-        textMeasurer.measure(m, label.copy(color = Gold.copy(alpha = 0.85f)))
-    }
 
     Canvas(
         modifier
@@ -146,9 +142,12 @@ fun HoloReactor(
                 }
             }
             drawText(name, topLeft = Offset(c.x - name.size.width / 2f, c.y - r * 0.995f - name.size.height * 0.1f))
-            drawText(mode, topLeft = Offset(c.x - mode.size.width / 2f, c.y + r * 0.995f - mode.size.height * 0.9f))
-            drawText(bat, topLeft = Offset(c.x - r * 0.99f, c.y - bat.size.height / 2f - r * 0.62f))
-            drawText(fuel, topLeft = Offset(c.x + r * 0.99f - fuel.size.width, c.y - fuel.size.height / 2f - r * 0.62f))
+            // The side read-outs need room outside the armour ring: only on the big reactor (on the small one, above the
+            // chat, they would sit on the ring). The state is written big under the reactor, so not on the dial.
+            if (r > 120.dp.toPx()) {
+                drawText(bat, topLeft = Offset(c.x - r * 0.99f, c.y - bat.size.height / 2f - r * 0.62f))
+                drawText(fuel, topLeft = Offset(c.x + r * 0.99f - fuel.size.width, c.y - fuel.size.height / 2f - r * 0.62f))
+            }
         }
 
         // 2. armoured main ring with a glowing groove and four clamps
