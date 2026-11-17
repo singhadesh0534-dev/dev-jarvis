@@ -25,6 +25,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -346,5 +348,42 @@ fun Modifier.holoBackdrop(clock: State<Float>, tilt: State<Offset>, accent: Colo
             val a = 0.15f + 0.35f * (0.5f + 0.5f * sin(time * 1.4f + i))
             drawCircle(Hud.Ice.copy(alpha = a), 1.3f * density / 2f + 0.6f, Offset(px * size.width, (1f - py) * size.height))
         }
+    }
+}
+
+/**
+ * A sci-fi HUD frame (like the reference dashboards): a dark translucent panel with a thin edge, bright corner brackets
+ * and a small notch on top. Use on status, messages and the input dock so they all speak one design language.
+ */
+fun Modifier.holoFrame(accent: Color, fill: Float = 0.42f, bracket: Float = 12f): Modifier = this
+    .drawWithContent {
+        val radius = 7.dp.toPx()
+        drawRoundRect(
+            Brush.verticalGradient(listOf(Color(0xFF0E2438).copy(alpha = fill + 0.12f), Color(0xFF06111D).copy(alpha = fill))),
+            cornerRadius = CornerRadius(radius),
+        )
+        drawRoundRect(accent.copy(alpha = 0.16f), cornerRadius = CornerRadius(radius), style = Stroke(1.dp.toPx()))
+        drawContent()
+        val b = bracket.dp.toPx()
+        val w = 2.dp.toPx()
+        val col = accent.copy(alpha = 0.9f)
+        val (x0, y0, x1, y1) = listOf(w / 2, w / 2, size.width - w / 2, size.height - w / 2)
+        drawLine(col, Offset(x0, y0), Offset(x0 + b, y0), w, StrokeCap.Round); drawLine(col, Offset(x0, y0), Offset(x0, y0 + b), w, StrokeCap.Round)
+        drawLine(col, Offset(x1, y0), Offset(x1 - b, y0), w, StrokeCap.Round); drawLine(col, Offset(x1, y0), Offset(x1, y0 + b), w, StrokeCap.Round)
+        drawLine(col, Offset(x0, y1), Offset(x0 + b, y1), w, StrokeCap.Round); drawLine(col, Offset(x0, y1), Offset(x0, y1 - b), w, StrokeCap.Round)
+        drawLine(col, Offset(x1, y1), Offset(x1 - b, y1), w, StrokeCap.Round); drawLine(col, Offset(x1, y1), Offset(x1, y1 - b), w, StrokeCap.Round)
+        drawLine(col.copy(alpha = 0.6f), Offset(size.width / 2f - b, y0), Offset(size.width / 2f + b, y0), w)
+    }
+
+/** A microphone drawn in lines (the core icon set has none). */
+@Composable
+fun MicGlyph(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier) {
+        val w = size.minDimension
+        val s = Stroke(w * 0.1f, cap = StrokeCap.Round)
+        drawRoundRect(color, Offset(w * 0.36f, w * 0.08f), Size(w * 0.28f, w * 0.5f), CornerRadius(w * 0.14f))
+        drawArc(color, 0f, 180f, false, Offset(w * 0.22f, w * 0.26f), Size(w * 0.56f, w * 0.48f), style = s)
+        drawLine(color, Offset(w * 0.5f, w * 0.74f), Offset(w * 0.5f, w * 0.9f), w * 0.1f, StrokeCap.Round)
+        drawLine(color, Offset(w * 0.34f, w * 0.92f), Offset(w * 0.66f, w * 0.92f), w * 0.1f, StrokeCap.Round)
     }
 }

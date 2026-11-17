@@ -292,6 +292,7 @@ fun HudScreen(
                 research = research,
                 onSend = viewModel::send,
                 onPlus = { sheetOpen = true },
+                onMic = onTap,
             )
         }
 
@@ -412,7 +413,7 @@ private fun StatusStrip(
         Modifier
             .fillMaxWidth()
             .padding(bottom = 8.dp)
-            .glass(accent, HudShapes.Card, tint = 0.7f, edge = 0.55f),
+            .holoFrame(accent),
     ) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), verticalAlignment = Alignment.CenterVertically) {
             Readout("PWR", if (ui.batteryPercent < 0) "--" else "${ui.batteryPercent}%" + if (ui.charging) "⚡" else "", if (battWarn) Hud.Amber else accent, Modifier.weight(1f), onPower)
@@ -444,8 +445,7 @@ private fun StatusStrip(
         ) {
             WakeRadar(on = ui.alwaysOn, color = tone)
             val sub = ui.wakeNotice
-                ?: if (ui.alwaysOn && ui.wakeHeard.isNotBlank()) "heard: ${ui.wakeHeard}" else null
-                ?: if (ui.alwaysOn) "\"Hello Dev\" boliye — screen off bhi" else "Wake word off — reactor tap karke baat"
+                ?: if (ui.alwaysOn) "\"Hello Dev\" boliye — screen off bhi sunta hoon" else "Wake word off — reactor ya mic dabake baat"
             Text(
                 sub,
                 style = MaterialTheme.typography.bodySmall,
@@ -764,12 +764,12 @@ private fun UserBubble(text: String, accent: Color) {
         Text(
             text,
             style = MaterialTheme.typography.bodyLarge,
-            color = Hud.Ice,
+            color = Color.White,
             modifier = Modifier
                 .widthIn(max = 300.dp)
-                .background(Brush.linearGradient(listOf(accent.copy(alpha = 0.16f), Hud.Faint.copy(alpha = 0.55f))), shape)
-                .border(1.dp, accent.copy(alpha = 0.22f), shape)
-                .padding(horizontal = 14.dp, vertical = 8.dp),
+                .background(Brush.linearGradient(listOf(Color(0xFF1F5FE0), accent.copy(alpha = 0.75f))), shape)
+                .border(1.dp, Color.White.copy(alpha = 0.18f), shape)
+                .padding(horizontal = 14.dp, vertical = 9.dp),
         )
     }
 }
@@ -779,14 +779,8 @@ private fun AssistantBubble(speaker: String, text: String, voiceColor: Color) {
     Column(
         Modifier
             .fillMaxWidth(0.94f)
-            .background(
-                Brush.horizontalGradient(listOf(voiceColor.copy(alpha = 0.13f), Color.Transparent)),
-                RoundedCornerShape(4.dp, 16.dp, 16.dp, 16.dp),
-            )
-            .drawBehind {
-                drawRect(voiceColor, size = Size(2.dp.toPx(), size.height))
-            }
-            .padding(start = 14.dp, end = 12.dp, top = 8.dp, bottom = 10.dp),
+            .holoFrame(voiceColor, fill = 0.5f, bracket = 9f)
+            .padding(start = 14.dp, end = 12.dp, top = 9.dp, bottom = 11.dp),
     ) {
         Text(
             speaker,
@@ -804,6 +798,7 @@ private fun InputBar(
     research: Boolean,
     onSend: (String) -> Unit,
     onPlus: () -> Unit,
+    onMic: () -> Unit = {},
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     val send = {
@@ -822,8 +817,8 @@ private fun InputBar(
         Modifier
             .fillMaxWidth()
             .padding(top = 8.dp, bottom = 8.dp)
-            .glass(accent, HudShapes.Pill, tint = 0.8f, edge = edge)
-            .padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .holoFrame(accent.copy(alpha = 0.6f + 0.4f * edge), fill = 0.6f)
+            .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // + : photo, camera, file, skills, connectors, research, memory.
@@ -867,21 +862,18 @@ private fun InputBar(
                 }
             },
         )
+        // Empty box: a big mic (talk to JARVIS); something typed: send.
         IconButton(
-            onClick = send,
+            onClick = { if (ready) send() else onMic() },
             modifier = Modifier
-                .size(44.dp)
+                .size(48.dp)
                 .background(
-                    Brush.linearGradient(listOf(sendFill, sendFill.copy(alpha = 0.7f))),
+                    Brush.linearGradient(listOf(Color(0xFF5FF0FF), Color(0xFF2E6BFF)).takeIf { !ready } ?: listOf(sendFill, sendFill.copy(alpha = 0.7f))),
                     CircleShape,
                 ),
         ) {
-            Icon(
-                Icons.AutoMirrored.Filled.Send,
-                contentDescription = "Send",
-                tint = if (ready) Hud.Background else accent,
-                modifier = Modifier.size(20.dp),
-            )
+            if (ready) Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Hud.Background, modifier = Modifier.size(22.dp))
+            else MicGlyph(Hud.Background, Modifier.size(22.dp))
         }
     }
 }
