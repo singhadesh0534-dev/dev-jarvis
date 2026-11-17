@@ -128,11 +128,11 @@ object Persona {
         Regex("बं?न?्?द") to "band", Regex("मत") to "mat", Regex("नहीं") to "nahi", Regex("ऑफ़?") to "off", Regex("हटाओ") to "hatao", Regex("छोड़ो") to "chhodo",
     )
     private const val GAP = """(?:\s+\S+){0,2}?\s+"""
-    private const val BECOME = """(?:ban\s?ja+o?\b|ban\s?ke\b|ban\s?kar\b|bano\b|ki tarah\b|jaise\b|jaisi\b|mode\b|roop\b|role\b)"""
+    private const val BECOME = """(?:ban\s?ja+o?\b|ban\s?ke\b|ban\s?kar\b|bano\b|ki tarah\b|jaise\b|jaisi\b|mode\b|roop\b|role\b|roll\b|rol\b|wala\b|wali\b)"""
     private val ASK_PARTNER = Regex("""\b(?:gf|g f|girl ?friend|premika)\b$GAP$BECOME""")
     private val ASK_DOST = Regex("""\b(?:dost|friend)\b$GAP$BECOME|\byaar\s+(?:ki tarah|ban\s?ja+o?|ban\s?ke|ban\s?kar)\b""")
     private val ASK_JARVIS = listOf(
-        Regex("""\bjarvis(?:\s+\S+)?\s+(?:ban\s?ja+o?\b|ban\s?ke\b|bano\b)"""), Regex("""\bjarvis\s+(?:mode|roop)\b"""),
+        Regex("""\bjarvis(?:\s+\S+)?\s+(?:ban\s?ja+o?\b|ban\s?ke\b|bano\b)"""), Regex("""\bjarvis\s+(?:mode|roop|role|roll|rol|wala)\b"""),
         Regex("""\bnormal\s+(?:ho\s?ja+o?\b|mode\b|ban\b)"""), Regex("""\b(?:wapas|vapas|waapas|vaapas)\s+jarvis\b"""),
     )
     private val STOP_IT = Regex("""\b(?:band|off|hatao|chhodo|chodo|mat|nahi|nahin)\b""")

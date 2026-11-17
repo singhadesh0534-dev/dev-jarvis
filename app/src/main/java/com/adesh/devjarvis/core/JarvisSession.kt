@@ -724,12 +724,13 @@ class JarvisSession @Inject constructor(
             wake.stop()
             wake.awaitStopped()
             val deadline = System.currentTimeMillis() + modes.followUpMs(settings.current.followUpSeconds.coerceIn(3, 30) * 1_000L)
+            var useAndroidStt = false // Groq's speech-to-text failed once: hear the rest on the phone's own recognizer
             var retriedBusy = false
             while (true) {
                 var outcome = ListenOutcome.NOTHING
                 var heardText = ""
                 var failure: SpeechInput.Reason? = null
-                classicListener().collect { ev ->
+                classicListener(phoneOnly = useAndroidStt).collect { ev ->
                     when (ev) {
                         SpeechInput.Event.Ready -> Unit
                         is SpeechInput.Event.Level -> _ui.update { it.copy(micLevel = ev.value) }
@@ -775,6 +776,12 @@ class JarvisSession @Inject constructor(
                         return@launch
                     }
                     ListenOutcome.FAILED -> {
+                        // The cloud speech-to-text (Groq) failed: don't make Sir repeat — listen again with the phone's own.
+                        if (!useAndroidStt && failure != SpeechInput.Reason.NO_PERMISSION && usesGroqStt()) {
+                            useAndroidStt = true
+                            SessionTrace.add("CLASSIC groq stt failed ($failure) — retrying on the phone recognizer")
+                            continue
+                        }
                         onListenFailed(failure ?: SpeechInput.Reason.OTHER)
                         return@launch
                     }
@@ -1090,8 +1097,12 @@ class JarvisSession @Inject constructor(
     // ---------------------------------------------------------------- engines & mode
 
     /** Classic-mode ears: Groq Whisper if chosen and possible, else Android's recognizer. */
-    private fun classicListener() = settings.current.let { s ->
-        if (s.sttEngine == JarvisSettings.STT_GROQ && s.hasGroqKey && device.isOnline() && !usage.isExhausted(Provider.GROQ)) {
+    private fun usesGroqStt() = settings.current.let { s ->
+        s.sttEngine == JarvisSettings.STT_GROQ && s.hasGroqKey && device.isOnline() && !usage.isExhausted(Provider.GROQ)
+    }
+
+    private fun classicListener(phoneOnly: Boolean = false) = settings.current.let { s ->
+        if (!phoneOnly && usesGroqStt()) {
             groqWhisper.listen(s.sttLanguage)
         } else {
             speechIn.listen(s.sttLanguage)
@@ -1572,7 +1583,9 @@ class JarvisSession @Inject constructor(
         is BrainError.MissingKey -> "Sir, mera dimaag abhi plug-in nahi hua. Settings mein Gemini API key daal dijiye."
         is BrainError.NoNetwork -> if (device.isOnline()) "Sir, net abhi bahut dheema hai, jawab nahi aa paya. Ek baar phir boliye."
             else "Sir, network gayab hai, abhi offline hoon."
-        is BrainError.RateLimited -> "Sir, aaj ka free fuel khatam ho gaya. Thodi der baad phir koshish karte hain."
+        // Usually a per-minute limit on both brains, not the day's fuel: say so honestly and what helps.
+        is BrainError.RateLimited -> "Sir, abhi ek minute mein bahut sawaal ho gaye, Google ne thoda roka hai. Aadhe minute baad phir boliye — " +
+            "baar-baar ho to Settings mein ek aur free Gemini key daal dijiye."
         is BrainError.InvalidKey -> "Sir, ye API key Google ko pasand nahi aayi. Settings mein ek baar check kar lijiye."
         is BrainError.Blocked -> "Sir, is sawaal pe mere safety filters ne haath khade kar diye. Kuch aur poochiye."
         is BrainError.Server -> "Sir, Google ke servers thoda nakhre kar rahe hain. Ek baar phir boliye."

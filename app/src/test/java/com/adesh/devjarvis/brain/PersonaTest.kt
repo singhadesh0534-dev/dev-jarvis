@@ -97,3 +97,11 @@ class PersonaTest {
         assertEquals(Persona.HER_VOICE, Persona.liveVoice(Persona.PARTNER, "Charon", ""))
     }
 }
+
+class PersonaRollTest {
+    @org.junit.Test fun jarvisRollMeansTheJarvisRole() {
+        org.junit.Assert.assertEquals(Persona.JARVIS, Persona.requested("Jarvis roll"))
+        org.junit.Assert.assertEquals(Persona.JARVIS, Persona.requested("jarvis role mein aao"))
+        org.junit.Assert.assertEquals(Persona.PARTNER, Persona.requested("gf wali baat karo"))
+    }
+}
