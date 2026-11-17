@@ -229,7 +229,7 @@ private fun ActionPill(text: String, color: Color, onClick: () -> Unit) {
         color = color,
         maxLines = 1,
         modifier = Modifier
-            .glass(color, HudShapes.Pill, tint = 0.8f, edge = 0.8f)
+            .glass(color, HudShapes.Hex, tint = 0.8f, edge = 0.8f)
             .clickable(onClick = onClick)
             .heightIn(min = 36.dp)
             .padding(horizontal = 16.dp, vertical = 10.dp),

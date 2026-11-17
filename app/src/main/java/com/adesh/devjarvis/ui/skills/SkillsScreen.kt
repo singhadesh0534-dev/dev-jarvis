@@ -108,7 +108,7 @@ fun SkillsScreen(viewModel: SkillsViewModel, onBack: () -> Unit, onRun: () -> Un
             Modifier
                 .fillMaxWidth()
                 .padding(start = 16.dp, end = 16.dp, top = 12.dp)
-                .glass(Hud.Cyan, HudShapes.Pill, tint = 0.7f, edge = 0.6f)
+                .glass(Hud.Cyan, HudShapes.Hex, tint = 0.7f, edge = 0.6f)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
         ) {
             BasicTextField(
@@ -138,8 +138,8 @@ fun SkillsScreen(viewModel: SkillsViewModel, onBack: () -> Unit, onRun: () -> Un
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.2.sp, fontWeight = FontWeight.Bold),
                     color = if (on) Hud.Background else if (a == SkillRow.MINE) Hud.Amber else Hud.Ice,
                     modifier = Modifier
-                        .background(if (on) Hud.Cyan else Hud.Panel, HudShapes.Pill)
-                        .border(1.dp, if (on) Hud.Cyan else Hud.Line, HudShapes.Pill)
+                        .background(if (on) Hud.Cyan else Hud.Panel, HudShapes.Hex)
+                        .border(1.dp, if (on) Hud.Cyan else Hud.Line, HudShapes.Hex)
                         .clickable { area = a }
                         .padding(horizontal = 12.dp, vertical = 7.dp),
                 )
@@ -224,8 +224,8 @@ private fun Action(text: String, color: androidx.compose.ui.graphics.Color, onCl
         style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.4.sp, fontWeight = FontWeight.Bold),
         color = color,
         modifier = Modifier
-            .background(color.copy(alpha = 0.12f), HudShapes.Pill)
-            .border(1.dp, color.copy(alpha = 0.45f), HudShapes.Pill)
+            .background(color.copy(alpha = 0.12f), HudShapes.Hex)
+            .border(1.dp, color.copy(alpha = 0.45f), HudShapes.Hex)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 9.dp),
     )

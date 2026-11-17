@@ -120,6 +120,8 @@ import com.adesh.devjarvis.ui.theme.StatusDot
 import com.adesh.devjarvis.ui.theme.Wordmark
 import com.adesh.devjarvis.ui.theme.cornerTicks
 import com.adesh.devjarvis.ui.theme.glass
+import com.adesh.devjarvis.ui.theme.rememberHoloClock
+import com.adesh.devjarvis.ui.theme.rememberTilt
 import com.adesh.devjarvis.ui.theme.hudBackdrop
 import com.adesh.devjarvis.update.AppUpdater
 import kotlin.math.sin
@@ -203,6 +205,7 @@ fun HudScreen(
         Modifier
             .fillMaxSize()
             .holoBackdrop(holoClock, tilt, accent)
+            .graphicsLayer() // content in its own layer: the moving backdrop never redraws it
             .safeDrawingPadding()
             .imePadding()
     ) {

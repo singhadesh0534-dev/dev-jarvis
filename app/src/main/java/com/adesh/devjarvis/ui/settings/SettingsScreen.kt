@@ -478,7 +478,7 @@ private fun SectionRail(onJump: (String) -> Unit) {
                 color = Hud.Ice,
                 maxLines = 1,
                 modifier = Modifier
-                    .glass(Hud.Cyan, HudShapes.Pill, tint = 0.5f, edge = 0.6f)
+                    .glass(Hud.Cyan, HudShapes.Hex, tint = 0.5f, edge = 0.6f)
                     .clickable { onJump(key) }
                     .padding(horizontal = 12.dp, vertical = 8.dp),
             )
@@ -1000,7 +1000,7 @@ private fun LabeledSlider(label: String, value: Float, range: ClosedFloatingPoin
                 style = MaterialTheme.typography.labelMedium.copy(fontSize = 11.sp),
                 color = Hud.Cyan,
                 modifier = Modifier
-                    .background(Hud.Cyan.copy(alpha = 0.10f), HudShapes.Pill)
+                    .background(Hud.Cyan.copy(alpha = 0.10f), HudShapes.Hex)
                     .padding(horizontal = 10.dp, vertical = 4.dp),
             )
         }

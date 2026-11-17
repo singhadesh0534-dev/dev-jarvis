@@ -279,7 +279,7 @@ private fun ProfilePanel(
     Text(email, style = MaterialTheme.typography.bodySmall, color = Hud.Dim)
     Spacer(Modifier.height(10.dp))
     Row(
-        Modifier.border(1.dp, accent.copy(alpha = 0.5f), HudShapes.Pill).padding(horizontal = 12.dp, vertical = 5.dp),
+        Modifier.border(1.dp, accent.copy(alpha = 0.5f), HudShapes.Hex).padding(horizontal = 12.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BlinkDot(time, accent)
@@ -319,8 +319,8 @@ private fun ProfilePanel(
 private fun GoogleButton(enabled: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().height(54.dp)
-            .shadow(14.dp, HudShapes.Pill, ambientColor = Hud.Cyan, spotColor = Hud.Cyan)
-            .clip(HudShapes.Pill)
+            .shadow(14.dp, HudShapes.Hex, ambientColor = Hud.Cyan, spotColor = Hud.Cyan)
+            .clip(HudShapes.Hex)
             .background(Color.White)
             .clickable(enabled = enabled, onClick = onClick)
             .graphicsLayer { alpha = if (enabled) 1f else 0.55f },
@@ -422,13 +422,13 @@ private fun OtpBoxes(value: String, accent: Color, time: Float, onChange: (Strin
 @Composable
 private fun Segmented(signup: Boolean, accent: Color, onPick: (Boolean) -> Unit) {
     val x by animateFloatAsState(if (signup) 1f else 0f, tween(300), label = "seg")
-    Box(Modifier.fillMaxWidth().height(42.dp).clip(HudShapes.Pill).background(Hud.Abyss.copy(alpha = 0.7f)).border(1.dp, Hud.Line, HudShapes.Pill)) {
+    Box(Modifier.fillMaxWidth().height(42.dp).clip(HudShapes.Hex).background(Hud.Abyss.copy(alpha = 0.7f)).border(1.dp, Hud.Line, HudShapes.Hex)) {
         // sliding highlight
         Box(
             Modifier.fillMaxWidth(0.5f).height(42.dp)
                 .graphicsLayer { translationX = x * size.width }
                 .padding(3.dp)
-                .clip(HudShapes.Pill)
+                .clip(HudShapes.Hex)
                 .background(Brush.horizontalGradient(listOf(accent.copy(alpha = 0.85f), Hud.Teal.copy(alpha = 0.85f)))),
         )
         Row(Modifier.fillMaxSize()) {
@@ -471,8 +471,8 @@ private fun HoloField(
 private fun GlowButton(text: String, accent: Color, enabled: Boolean, onClick: () -> Unit) {
     Box(
         Modifier.fillMaxWidth().height(52.dp)
-            .shadow(if (enabled) 18.dp else 0.dp, HudShapes.Pill, ambientColor = accent, spotColor = accent)
-            .clip(HudShapes.Pill)
+            .shadow(if (enabled) 18.dp else 0.dp, HudShapes.Hex, ambientColor = accent, spotColor = accent)
+            .clip(HudShapes.Hex)
             .background(Brush.horizontalGradient(listOf(accent, Hud.Teal)))
             .clickable(enabled = enabled, onClick = onClick)
             .graphicsLayer { alpha = if (enabled) 1f else 0.5f },
@@ -485,8 +485,8 @@ private fun GlowButton(text: String, accent: Color, enabled: Boolean, onClick: (
 @Composable
 private fun GhostButton(text: String, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
     Box(
-        Modifier.fillMaxWidth().height(48.dp).clip(HudShapes.Pill)
-            .border(BorderStroke(1.dp, color.copy(alpha = 0.45f)), HudShapes.Pill)
+        Modifier.fillMaxWidth().height(48.dp).clip(HudShapes.Hex)
+            .border(BorderStroke(1.dp, color.copy(alpha = 0.45f)), HudShapes.Hex)
             .background(color.copy(alpha = 0.05f))
             .clickable(enabled = enabled, onClick = onClick)
             .graphicsLayer { alpha = if (enabled) 1f else 0.5f },
