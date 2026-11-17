@@ -102,6 +102,7 @@ fun AgentScene(
     /** A real-movement clip of the robot for this moment (see AgentClips), played over the picture. */
     clip: AgentClips.Source? = null,
     clipLoop: Boolean = true,
+    clipLoopFromMs: Int = 0,
     onClipEnd: () -> Unit = {},
 ) {
     val image = ImageBitmap.imageResource(R.drawable.jarvis_agent)
@@ -293,7 +294,7 @@ fun AgentScene(
 
         // The robot really moving: its clip for this moment, over the picture (which shows until the first frame).
         if (clip != null) {
-            AgentVideo(clip, clipLoop, onClipEnd, Modifier.fillMaxSize(), focusX = 0.53f, focusY = 0.32f)
+            AgentVideo(clip, clipLoop, onClipEnd, Modifier.fillMaxSize(), loopFromMs = clipLoopFromMs, focusX = 0.5f, focusY = 0.3f)
             Canvas(Modifier.fillMaxSize()) {
                 val time = clock.value
                 when (moodNow.value) {

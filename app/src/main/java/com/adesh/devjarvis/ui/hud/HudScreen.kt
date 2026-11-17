@@ -317,6 +317,7 @@ fun HudScreen(
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(agentHeight),
                     clip = slot?.let { clips[it] },
                     clipLoop = slot?.loop ?: true,
+                    clipLoopFromMs = slot?.let { AgentClips.loopFromMs(it, clips[it]) } ?: 0,
                     onClipEnd = { greeting = false },
                 )
             }

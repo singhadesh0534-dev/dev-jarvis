@@ -1064,8 +1064,8 @@ private fun AgentClipsEditor() {
     }
     SubLabel("AI robot ki asli movement (video clips)")
     Hint(
-        "Robot ki picture se kisi bhi photo-to-video AI app mein 4-6 second ke clip banao (camera hile nahi, wahi robot, wahi scene), " +
-            "phir yahan chuno. JARVIS khud sahi clip chalayega: sunte waqt sunna, bolte waqt bolna, baat shuru hote hi hello.",
+        "Robot ke clips app mein pehle se hain (✓). JARVIS khud sahi clip chalata hai: baat shuru hote hi hello, sunte waqt sunna, " +
+            "bolte waqt bolna. Apna clip lagana ho to CHUNO dabao — wo us jagah ka clip badal dega.",
     )
     com.adesh.devjarvis.ui.hud.AgentClips.Slot.entries.forEach { slot ->
         val own = remember(version, slot) { com.adesh.devjarvis.ui.hud.AgentClips.hasOwn(context, slot) }

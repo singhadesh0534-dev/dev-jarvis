@@ -15,7 +15,8 @@ import java.io.File
  * The robot's real movements: short video clips of the SAME robot (made from Sir's picture in any image-to-video
  * app), one per situation. JARVIS plays the right one by itself: working while idle or thinking, turning to listen,
  * talking with its hands while speaking, a wave when a conversation starts, and mood clips after a happy / sad reply.
- * Clips Sir picks live in the app's own storage; clips built into the app (res/raw/agent_<slot>) are the fallback.
+ * Clips built into the app (res/raw/agent_<slot>, made from the picture by scripts/make_agent_clips.py) play by
+ * default; a clip Sir picks in Settings replaces that one.
  */
 object AgentClips {
     enum class Slot(val key: String, val title: String, val hint: String, val loop: Boolean) {
@@ -31,6 +32,13 @@ object AgentClips {
         data class FromFile(val file: File) : Source
         data class FromRaw(val resId: Int) : Source
     }
+
+    /**
+     * Where a looping clip starts again. The built-in Sunna / Bolna clips begin with the robot turning to Sir; after
+     * that turn they loop from 1 s, so he keeps facing Sir. Sir's own clips loop from the start.
+     */
+    fun loopFromMs(slot: Slot, source: Source?): Int =
+        if (source is Source.FromRaw && (slot == Slot.LISTEN || slot == Slot.TALK)) 1_000 else 0
 
     /** Bumps whenever Sir adds or removes a clip, so the HUD re-checks. */
     private val _version = MutableStateFlow(0)
