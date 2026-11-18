@@ -36,6 +36,10 @@ class CodeRunner @Inject constructor(@ApplicationContext private val context: Co
     private val _busy = MutableStateFlow(false)
     val busy: StateFlow<Boolean> = _busy.asStateFlow()
 
+    /** Asks the app to show the Terminal screen (collected by MainActivity). */
+    val openRequests = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    fun requestOpen() { openRequests.tryEmit(Unit) }
+
     private val typed = LinkedBlockingQueue<String>()
     private val lock = Mutex()
 

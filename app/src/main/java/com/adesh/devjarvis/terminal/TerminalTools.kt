@@ -36,6 +36,7 @@ class TerminalTools @Inject constructor(private val runner: CodeRunner) {
             if (lang == "shell" && risky.containsMatchIn(code) && !ctx.confirm("Sir, ye command files mita sakti hai: ${code.take(80)} — chalaun?")) {
                 return ToolResult.ok("cancelled — Sir said no")
             }
+            runner.requestOpen() // Sir watches it happen on the Terminal screen
             val out = runCatching {
                 if (name != null) {
                     runner.saveFile(name, code)
@@ -54,5 +55,15 @@ class TerminalTools @Inject constructor(private val runner: CodeRunner) {
         }
     }
 
-    val tools: List<JarvisTool> = listOf(runCode)
+    private val openTerminal = object : SimpleTool(
+        "open_terminal",
+        "Open JARVIS's built-in terminal screen (\"terminal kholo\", \"apna terminal dikhao\").",
+    ) {
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            runner.requestOpen()
+            return ToolResult.ok("terminal is open on the screen")
+        }
+    }
+
+    val tools: List<JarvisTool> = listOf(runCode, openTerminal)
 }

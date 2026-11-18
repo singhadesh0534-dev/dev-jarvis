@@ -37,6 +37,7 @@ class MainActivity : ComponentActivity() {
     @Inject lateinit var settings: SettingsRepository
     @Inject lateinit var updater: AppUpdater
     @Inject lateinit var account: com.adesh.devjarvis.cloud.AccountManager
+    @Inject lateinit var codeRunner: com.adesh.devjarvis.terminal.CodeRunner
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,6 +57,12 @@ class MainActivity : ComponentActivity() {
         setContent {
             JarvisTheme {
                 val nav = rememberNavController()
+                // JARVIS opens his terminal when he runs code (or Sir says "terminal kholo"), so Sir sees it work.
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    codeRunner.openRequests.collect {
+                        if (nav.currentDestination?.route != ROUTE_TERMINAL) nav.navigate(ROUTE_TERMINAL) { launchSingleTop = true }
+                    }
+                }
                 NavHost(navController = nav, startDestination = start) {
                     composable(ROUTE_BOOT) {
                         BootScreen(viewModel = hiltViewModel(), onDone = {
