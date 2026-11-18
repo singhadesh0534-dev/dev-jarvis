@@ -101,7 +101,12 @@ object FinalActionDetector {
     private val forbidden = Regex("""(?i)\b(pay|buy|purchase|order|checkout|transfer|donate|subscribe|place order|add money|recharge)\b""")
     private val final = Regex("""(?i)\b(send|post|share|publish|tweet|reply|submit|upload|delete|remove|confirm|bhejo|bhej|done)\b""")
 
+    /**
+     * Only button-sized labels count: a long block of text that merely mentions "donate" (Termux's welcome text)
+     * is not a payment button.
+     */
     fun classify(label: String): Kind = when {
+        label.length > 40 -> Kind.NORMAL
         forbidden.containsMatchIn(label) -> Kind.FORBIDDEN
         final.containsMatchIn(label) -> Kind.NEEDS_CONFIRMATION
         else -> Kind.NORMAL

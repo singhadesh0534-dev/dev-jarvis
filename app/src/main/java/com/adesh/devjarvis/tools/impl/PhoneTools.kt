@@ -692,8 +692,47 @@ class PhoneTools @Inject constructor(
         }
     }
 
+    private val runInTermux = object : SimpleTool(
+        "run_in_termux",
+        "Run a shell command in Termux (Linux on the phone) and show it in Termux's window. Use this for EVERYTHING in " +
+            "Termux — writing files (cat > file << 'EOF' ... EOF), python, pkg install, git — never type_text or " +
+            "do_task_on_screen in Termux (its terminal is not a text box). Multi-line scripts are fine.",
+        params { string("command", "The bash command or script to run", required = true) },
+    ) {
+        private val risky = Regex("""(?i)(\brm\s+-[a-z]*r|\bdd\b|\bmkfs|chmod\s+-R|\bpkg\s+(uninstall|remove)|>\s*/dev/|:\(\)\s*\{)""")
+
+        override suspend fun execute(args: ToolArgs, ctx: ToolContext): ToolResult {
+            val cmd = args.requireString("command")
+            if (context.packageManager.getLaunchIntentForPackage("com.termux") == null) {
+                return ToolResult.fail("Termux is not installed — tell Sir to install it from F-Droid (not the old Play Store one)")
+            }
+            if (risky.containsMatchIn(cmd) && !ctx.confirm("Sir, ye command files mita/badal sakti hai: ${cmd.take(80)} — chalaun?")) {
+                return ToolResult.ok("cancelled — Sir said no")
+            }
+            val intent = Intent("com.termux.RUN_COMMAND")
+                .setClassName("com.termux", "com.termux.app.RunCommandService")
+                .putExtra("com.termux.RUN_COMMAND_PATH", "/data/data/com.termux/files/usr/bin/bash")
+                .putExtra("com.termux.RUN_COMMAND_ARGUMENTS", arrayOf("-c", cmd))
+                .putExtra("com.termux.RUN_COMMAND_WORKDIR", "/data/data/com.termux/files/home")
+                .putExtra("com.termux.RUN_COMMAND_BACKGROUND", false)
+                .putExtra("com.termux.RUN_COMMAND_SESSION_ACTION", "0")
+            return try {
+                context.startService(intent)
+                ToolResult.ok("running in Termux (its window shows the output) — tell Sir in one line what it does")
+            } catch (e: SecurityException) {
+                ToolResult.fail(
+                    "Termux hasn't allowed JARVIS yet. Tell Sir two one-time steps: 1) in Termux run: " +
+                        "mkdir -p ~/.termux && echo 'allow-external-apps=true' >> ~/.termux/termux.properties && termux-reload-settings ; " +
+                        "2) Phone Settings > Apps > Dev Jarvis > Permissions > 'Run commands in Termux environment' > Allow.",
+                )
+            } catch (e: Exception) {
+                ToolResult.fail("Termux didn't start the command: ${e.message?.take(100)}")
+            }
+        }
+    }
+
     val tools: List<JarvisTool> = listOf(
-        reminderDone,
+        reminderDone, runInTermux,
         openApp, closeApp, uninstallApp, installApp, setAlarm, setTimer, createReminder, addCalendarEvent, flashlight, setRinger, setVolume,
         setBrightness, openSettings, setToggle, searchInApp, screenshot, lockScreen, deviceStatus, playMusic, mediaControl,
         phoneSetting,
