@@ -143,18 +143,6 @@ fun HudScreen(
     var sheetOpen by rememberSaveable { mutableStateOf(false) }
     val speechLevel by viewModel.speechLevel.collectAsStateWithLifecycle()
     val role by viewModel.role.collectAsStateWithLifecycle()
-    val hudFace by viewModel.hudFace.collectAsStateWithLifecycle()
-    val showAgent = hudFace != com.adesh.devjarvis.settings.JarvisSettings.HUD_FACE_REACTOR
-    // The robot's mood follows JARVIS's own last reply, for a while.
-    val lastReply = ui.transcript.lastOrNull { !it.fromUser && !it.isSystem }?.text.orEmpty()
-    var agentMood by remember { mutableStateOf(com.adesh.devjarvis.core.AgentMood.NEUTRAL) }
-    LaunchedEffect(lastReply, role) {
-        agentMood = com.adesh.devjarvis.core.AgentMoods.of(lastReply, role)
-        if (agentMood != com.adesh.devjarvis.core.AgentMood.NEUTRAL) {
-            kotlinx.coroutines.delay(15_000)
-            agentMood = com.adesh.devjarvis.core.AgentMood.NEUTRAL
-        }
-    }
     val update by viewModel.update.collectAsStateWithLifecycle()
     val factory by viewModel.factoryStatus.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -296,36 +284,11 @@ fun HudScreen(
                 }
             }
 
-            if (showAgent) {
-                // JARVIS as a character, working under the reactor: its lights follow what it's doing, its mood its reply.
-                val agentHeight by animateDpAsState(if (hasChat) 96.dp else 156.dp, tween(500), label = "agentHeight")
-                // Real movement: the robot's clips (Settings > Roop), the right one for this moment.
-                val clipsVersion by AgentClips.version.collectAsStateWithLifecycle()
-                val clips = remember(clipsVersion) { AgentClips.Slot.entries.associateWith { AgentClips.source(context, it) } }
-                var greeting by remember { mutableStateOf(false) }
-                LaunchedEffect(ui.inConversation) { greeting = ui.inConversation && clips[AgentClips.Slot.WAVE] != null }
-                val slot = AgentClips.pick(ui.state, agentMood, greeting) { clips[it] != null }
-                AgentScene(
-                    state = ui.state,
-                    micLevel = ui.micLevel,
-                    speechLevel = speechLevel,
-                    mood = agentMood,
-                    accent = accent,
-                    tilt = tilt,
-                    clock = holoClock,
-                    onTap = onTap,
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).height(agentHeight),
-                    clip = slot?.let { clips[it] },
-                    clipLoop = slot?.loop ?: true,
-                    clipLoopFromMs = slot?.let { AgentClips.loopFromMs(it, clips[it]) } ?: 0,
-                    onClipEnd = { greeting = false },
-                )
-            }
             Column(Modifier.fillMaxWidth().animateContentSize()) {
                 ui.pendingConfirmation?.let { q -> ConfirmCard(q, viewModel::answerConfirmation) }
                 ui.card?.let { c -> ResultCard(c, viewModel::dismissCard) }
             }
-            Transcript(ui, role, accent, Modifier.weight(if (hasChat) 1.1f else if (showAgent) 0.02f else 0.35f))
+            Transcript(ui, role, accent, Modifier.weight(if (hasChat) 1.1f else 0.35f))
             attachment?.let { a -> AttachmentChip(a.name, a.isImage, accent, onClear = viewModel::clearAttachment) }
             InputBar(
                 accent,

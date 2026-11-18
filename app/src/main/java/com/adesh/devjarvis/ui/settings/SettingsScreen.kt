@@ -217,12 +217,6 @@ fun SettingsScreen(
                     listOf("jarvis" to "JARVIS", "dost" to "DOST", "gf" to "GF"),
                     com.adesh.devjarvis.brain.Persona.normalize(draft.persona),
                 ) { v -> viewModel.edit { it.copy(persona = v) } }
-                SubLabel("HUD ke beech mein")
-                ChoiceRow(
-                    listOf(JarvisSettings.HUD_FACE_AGENT to "REACTOR + AI ROBOT", JarvisSettings.HUD_FACE_REACTOR to "SIRF REACTOR"),
-                    draft.hudFace,
-                ) { v -> viewModel.edit { it.copy(hudFace = v) } }
-                if (draft.hudFace != JarvisSettings.HUD_FACE_REACTOR) AgentClipsEditor()
                 SubLabel("JARVIS ki awaaz (Live)")
                 ChoiceRow(com.adesh.devjarvis.brain.Persona.HIS_VOICES.map { it to it.uppercase() }, draft.liveVoice) { v -> viewModel.edit { it.copy(liveVoice = v) } }
                 SubLabel("DOST ki awaaz (Live)")
@@ -1040,48 +1034,4 @@ private fun BackupBlock(viewModel: SettingsViewModel) {
         HudButton("Backup se wapas lao", { open.launch(arrayOf("application/json", "text/plain", "*/*")) })
     }
     report?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Hud.Ice) }
-}
-
-/**
- * The robot's real movements: one short clip per situation, picked from the gallery (made from Sir's robot picture
- * in any image-to-video app). JARVIS plays the right one by itself; missing ones fall back to "Kaam / soch".
- */
-@Composable
-private fun AgentClipsEditor() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val version by com.adesh.devjarvis.ui.hud.AgentClips.version.collectAsStateWithLifecycle()
-    var picking by remember { mutableStateOf<com.adesh.devjarvis.ui.hud.AgentClips.Slot?>(null) }
-    var note by remember { mutableStateOf("") }
-    val launcher = androidx.activity.compose.rememberLauncherForActivityResult(
-        androidx.activity.result.contract.ActivityResultContracts.GetContent(),
-    ) { uri ->
-        val slot = picking
-        picking = null
-        if (uri != null && slot != null) scope.launch {
-            note = if (com.adesh.devjarvis.ui.hud.AgentClips.save(context, slot, uri)) "${slot.title}: clip lag gaya ✓" else "Ye video copy nahi hua — dusra chuno"
-        }
-    }
-    SubLabel("AI robot ki asli movement (video clips)")
-    Hint(
-        "Robot ke clips app mein pehle se hain (✓). JARVIS khud sahi clip chalata hai: baat shuru hote hi hello, sunte waqt sunna, " +
-            "bolte waqt bolna. Apna clip lagana ho to CHUNO dabao — wo us jagah ka clip badal dega.",
-    )
-    com.adesh.devjarvis.ui.hud.AgentClips.Slot.entries.forEach { slot ->
-        val own = remember(version, slot) { com.adesh.devjarvis.ui.hud.AgentClips.hasOwn(context, slot) }
-        val any = remember(version, slot) { com.adesh.devjarvis.ui.hud.AgentClips.source(context, slot) != null }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    (if (any) "✓ " else "○ ") + slot.title,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = if (any) Hud.Cyan else Hud.Ice,
-                )
-                Text(slot.hint, style = MaterialTheme.typography.bodySmall, color = Hud.Dim, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            HudTextButton(if (own) "BADLO" else "CHUNO", onClick = { picking = slot; launcher.launch("video/*") })
-            if (own) HudTextButton("HATAO", onClick = { com.adesh.devjarvis.ui.hud.AgentClips.remove(context, slot) }, color = Hud.Dim)
-        }
-    }
-    if (note.isNotEmpty()) Text(note, style = MaterialTheme.typography.bodySmall, color = Hud.Cyan)
 }
