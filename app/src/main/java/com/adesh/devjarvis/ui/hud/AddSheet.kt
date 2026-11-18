@@ -70,6 +70,7 @@ fun BoxScope.AddSheet(
     onFiles: () -> Unit,
     onSkills: () -> Unit,
     onConnectors: () -> Unit,
+    onTerminal: () -> Unit,
     onResearch: (Boolean) -> Unit,
     onMemory: (Boolean) -> Unit,
 ) {
@@ -126,6 +127,8 @@ fun BoxScope.AddSheet(
                 LinkRow(LineIcon.SKILLS, "Skills", "${state.skills}+ kaam · ${state.learnedSkills} khud seekhe", accent, onSkills)
                 Hairline()
                 LinkRow(LineIcon.CONNECTORS, "Connectors", "Dimaag, permissions, apps — kya juda hai", accent, onConnectors)
+                Hairline()
+                LinkRow(LineIcon.SKILLS, "Terminal", "Python + shell, JARVIS ke andar — code likho aur chalao", accent, onTerminal)
             }
             Column(
                 Modifier.fillMaxWidth().padding(top = 10.dp).glass(accent, HudShapes.Panel, tint = 0.6f, edge = 0.6f),

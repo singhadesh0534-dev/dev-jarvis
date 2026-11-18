@@ -71,7 +71,11 @@ class MainActivity : ComponentActivity() {
                             onOpenSetup = { nav.navigate(ROUTE_SETUP) },
                             onOpenSkills = { nav.navigate(ROUTE_SKILLS) },
                             onOpenConnectors = { nav.navigate(ROUTE_CONNECTORS) },
+                            onOpenTerminal = { nav.navigate(ROUTE_TERMINAL) },
                         )
+                    }
+                    composable(ROUTE_TERMINAL) {
+                        com.adesh.devjarvis.ui.terminal.TerminalScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() })
                     }
                     composable(ROUTE_SKILLS) {
                         SkillsScreen(viewModel = hiltViewModel(), onBack = { nav.popBackStack() }, onRun = { nav.popBackStack() })
@@ -172,6 +176,7 @@ class MainActivity : ComponentActivity() {
             "android.speech.action.VOICE_SEARCH_HANDS_FREE", QuickAccess.ACTION_TALK,
         )
         const val ROUTE_BOOT = "boot"
+        const val ROUTE_TERMINAL = "terminal"
         const val ROUTE_HUD = "hud"
         const val ROUTE_SETTINGS = "settings"
         const val ROUTE_ACTIVITY = "activity"

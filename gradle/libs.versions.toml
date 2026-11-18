@@ -1,5 +1,6 @@
 [versions]
 agp = "8.10.1"
+chaquopy = "16.1.0"
 kotlin = "2.1.21"
 ksp = "2.1.21-2.0.1"
 hilt = "2.56.2"
@@ -55,6 +56,7 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+chaquopy = { id = "com.chaquo.python", version.ref = "chaquopy" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

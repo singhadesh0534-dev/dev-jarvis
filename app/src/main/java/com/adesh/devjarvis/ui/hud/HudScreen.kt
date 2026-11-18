@@ -135,6 +135,7 @@ fun HudScreen(
     onOpenSetup: () -> Unit = onOpenSettings,
     onOpenSkills: () -> Unit = {},
     onOpenConnectors: () -> Unit = {},
+    onOpenTerminal: () -> Unit = {},
 ) {
     val ui by viewModel.ui.collectAsStateWithLifecycle()
     val attachment by viewModel.attachment.collectAsStateWithLifecycle()
@@ -322,6 +323,7 @@ fun HudScreen(
             },
             onSkills = { sheetOpen = false; onOpenSkills() },
             onConnectors = { sheetOpen = false; onOpenConnectors() },
+            onTerminal = { sheetOpen = false; onOpenTerminal() },
             onResearch = viewModel::setResearch,
             onMemory = viewModel::setAutoMemory,
         )

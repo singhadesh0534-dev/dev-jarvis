@@ -4,6 +4,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
+    // Python 3 inside the app: the built-in terminal and run_code run Sir's / JARVIS's scripts without Termux.
+    alias(libs.plugins.chaquopy)
 }
 
 android {
@@ -18,6 +20,8 @@ android {
         val run = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
         versionCode = 100 + (run ?: 0)
         versionName = "1.0." + (run ?: 0)
+        // Phones (arm64) and the CI emulator (x86_64); Python's native parts are built for these.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         buildConfigField("String", "UPDATE_REPO", "\"singhadesh0534-dev/dev-jarvis\"")
         // JARVIS accounts server (Supabase). The URL and the anon key are public by design (they ship inside every app
         // build; each user's data is protected by row level security on the server). Sir chose to keep them here.
@@ -130,4 +134,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+    }
 }
